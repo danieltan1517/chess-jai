@@ -3,11 +3,11 @@
 main :: () {
   for i: 0..63 {
     val: u64 = xx (1 << i);
-    rook_mov := rook_moves(xx file_d, i, val);
+    rook_mov := black_pawn_moves(xx rank_6, i, val);
 
     print("------------------------------------\n");
     print("square: %\n", cast(bboard)val);
-    print("values: %\n", cast(bboard)(rook_mov));
+    print("values: %\n", cast(bboard)rook_mov);
     print_bitboard(rook_mov);
     print("------------------------------------\n");
   }
@@ -45,17 +45,41 @@ using bboard :: enum_flags u64 {
   rank_8 :: a8 | b8 | c8 | d8 | e8 | f8 | g8 | h8;
 }
 
-rook_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
-  file_slide := sliding(occupied, slider, file_of(i));        
-  rank_slide := sliding(occupied, slider, rank_of(i));        
-  return (file_slide | rank_slide) & ~friends;
-} 
+white_pawn_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
+  up1 := (slider << 8) & ~occupied;
+  captures := (((slider << 9) & xx ~file_a) | ((slider << 7) & xx ~file_h)) & (occupied & ~friends);
+  pawn_power := ((up1 & (xx rank_3)) << 8) & ~occupied;
+  return up1 | captures | pawn_power;
+}
+
+black_pawn_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
+  up1 := (slider >> 8) & ~occupied;
+  captures := (((slider >> 7) & xx ~file_a) | ((slider >> 9) & xx ~file_h)) & (occupied & ~friends);
+  pawn_power := ((up1 & (xx rank_6)) >> 8) & ~occupied;
+  return up1 | captures | pawn_power;
+}
 
 bishop_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
   diag_slide  := sliding(occupied, slider,  diag_of(i));
   adiag_slide := sliding(occupied, slider, adiag_of(i));
   return (diag_slide | adiag_slide) & ~friends;
 }
+
+knight_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
+  east1 := (slider << 1) & xx ~file_a;
+  west1 := (slider >> 1) & xx ~file_h;
+  east2 := (east1  << 1) & xx ~file_a;
+  west2 := (west1  >> 1) & xx ~file_h;
+  sqs1 := east1 | west1;
+  sqs2 := east2 | west2;
+  return ((sqs2 << 8) | (sqs2 >> 8) | (sqs1 << 16) | (sqs1 >> 16)) & ~friends;
+}
+
+rook_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
+  file_slide := sliding(occupied, slider, file_of(i));        
+  rank_slide := sliding(occupied, slider, rank_of(i));        
+  return (file_slide | rank_slide) & ~friends;
+} 
 
 queen_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
   file_slide  := sliding(occupied, slider,  file_of(i));        
@@ -70,18 +94,6 @@ king_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) ->
   neighbors := (k | (k << 8) | (k >> 8)) & ~slider;
   return neighbors;
 }
-
-knight_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
-  east1 := (slider << 1) & xx ~file_a;
-  west1 := (slider >> 1) & xx ~file_h;
-  east2 := (east1  << 1) & xx ~file_a;
-  west2 := (west1  >> 1) & xx ~file_h;
-  sqs1 := east1 | west1;
-  sqs2 := east2 | west2;
-  
-  return ((sqs2 << 8) | (sqs2 >> 8) | (sqs1 << 16) | (sqs1 >> 16)) & ~friends;
-}
-
 
 file_of :: inline (i: int) -> u64 {
   assert(0 <= i && i <= 63);
@@ -101,16 +113,16 @@ diag_of :: inline (i: int)->u64 {
   assert(0 <= i && i <= 63);
   f := (i & ~7) >> 3;
   r := i & 7;
-  diag_i  := 7 + f - r;
-  return xx diags[diag_i];
+  index := 7 + f - r;
+  return xx diags[index];
 }
 
 adiag_of :: inline (i: int)->u64 {
   assert(0 <= i && i <= 63);
   f := (i & ~7) >> 3;
   r := i & 7;
-  adiag_i := f + r;
-  return xx a_diags[adiag_i];
+  index := f + r;
+  return xx a_diags[index];
 }
 
 diags :: bboard.[
@@ -149,14 +161,7 @@ a_diags :: bboard.[
   h8,
 ];
 
-
-
-// TODO: if bit_scan_reverse gets a zero-based implementation, we'll use that...
-// ... or assembly-language instruction...
-// can also use de brujin's multiplication to do this too.
-serialize_bit :: inline (x: u64)->int {
-  return trailing_zeros(x);
-}
+serialize_bit :: trailing_zeros;
 
 print_bitboard :: (b: u64) {
   loop(xx a8, "8 ");
@@ -186,26 +191,9 @@ print_bitboard :: (b: u64) {
 
 // o = occupied, r = piece, m = mask
 sliding :: inline (o: u64, r: u64, m: u64)->u64 {
-  o_bar := reverse(o & m);
-  r_bar := reverse(r);
-  return (((o & m) - (2*r)) ^ reverse(o_bar - (2*r_bar))) & m;
+  o_bar := bit_reverse64(o & m);
+  r_bar := bit_reverse64(r);
+  return (((o & m) - (2*r)) ^ bit_reverse64(o_bar - (2*r_bar))) & m;
 }
-
-// TODO: most computers already have 64 assembly instruction just to do this.
-reverse :: (x: u64)->u64 {
-  /* SOFTWARE: 
-  ret: u64 = 0;
-  while x {
-    b := serialize_bit(x);
-    bit: u64 = cast(u64) (1 << (63-b));
-    ret = ret | bit;
-    x = x & (x-1);
-  }
-  return ret;*/
-
-  return bit_reverse64(x);
-}
-
-
 
 
