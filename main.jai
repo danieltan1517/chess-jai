@@ -1,16 +1,22 @@
 #import "Basic";
 
 main :: () {
-  for i: 0..63 {
+  for < i: 63..0 {
     val := cast(bboard) (1 << i);
-    s := file_and_rank(serialize_bit(val));
-    //s := diagonals(serialize_bit(val));
+    o := sliding(xx d1|a4|f8|h6, xx val, file_of(i));        
+    o |= sliding(xx d1|a4, xx val, rank_of(i));        
     print("------------------------------------\n");
     print("square: %\n", val);
-    print("values: %\n", cast(bboard)s);
-    print_bitboard(s);
+    print("values: %\n", cast(bboard)(o));
+    print_bitboard(o);
     print("------------------------------------\n");
   }
+
+  //a := reverse(xx a1 | b1);
+  //print("%\n", cast(bboard)a);
+  //s := diagonals(serialize_bit(val));
+
+
 }
 
 using bboard :: enum_flags u64 {
@@ -54,7 +60,19 @@ file_and_rank :: inline (i: int) -> u64 {
   return file | rank;
 }
 
-diagonals :: inline (i: int) -> u64 {
+file_of :: inline (i: int) -> u64 {
+  f := i & 7;
+  file: u64 = (cast(u64) file_a) << f;
+  return file;
+}
+
+rank_of :: inline (i: int) -> u64 {
+  r := i & ~7;
+  rank: u64 = (cast(u64) rank_1) << r;
+  return rank;
+}
+
+diag_of :: inline (i: int)->u64 {
   diags :: bboard.[
     h1,
     g1 | h2,
@@ -72,7 +90,14 @@ diagonals :: inline (i: int) -> u64 {
     a7 | b8,
     a8
   ];
+  assert(0 <= i && i <= 63);
+  f := (i & ~7) >> 3;
+  r := i & 7;
+  diag_i  := 7 + f - r;
+  return xx diags[diag_i];
+}
 
+adiag_of :: inline (i: int)->u64 {
   a_diags :: bboard.[
     a1,
     a2 | b1,
@@ -90,20 +115,20 @@ diagonals :: inline (i: int) -> u64 {
     g8 | h7,
     h8,
   ];
-
   assert(0 <= i && i <= 63);
   f := (i & ~7) >> 3;
   r := i & 7;
-
-  diag_i  := 7 + f - r;
   adiag_i := f + r;
-  return xx (diags[diag_i] | a_diags[adiag_i]);
+  return xx a_diags[adiag_i];
 }
+
 
 // TODO: if bit_scan_reverse gets a zero-based implementation, we'll use that...
 // ... or assembly-language instruction...
 // can also use de brujin's multiplication to do this too.
-serialize_bit :: x => bit_scan_reverse(cast(int) x) - 1;
+serialize_bit :: inline (x: u64)->int {
+  return bit_scan_forward(x) - 1;
+}
 
 print_bitboard :: (b: u64) {
   loop(xx a8, "8 ");
@@ -123,12 +148,31 @@ print_bitboard :: (b: u64) {
       if b & z {
         print("O ");
       } else {
-        print("_ ");
+        print("- ");
       }
       z <<= 1;
     }
     print("\n");
   }
+}
+
+// o = occupied, r = piece, m = mask
+sliding :: inline (o: u64, r: u64, m: u64)->u64 {
+  o_bar := reverse(o & m);
+  r_bar := reverse(r);
+  return (((o & m) - (2*r)) ^ reverse(o_bar - (2*r_bar))) & m;
+}
+
+// TODO: most computers already have 64 assembly instruction just to do this.
+reverse :: (x: u64)->u64 {
+  ret: u64 = 0;
+  while x {
+    b := serialize_bit(x);
+    bit: u64 = cast(u64) (1 << (63-b));
+    ret = ret | bit;
+    x = x & (x-1);
+  }
+  return ret;
 }
 
 
