@@ -1,7 +1,6 @@
 #import "Basic";
 #import "Compiler";
 
-
 #run {
   option : enum { debug; release;} = .debug;
 
@@ -93,4 +92,18 @@ build_release :: () {
   options.output_type = .NO_OUTPUT;  // No executable for the primary workspace.
   set_build_options(options);
 }
+
+install :: () {
+  // sudo apt install libc++abi-dev   --- Dear ImGui
+  // sudo apt install libgl-dev       --- glfw
+}
+
+todo :: () {
+  // glfw needs to get working
+  // imgui needs to get working
+  // draw chessboard on screen
+}
+
+
+
 

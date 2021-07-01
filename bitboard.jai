@@ -1,19 +1,5 @@
 #import "Basic";
 
-main :: () {
-  for i: 0..63 {
-    val: u64 = xx (1 << i);
-    rook_mov := black_pawn_moves(xx rank_6, i, val);
-
-    print("------------------------------------\n");
-    print("square: %\n", cast(bboard)val);
-    print("values: %\n", cast(bboard)rook_mov);
-    print_bitboard(rook_mov);
-    print("------------------------------------\n");
-  }
-
-}
-
 using bboard :: enum_flags u64 {
   a1; b1; c1; d1; e1; f1; g1; h1;
   a2; b2; c2; d2; e2; f2; g2; h2;
@@ -47,14 +33,14 @@ using bboard :: enum_flags u64 {
 
 white_pawn_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
   up1 := (slider << 8) & ~occupied;
-  captures := (((slider << 9) & xx ~file_a) | ((slider << 7) & xx ~file_h)) & (occupied & ~friends);
+  captures := white_pawn_captures(slider) & (occupied & ~friends);
   pawn_power := ((up1 & (xx rank_3)) << 8) & ~occupied;
   return up1 | captures | pawn_power;
 }
 
 black_pawn_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
   up1 := (slider >> 8) & ~occupied;
-  captures := (((slider >> 7) & xx ~file_a) | ((slider >> 9) & xx ~file_h)) & (occupied & ~friends);
+  captures := black_pawn_captures(slider) & (occupied & ~friends);
   pawn_power := ((up1 & (xx rank_6)) >> 8) & ~occupied;
   return up1 | captures | pawn_power;
 }
@@ -93,6 +79,14 @@ king_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) ->
   k := slider | ((slider << 1) & xx ~file_a) | ((slider >> 1) & xx ~file_h);
   neighbors := (k | (k << 8) | (k >> 8)) & ~slider;
   return neighbors;
+}
+
+white_pawn_captures :: inline (slider: u64) -> u64 {
+  return ((slider << 9) & xx ~file_a) | ((slider << 7) & xx ~file_h);
+}
+
+black_pawn_captures :: inline (slider: u64) -> u64 {
+  return ((slider >> 7) & xx ~file_a) | ((slider >> 9) & xx ~file_h);
 }
 
 file_of :: inline (i: int) -> u64 {
