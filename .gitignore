@@ -1,3 +1,7 @@
 chess
 chess-jai
 .build
+*.txt
+*.so
+*.a
+.*.swp

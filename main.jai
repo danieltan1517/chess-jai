@@ -1,9 +1,10 @@
 #import "Basic";
+#load "asm.jai";
 
 main :: () {
-  for < i: 63..0 {
+  for i: 0..63 {
     val: u64 = xx (1 << i);
-    rook_mov := knight_moves(0, i, val);
+    rook_mov := rook_moves(xx file_d, i, val);
 
     print("------------------------------------\n");
     print("square: %\n", cast(bboard)val);
@@ -11,11 +12,6 @@ main :: () {
     print_bitboard(rook_mov);
     print("------------------------------------\n");
   }
-
-  //a := reverse(xx a1 | b1);
-  //print("%\n", cast(bboard)a);
-  //s := diagonals(serialize_bit(val));
-
 
 }
 
@@ -160,7 +156,7 @@ a_diags :: bboard.[
 // ... or assembly-language instruction...
 // can also use de brujin's multiplication to do this too.
 serialize_bit :: inline (x: u64)->int {
-  return bit_scan_forward(x) - 1;
+  return trailing_zeros(x);
 }
 
 print_bitboard :: (b: u64) {
@@ -198,6 +194,7 @@ sliding :: inline (o: u64, r: u64, m: u64)->u64 {
 
 // TODO: most computers already have 64 assembly instruction just to do this.
 reverse :: (x: u64)->u64 {
+  /* SOFTWARE: 
   ret: u64 = 0;
   while x {
     b := serialize_bit(x);
@@ -205,7 +202,9 @@ reverse :: (x: u64)->u64 {
     ret = ret | bit;
     x = x & (x-1);
   }
-  return ret;
+  return ret;*/
+
+  return bit_reverse64(x);
 }
 
 
