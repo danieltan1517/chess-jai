@@ -1,5 +1,4 @@
 #import "Basic";
-#load "asm.jai";
 
 main :: () {
   for i: 0..63 {

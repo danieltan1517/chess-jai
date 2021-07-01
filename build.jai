@@ -41,6 +41,7 @@ build_debug :: () {
   compiler_begin_intercept(w);
   // add all the files
   add_build_file(tprint("%/main.jai", #filepath), w);  
+  add_build_file(tprint("%/asm.jai" , #filepath), w);  
   while true {
     message := compiler_wait_for_message();
     if !message break;
