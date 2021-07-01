@@ -2,13 +2,13 @@
 
 main :: () {
   for < i: 63..0 {
-    val := cast(bboard) (1 << i);
-    o := sliding(xx d1|a4|f8|h6, xx val, file_of(i));        
-    o |= sliding(xx d1|a4, xx val, rank_of(i));        
+    val: u64 = xx (1 << i);
+    rook_mov := knight_moves(0, i, val);
+
     print("------------------------------------\n");
-    print("square: %\n", val);
-    print("values: %\n", cast(bboard)(o));
-    print_bitboard(o);
+    print("square: %\n", cast(bboard)val);
+    print("values: %\n", cast(bboard)(rook_mov));
+    print_bitboard(rook_mov);
     print("------------------------------------\n");
   }
 
@@ -50,46 +50,59 @@ using bboard :: enum_flags u64 {
   rank_8 :: a8 | b8 | c8 | d8 | e8 | f8 | g8 | h8;
 }
 
-file_and_rank :: inline (i: int) -> u64 {
-  assert(0 <= i && i <= 63);
-  f := i & 7;
-  r := i & ~7;
+rook_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
+  file_slide := sliding(occupied, slider, file_of(i));        
+  rank_slide := sliding(occupied, slider, rank_of(i));        
+  return (file_slide | rank_slide) & ~friends;
+} 
 
-  file: u64 = (cast(u64) file_a) << f;
-  rank: u64 = (cast(u64) rank_1) << r;
-  return file | rank;
+bishop_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
+  diag_slide  := sliding(occupied, slider,  diag_of(i));
+  adiag_slide := sliding(occupied, slider, adiag_of(i));
+  return (diag_slide | adiag_slide) & ~friends;
 }
 
+queen_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
+  file_slide  := sliding(occupied, slider,  file_of(i));        
+  rank_slide  := sliding(occupied, slider,  rank_of(i));        
+  diag_slide  := sliding(occupied, slider,  diag_of(i));
+  adiag_slide := sliding(occupied, slider, adiag_of(i));
+  return (file_slide | rank_slide | diag_slide | adiag_slide) & ~friends;
+}
+
+king_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
+  k := slider | ((slider << 1) & xx ~file_a) | ((slider >> 1) & xx ~file_h);
+  neighbors := (k | (k << 8) | (k >> 8)) & ~slider;
+  return neighbors;
+}
+
+knight_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
+  east1 := (slider << 1) & xx ~file_a;
+  west1 := (slider >> 1) & xx ~file_h;
+  east2 := (east1  << 1) & xx ~file_a;
+  west2 := (west1  >> 1) & xx ~file_h;
+  sqs1 := east1 | west1;
+  sqs2 := east2 | west2;
+  
+  return ((sqs2 << 8) | (sqs2 >> 8) | (sqs1 << 16) | (sqs1 >> 16)) & ~friends;
+}
+
+
 file_of :: inline (i: int) -> u64 {
+  assert(0 <= i && i <= 63);
   f := i & 7;
   file: u64 = (cast(u64) file_a) << f;
   return file;
 }
 
 rank_of :: inline (i: int) -> u64 {
+  assert(0 <= i && i <= 63);
   r := i & ~7;
   rank: u64 = (cast(u64) rank_1) << r;
   return rank;
 }
 
 diag_of :: inline (i: int)->u64 {
-  diags :: bboard.[
-    h1,
-    g1 | h2,
-    f1 | g2 | h3,
-    e1 | f2 | g3 | h4,
-    d1 | e2 | f3 | g4 | h5,
-    c1 | d2 | e3 | f4 | g5 | h6,
-    b1 | c2 | d3 | e4 | f5 | g6 | h7,
-    a1 | b2 | c3 | d4 | e5 | f6 | g7 | h8,
-    a2 | b3 | c4 | d5 | e6 | f7 | g8,
-    a3 | b4 | c5 | d6 | e7 | f8,
-    a4 | b5 | c6 | d7 | e8,
-    a5 | b6 | c7 | d8,
-    a6 | b7 | c8,
-    a7 | b8,
-    a8
-  ];
   assert(0 <= i && i <= 63);
   f := (i & ~7) >> 3;
   r := i & 7;
@@ -98,29 +111,49 @@ diag_of :: inline (i: int)->u64 {
 }
 
 adiag_of :: inline (i: int)->u64 {
-  a_diags :: bboard.[
-    a1,
-    a2 | b1,
-    a3 | b2 | c1,
-    a4 | b3 | c2 | d1,
-    a5 | b4 | c3 | d2 | e1,
-    a6 | b5 | c4 | d3 | e2 | f1,
-    a7 | b6 | c5 | d4 | e3 | f2 | g1,
-    a8 | b7 | c6 | d5 | e4 | f3 | g2 | h1,
-    b8 | c7 | d6 | e5 | f4 | g3 | h2,
-    c8 | d7 | e6 | f5 | g4 | h3,
-    d8 | e7 | f6 | g5 | h4,
-    e8 | f7 | g6 | h5,
-    f8 | g7 | h6,
-    g8 | h7,
-    h8,
-  ];
   assert(0 <= i && i <= 63);
   f := (i & ~7) >> 3;
   r := i & 7;
   adiag_i := f + r;
   return xx a_diags[adiag_i];
 }
+
+diags :: bboard.[
+  h1,
+  g1 | h2,
+  f1 | g2 | h3,
+  e1 | f2 | g3 | h4,
+  d1 | e2 | f3 | g4 | h5,
+  c1 | d2 | e3 | f4 | g5 | h6,
+  b1 | c2 | d3 | e4 | f5 | g6 | h7,
+  a1 | b2 | c3 | d4 | e5 | f6 | g7 | h8,
+  a2 | b3 | c4 | d5 | e6 | f7 | g8,
+  a3 | b4 | c5 | d6 | e7 | f8,
+  a4 | b5 | c6 | d7 | e8,
+  a5 | b6 | c7 | d8,
+  a6 | b7 | c8,
+  a7 | b8,
+  a8
+];
+
+a_diags :: bboard.[
+  a1,
+  a2 | b1,
+  a3 | b2 | c1,
+  a4 | b3 | c2 | d1,
+  a5 | b4 | c3 | d2 | e1,
+  a6 | b5 | c4 | d3 | e2 | f1,
+  a7 | b6 | c5 | d4 | e3 | f2 | g1,
+  a8 | b7 | c6 | d5 | e4 | f3 | g2 | h1,
+  b8 | c7 | d6 | e5 | f4 | g3 | h2,
+  c8 | d7 | e6 | f5 | g4 | h3,
+  d8 | e7 | f6 | g5 | h4,
+  e8 | f7 | g6 | h5,
+  f8 | g7 | h6,
+  g8 | h7,
+  h8,
+];
+
 
 
 // TODO: if bit_scan_reverse gets a zero-based implementation, we'll use that...
