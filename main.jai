@@ -80,16 +80,20 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
     }
     TF = TF ^ true;
   }
-  BLANK    :: Vector4.{1,1,1,1}; 
+
   // chess.com uses yellow, so we follow their example...
+  BLANK    :: Vector4.{1,1,1,1}; 
   GREY     :: Vector4.{.5,.5,.2,.35}; 
-  YELLOW :: Vector4.{.9,.9,0,.5}; 
-  draw_bitboard(possible_moves_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, GREY);
+  YELLOW :: Vector4.{.9,.9,0,.35}; 
+  LESS :: Vector4.{1.0, 1.0, 1.0, 0.25};
+
   draw_bitboard(last_move_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, YELLOW);
+  draw_bitboard(possible_moves_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, GREY);
 
   im_set_texture(texture);
 
   using pieces;
+  // draw the idle piece
   draw_bitboard(w_king, u0=0.0, v0=0.0, u1=1.0/6.0, v1=0.5, BLANK);
   draw_bitboard(w_queen, u0=1.0/6.0, v0=0.0, u1=2.0/6.0, v1=1.0/2.0, BLANK);
   draw_bitboard(w_rook, u0=4.0/6.0, v0=0.0, u1=5.0/6.0, v1=1.0/2.0, BLANK);
@@ -104,7 +108,7 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
   draw_bitboard(b_knight, u0=3.0/6.0, v0=0.5, u1=4.0/6.0, v1=1.0, BLANK);
   draw_bitboard(b_pawn, u0=5.0/6.0, v0=0.5, u1=1.0, v1=1.0, BLANK);
 
-  LESS :: Vector4.{1.0, 1.0, 1.0, 0.25};
+  // draw the piece being dragged
   draw_bitboard(w_king, u0=0.0, v0=0.0, u1=1.0/6.0, v1=0.5, BLANK, true);
   draw_bitboard(w_queen, u0=1.0/6.0, v0=0.0, u1=2.0/6.0, v1=1.0/2.0, BLANK, true);
   draw_bitboard(w_rook, u0=4.0/6.0, v0=0.0, u1=5.0/6.0, v1=1.0/2.0, BLANK, true);
@@ -120,11 +124,11 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
   draw_bitboard(b_pawn, u0=5.0/6.0, v0=0.5, u1=1.0, v1=1.0, BLANK, true);
 
   draw_bitboard :: (bit_board: u64, $u0: float, $v0: float, $u1: float, $v1: float, $c: Vector4, $draw_mouse_drag := false) #expand {
-    value: u64 = bit_board;
+    value: u64 = 0;
     #if !draw_mouse_drag 
-      value &= ~highlight_square;
+      value = bit_board & ~highlight_square;
     else 
-      value &= highlight_square;
+      value = bit_board & highlight_square;
 
     while value {
       index := serialize_bit(value);
