@@ -42,7 +42,7 @@ main :: () {
     im_set_viewport_transform(2.0/width, 2.0/height, -1, -1);
     white_side = handle_flip_board(window, white_side);
     handle_board_click(xx width, xx height, *piece_bitboard, white_side=white_side);
-    draw_chess(xx width, xx height, *piece_bitboard, t, highlight_the_square|possible_moves_bb, white_side);
+    draw_chess(xx width, xx height, *piece_bitboard, t, highlight_the_square|possible_moves_bb, last_move_bb, white_side);
     im_flush();
 
     glfwSwapBuffers(window);
@@ -51,7 +51,7 @@ main :: () {
   }
 }
 
-draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *Texture, highlight_bb: u64, white_side: bool) {
+draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *Texture, highlight_bb: u64, move_bb: u64, white_side: bool) {
   cen_x := width * 0.5; 
   cen_y := height * 0.5;
 
@@ -82,8 +82,10 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
   }
   BLANK    :: Vector4.{1,1,1,1}; 
   // chess.com uses yellow, so we follow their example...
-  YELLOW   :: Vector4.{.9,.9,0,.5}; 
-  draw_bitboard(highlight_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, YELLOW);
+  GREY     :: Vector4.{.5,.5,.2,.35}; 
+  YELLOW :: Vector4.{.9,.9,0,.5}; 
+  draw_bitboard(highlight_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, GREY);
+  draw_bitboard(move_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, YELLOW);
 
   im_set_texture(texture);
 
@@ -179,13 +181,11 @@ handle_board_click :: (width: float, height: float, piece_bitboard: *Piece_Bitbo
           sq_y_clicked: int = 7 - xx ((mouse_position_y - y0) / square_len);
           i := sq_x_clicked + sq_y_clicked * 8;
           sq = xx (1 << i);
-          print("%: (%, %) %\n", mouse_button_1_state, sq_x_clicked, sq_y_clicked, cast(bboard)sq); 
         } else {
           sq_x_clicked: int = 7 - xx ((mouse_position_x - x0) / square_len);
           sq_y_clicked: int = xx ((mouse_position_y - y0) / square_len);
           i := sq_x_clicked + sq_y_clicked * 8;
           sq = xx (1 << i);
-          print("%: (%, %) %\n", mouse_button_1_state, sq_x_clicked, sq_y_clicked, cast(bboard)sq); 
         }
       }
     }
@@ -211,12 +211,11 @@ handle_board_click :: (width: float, height: float, piece_bitboard: *Piece_Bitbo
       possible_moves_bb = possible_moves_for(piece_bitboard, sq, whose_turn);
     } else if !can_move(piece_bitboard, sq, whose_turn) {
       // make move
-      print("make the move: %-%\n", cast(bboard) highlight_the_square, cast(bboard) sq);
       from := highlight_the_square;
       to   := sq;
       if to & possible_moves_bb {
-        print("make the move: % to %\n", cast(bboard) from, cast(bboard) to);
         make_move_no_checking(piece_bitboard, from, to, whose_turn);
+        last_move_bb = from | to;
         whose_turn = !whose_turn;
       }
       highlight_the_square = 0;
@@ -240,4 +239,8 @@ whose_turn := true; // true=white, false=black.
 highlight_the_square: u64 = 0;
 piece_select_state: enum { PIECE_IDLE; PIECE_SELECTED; } = .PIECE_IDLE;
 possible_moves_bb: u64 = 0;
+
+last_move_bb: u64 = 0;
+
+
 

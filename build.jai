@@ -2,21 +2,21 @@
 #import "Compiler";
 
 #run {
-  option : enum { debug; release;} = .debug;
-
+  args_option : enum { debug; release;} = .debug;
   args := compiler_get_command_line_arguments();
   for arg: args {
     if arg == {
     case "debug";
-      option = .debug;
+      args_option = .debug;
     case "release";
-      option = .release;
+      args_option = .release;
     case;
-      print("Invalid commandline argument: %\n", arg);
+      print("Error: Invalid commandline argument: %\n", arg);
+      return;
     }
   }
 
-  if option == {
+  if args_option == {
   case .debug;
     build_debug();
   case .release;
@@ -55,9 +55,9 @@ build_debug :: () {
     }
   }
   compiler_end_intercept(w);
-  options := get_build_options();
-  options.output_type = .NO_OUTPUT;  // No executable for the primary workspace.
-  set_build_options(options);
+  build_options := get_build_options();
+  build_options.output_type = .NO_OUTPUT;  // No executable for the primary workspace.
+  set_build_options(build_options);
 }
 
 build_release :: () {
@@ -88,9 +88,9 @@ build_release :: () {
     }
   }
   compiler_end_intercept(w);
-  options := get_build_options();
-  options.output_type = .NO_OUTPUT;  // No executable for the primary workspace.
-  set_build_options(options);
+  build_options := get_build_options();
+  build_options.output_type = .NO_OUTPUT;  // No executable for the primary workspace.
+  set_build_options(build_options);
 }
 
 install :: () {
