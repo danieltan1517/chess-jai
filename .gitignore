@@ -5,3 +5,4 @@ chess-jai
 *.so
 *.a
 .*.swp
+resources

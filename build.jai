@@ -25,7 +25,7 @@
 }
 
 executable_name :: "chess-jai";
-file_names :: string.["main.jai", "asm.jai"];
+file_names :: string.["main.jai", "asm.jai", "bitboard.jai"];
 
 build_debug :: () {
   w := compiler_create_workspace();
@@ -95,7 +95,8 @@ build_release :: () {
 
 install :: () {
   // sudo apt install libc++abi-dev   --- Dear ImGui
-  // sudo apt install libgl-dev       --- glfw
+  // sudo apt install libgl-dev       --- opengl 
+  // sudo apt install libglfw-dev     --- glfw
 }
 
 todo :: () {
