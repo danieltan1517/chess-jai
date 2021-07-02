@@ -20,6 +20,9 @@ main :: () {
   im_init_gl();
 
   t := New(Texture);
+  defer {
+    destroy_texture(t);
+  }
   if !load_texture_from_file(t, "resources/chess_pieces.png") {
     print("Error loading texture");
     return;
@@ -27,21 +30,19 @@ main :: () {
 
   piece_bitboard := chess_start_pos();
 
-  defer {
-    destroy_texture(t);
-  }
   white_side := true;
   while !glfwWindowShouldClose(window) {
     width, height : s32;
     glfwGetFramebufferSize(window, *width, *height);
     glViewport(0, 0, xx width, xx height);
+    glClearColor(0.15555, 0.15555, 0.15555, 1.0);
     glClear(GL_COLOR_BUFFER_BIT);
 
     im_draw_setup_gl();
     im_set_viewport_transform(2.0/width, 2.0/height, -1, -1);
     white_side = handle_flip_board(window, white_side);
-    handle_board_click(xx width, xx height, white_side=white_side);
-    draw_chess(xx width, xx height, *piece_bitboard, t, white_side);
+    handle_board_click(xx width, xx height, *piece_bitboard, white_side=white_side);
+    draw_chess(xx width, xx height, *piece_bitboard, t, highlight_the_square|possible_moves_bb, white_side);
     im_flush();
 
     glfwSwapBuffers(window);
@@ -50,8 +51,7 @@ main :: () {
   }
 }
 
-draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *Texture, white_side: bool) {
-  // NOTE: chessboard squares itself is same regardless of flipping board
+draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *Texture, highlight_bb: u64, white_side: bool) {
   cen_x := width * 0.5; 
   cen_y := height * 0.5;
 
@@ -65,6 +65,7 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
   black_sq_color :: Vector4.{118.0/255.0, 150.0/255.0,  86.0/255.0, 1.0};
   im_set_texture(null);
 
+  // NOTE: chessboard squares itself is same regardless of flipping board
   TF := false; 
   for i: 0..7 {
     for j: 0..7 {
@@ -79,41 +80,31 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
     }
     TF = TF ^ true;
   }
-
+  BLANK    :: Vector4.{1,1,1,1}; 
+  // chess.com uses yellow, so we follow their example...
+  YELLOW   :: Vector4.{.9,.9,0,.5}; 
+  draw_bitboard(highlight_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, YELLOW);
 
   im_set_texture(texture);
-  BLANK :: Vector4.{1,1,1,1}; 
-  /*value := pieces.w_king;
-  while value {
-    index := serialize_bit(value);
-    i := index &  7;
-    j := index >> 3;
-    posx := x + i*square_len;
-    posy := y + j*square_len;
-    im_draw_rect(posx + square_len, posy + square_len, posx, posy, u0=0.0, v0=0.0, u1=1.0/6.0, v1=0.5, c=BLANK);
-    value &= (value - 1);
-  }*/
 
-  draw_piece(pieces.w_king, u0=0.0, v0=0.0, u1=1.0/6.0, v1=0.5);
-  draw_piece(pieces.w_queen, u0=1.0/6.0, v0=0.0, u1=2.0/6.0, v1=1.0/2.0);
-  draw_piece(pieces.w_rook, u0=4.0/6.0, v0=0.0, u1=5.0/6.0, v1=1.0/2.0);
-  draw_piece(pieces.w_bishop, u0=2.0/6.0, v0=0.0, u1=3.0/6.0, v1=1.0/2.0);
-  draw_piece(pieces.w_knight, u0=3.0/6.0, v0=0.0, u1=4.0/6.0, v1=1.0/2.0);
-  draw_piece(pieces.w_pawn, u0=5.0/6.0, v0=0.0, u1=1.0, v1=1.0/2.0);
+  draw_bitboard(pieces.w_king, u0=0.0, v0=0.0, u1=1.0/6.0, v1=0.5, BLANK);
+  draw_bitboard(pieces.w_queen, u0=1.0/6.0, v0=0.0, u1=2.0/6.0, v1=1.0/2.0, BLANK);
+  draw_bitboard(pieces.w_rook, u0=4.0/6.0, v0=0.0, u1=5.0/6.0, v1=1.0/2.0, BLANK);
+  draw_bitboard(pieces.w_bishop, u0=2.0/6.0, v0=0.0, u1=3.0/6.0, v1=1.0/2.0, BLANK);
+  draw_bitboard(pieces.w_knight, u0=3.0/6.0, v0=0.0, u1=4.0/6.0, v1=1.0/2.0, BLANK);
+  draw_bitboard(pieces.w_pawn, u0=5.0/6.0, v0=0.0, u1=1.0, v1=1.0/2.0, BLANK);
 
-  draw_piece(pieces.b_king, u0=0.0, v0=0.5, u1=1.0/6.0, v1=1.0);
-  draw_piece(pieces.b_queen, u0=1.0/6.0, v0=0.5, u1=2.0/6.0, v1=1.0);
+  draw_bitboard(pieces.b_king, u0=0.0, v0=0.5, u1=1.0/6.0, v1=1.0, BLANK);
+  draw_bitboard(pieces.b_queen, u0=1.0/6.0, v0=0.5, u1=2.0/6.0, v1=1.0, BLANK);
+  draw_bitboard(pieces.b_rook, u0=4.0/6.0, v0=0.5, u1=5.0/6.0, v1=1.0, BLANK);
+  draw_bitboard(pieces.b_bishop, u0=2.0/6.0, v0=0.5, u1=3.0/6.0, v1=1.0, BLANK);
+  draw_bitboard(pieces.b_knight, u0=3.0/6.0, v0=0.5, u1=4.0/6.0, v1=1.0, BLANK);
+  draw_bitboard(pieces.b_pawn, u0=5.0/6.0, v0=0.5, u1=1.0, v1=1.0, BLANK);
 
-  draw_piece(pieces.b_rook, u0=4.0/6.0, v0=0.5, u1=5.0/6.0, v1=1.0);
-  draw_piece(pieces.b_bishop, u0=2.0/6.0, v0=0.5, u1=3.0/6.0, v1=1.0);
-  draw_piece(pieces.b_knight, u0=3.0/6.0, v0=0.5, u1=4.0/6.0, v1=1.0);
-  draw_piece(pieces.b_pawn, u0=5.0/6.0, v0=0.5, u1=1.0, v1=1.0);
-
-  draw_piece :: (bit_board: u64, $u0: float, $v0: float, $u1: float, $v1: float) #expand {
+  draw_bitboard :: (bit_board: u64, $u0: float, $v0: float, $u1: float, $v1: float, $c: Vector4) #expand {
     value := bit_board;
     while value {
       index := serialize_bit(value);
-      // white
       i := 0;
       j := 0;
       if white_side {
@@ -125,7 +116,7 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
       }
       posx := x + i*square_len;
       posy := y + j*square_len;
-      im_draw_rect(posx, posy + square_len, posx + square_len, posy, u0=u0, v0=v0, u1=u1, v1=v1, c=BLANK);
+      im_draw_rect(posx, posy + square_len, posx + square_len, posy, u0=u0, v0=v0, u1=u1, v1=v1, c=c);
       value &= (value - 1);
     }
   }
@@ -166,10 +157,7 @@ read_mouse_input :: (window: *GLFWwindow) {
   }
 }
 
-handle_board_click :: (width: float, height: float, white_side := true) {
-  //mouse_position_x:     float = 0.0;
-  //mouse_position_y:     float = 0.0;
-  //mouse_button_1_state: enum {MOUSE_IDLE; MOUSE_PRESSED; MOUSE_HOLD; MOUSE_RELEASE; } = .MOUSE_IDLE;
+handle_board_click :: (width: float, height: float, piece_bitboard: *Piece_Bitboards, white_side := true) {
   cen_x := width * 0.5; 
   cen_y := height * 0.5;
 
@@ -182,26 +170,60 @@ handle_board_click :: (width: float, height: float, white_side := true) {
   x1 := cen_x + len*.5;
   y1 := cen_y + len*.5;
 
-  if mouse_button_1_state == .MOUSE_PRESSED {
+  sq: u64 = 0;
+  if mouse_button_1_state == .MOUSE_PRESSED || mouse_button_1_state == .MOUSE_RELEASE {
     if x0 <= mouse_position_x && mouse_position_x <= x1 {
       if y0 <= mouse_position_y && mouse_position_y <= y1 {
         if white_side {
           sq_x_clicked: int = xx ((mouse_position_x - x0) / square_len);
           sq_y_clicked: int = 7 - xx ((mouse_position_y - y0) / square_len);
           i := sq_x_clicked + sq_y_clicked * 8;
-          sq := cast(bboard) (1 << i);
-          print("Board Clicked! (%, %) %\n", sq_x_clicked, sq_y_clicked, sq); 
+          sq = xx (1 << i);
+          print("%: (%, %) %\n", mouse_button_1_state, sq_x_clicked, sq_y_clicked, cast(bboard)sq); 
         } else {
           sq_x_clicked: int = 7 - xx ((mouse_position_x - x0) / square_len);
           sq_y_clicked: int = xx ((mouse_position_y - y0) / square_len);
           i := sq_x_clicked + sq_y_clicked * 8;
-          sq := cast(bboard) (1 << i);
-          print("Board Clicked! (%, %) %\n", sq_x_clicked, sq_y_clicked, sq); 
+          sq = xx (1 << i);
+          print("%: (%, %) %\n", mouse_button_1_state, sq_x_clicked, sq_y_clicked, cast(bboard)sq); 
         }
       }
     }
   }
-  
+  // only deal with things that output a 'sq', when 0, return
+  if sq == 0 then return;
+
+  // piece selection state machine.
+  if piece_select_state == {
+  case .PIECE_IDLE;
+    if can_move(piece_bitboard, sq, whose_turn) && mouse_button_1_state == .MOUSE_PRESSED {
+      highlight_the_square ^= xx sq;
+      piece_select_state = .PIECE_SELECTED;
+      possible_moves_bb = possible_moves_for(piece_bitboard, sq, whose_turn);
+    }
+  case .PIECE_SELECTED;
+    if highlight_the_square == sq && mouse_button_1_state == .MOUSE_PRESSED {
+      highlight_the_square = 0;
+      piece_select_state = .PIECE_IDLE;
+      possible_moves_bb = 0;
+    } else if can_move(piece_bitboard, sq, whose_turn) && mouse_button_1_state == .MOUSE_PRESSED {
+      highlight_the_square = xx sq;
+      possible_moves_bb = possible_moves_for(piece_bitboard, sq, whose_turn);
+    } else if !can_move(piece_bitboard, sq, whose_turn) {
+      // make move
+      print("make the move: %-%\n", cast(bboard) highlight_the_square, cast(bboard) sq);
+      from := highlight_the_square;
+      to   := sq;
+      if to & possible_moves_bb {
+        print("make the move: % to %\n", cast(bboard) from, cast(bboard) to);
+        make_move_no_checking(piece_bitboard, from, to, whose_turn);
+        whose_turn = !whose_turn;
+      }
+      highlight_the_square = 0;
+      possible_moves_bb = 0;
+      piece_select_state = .PIECE_IDLE;
+    }
+  }
 }
 
 handle_flip_board :: (window: *GLFWwindow, white_side: bool)->bool {
@@ -214,18 +236,8 @@ handle_flip_board :: (window: *GLFWwindow, white_side: bool)->bool {
   return white_side;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+whose_turn := true; // true=white, false=black.
+highlight_the_square: u64 = 0;
+piece_select_state: enum { PIECE_IDLE; PIECE_SELECTED; } = .PIECE_IDLE;
+possible_moves_bb: u64 = 0;
 

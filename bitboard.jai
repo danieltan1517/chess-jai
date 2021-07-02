@@ -63,6 +63,88 @@ chess_start_pos :: () -> Piece_Bitboards {
   return start_pos;
 }
 
+get_white_pieces :: inline p => p.w_king | p.w_queen | p.w_rook | p.w_bishop | p.w_knight | p.w_pawn;
+get_black_pieces :: inline p => p.b_king | p.b_queen | p.b_rook | p.b_bishop | p.b_knight | p.b_pawn;
+
+can_move :: (using piece_bitboards: *Piece_Bitboards, sq: u64, whose_turn: bool) -> bool {
+  if whose_turn == true {
+    // white turn 
+    w_pieces := get_white_pieces(piece_bitboards);
+    return (w_pieces & sq) != 0;
+  } else {
+    // black turn
+    b_pieces := get_black_pieces(piece_bitboards);
+    return (b_pieces & sq) != 0;
+  }
+}
+
+make_move_no_checking :: (using piece_bitboards: *Piece_Bitboards, from: u64, to: u64, whose_turn: bool) {
+  // TODO: this is very naive.
+  if whose_turn == true {
+    maybe_make_move(w_king);
+    maybe_make_move(w_queen);
+    maybe_make_move(w_rook);
+    maybe_make_move(w_bishop);
+    maybe_make_move(w_knight);
+    maybe_make_move(w_pawn);
+    b_king &= ~to;
+    b_queen &= ~to;
+    b_rook &= ~to;
+    b_bishop &= ~to;
+    b_knight &= ~to;
+    b_pawn &= ~to;
+  } else {
+    maybe_make_move(b_king);
+    maybe_make_move(b_queen);
+    maybe_make_move(b_rook);
+    maybe_make_move(b_bishop);
+    maybe_make_move(b_knight);
+    maybe_make_move(b_pawn);
+    w_king &= ~to;
+    w_queen &= ~to;
+    w_rook &= ~to;
+    w_bishop &= ~to;
+    w_knight &= ~to;
+    w_pawn &= ~to;
+  }
+
+  maybe_make_move :: (code: Code) #expand {
+    if (#insert code) & from {
+      (#insert code) &= ~from;
+      (#insert code) |= to;
+    }
+  }
+}
+
+possible_moves_for :: (using piece_bitboards: *Piece_Bitboards, b: u64, whose_turn: bool) -> u64 {
+  w_pieces := get_white_pieces(piece_bitboards);
+  b_pieces := get_black_pieces(piece_bitboards);
+  all_pieces := w_pieces | b_pieces;
+  i := serialize_bit(b);
+  if whose_turn {
+    do_piece(w_king, w_pieces, king_moves);
+    do_piece(w_queen, w_pieces, queen_moves);
+    do_piece(w_rook, w_pieces, rook_moves);
+    do_piece(w_bishop, w_pieces, bishop_moves);
+    do_piece(w_knight, w_pieces, knight_moves);
+    do_piece(w_pawn, w_pieces, white_pawn_moves);
+  } else {
+    do_piece(b_king, b_pieces, king_moves);
+    do_piece(b_queen, b_pieces, queen_moves);
+    do_piece(b_rook, b_pieces, rook_moves);
+    do_piece(b_bishop, b_pieces, bishop_moves);
+    do_piece(b_knight, b_pieces, knight_moves);
+    do_piece(b_pawn, b_pieces, black_pawn_moves);
+  }
+
+  return 0;
+
+  do_piece :: (bboard: u64, friends: u64, $move_funct: #type (u64,int,u64,u64)->u64 ) #expand {
+    if b & bboard {
+      `return move_funct(all_pieces, i, b, friends);
+    }
+  }
+}
 
 white_pawn_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
   up1 := (slider << 8) & ~occupied;
@@ -111,7 +193,7 @@ queen_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -
 king_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
   k := slider | ((slider << 1) & xx ~file_a) | ((slider >> 1) & xx ~file_h);
   neighbors := (k | (k << 8) | (k >> 8)) & ~slider;
-  return neighbors;
+  return neighbors & ~friends;
 }
 
 white_pawn_captures :: inline (slider: u64) -> u64 {
@@ -152,6 +234,46 @@ adiag_of :: inline (i: int)->u64 {
   return xx a_diags[index];
 }
 
+
+serialize_bit :: trailing_zeros;
+
+print_bitboard :: (b: u64) {
+  #import "Basic";
+  loop(xx a8, "8 ");
+  loop(xx a7, "7 ");
+  loop(xx a6, "6 ");
+  loop(xx a5, "5 ");
+  loop(xx a4, "4 ");
+  loop(xx a3, "3 ");
+  loop(xx a2, "2 ");
+  loop(xx a1, "1 ");
+  print("  a b c d e f g h\n");
+
+  loop :: (x: u64, s: string) #expand {
+    print(s);
+    z := x;
+    for 0..7 {
+      if b & z {
+        print("O ");
+      } else {
+        print("- ");
+      }
+      z <<= 1;
+    }
+    print("\n");
+  }
+}
+
+
+#scope_file
+
+// o = occupied, r = piece, m = mask
+sliding :: inline (o: u64, r: u64, m: u64)->u64 {
+  o_bar := bit_reverse64(o & m);
+  r_bar := bit_reverse64(r);
+  return (((o & m) - (2*r)) ^ bit_reverse64(o_bar - (2*r_bar))) & m;
+}
+
 diags :: bboard.[
   h1,
   g1 | h2,
@@ -187,41 +309,4 @@ a_diags :: bboard.[
   g8 | h7,
   h8,
 ];
-
-serialize_bit :: trailing_zeros;
-
-print_bitboard :: (b: u64) {
-  #import "Basic";
-  loop(xx a8, "8 ");
-  loop(xx a7, "7 ");
-  loop(xx a6, "6 ");
-  loop(xx a5, "5 ");
-  loop(xx a4, "4 ");
-  loop(xx a3, "3 ");
-  loop(xx a2, "2 ");
-  loop(xx a1, "1 ");
-  print("  a b c d e f g h\n");
-
-  loop :: (x: u64, s: string) #expand {
-    print(s);
-    z := x;
-    for 0..7 {
-      if b & z {
-        print("O ");
-      } else {
-        print("- ");
-      }
-      z <<= 1;
-    }
-    print("\n");
-  }
-}
-
-// o = occupied, r = piece, m = mask
-sliding :: inline (o: u64, r: u64, m: u64)->u64 {
-  o_bar := bit_reverse64(o & m);
-  r_bar := bit_reverse64(r);
-  return (((o & m) - (2*r)) ^ bit_reverse64(o_bar - (2*r_bar))) & m;
-}
-
 
