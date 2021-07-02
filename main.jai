@@ -42,7 +42,7 @@ main :: () {
     im_set_viewport_transform(2.0/width, 2.0/height, -1, -1);
     white_side = handle_flip_board(window, white_side);
     handle_board_click(xx width, xx height, *piece_bitboard, white_side=white_side);
-    draw_chess(xx width, xx height, *piece_bitboard, t, highlight_the_square|possible_moves_bb, last_move_bb, white_side);
+    draw_chess(xx width, xx height, *piece_bitboard, t, highlight_the_square, possible_moves_bb, last_move_bb, white_side);
     im_flush();
 
     glfwSwapBuffers(window);
@@ -51,7 +51,7 @@ main :: () {
   }
 }
 
-draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *Texture, highlight_bb: u64, move_bb: u64, white_side: bool) {
+draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *Texture, highlight_square: u64, possible_moves_bb: u64, last_move_bb: u64, white_side: bool) {
   cen_x := width * 0.5; 
   cen_y := height * 0.5;
 
@@ -84,27 +84,48 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
   // chess.com uses yellow, so we follow their example...
   GREY     :: Vector4.{.5,.5,.2,.35}; 
   YELLOW :: Vector4.{.9,.9,0,.5}; 
-  draw_bitboard(highlight_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, GREY);
-  draw_bitboard(move_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, YELLOW);
+  draw_bitboard(possible_moves_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, GREY);
+  draw_bitboard(last_move_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, YELLOW);
 
   im_set_texture(texture);
 
-  draw_bitboard(pieces.w_king, u0=0.0, v0=0.0, u1=1.0/6.0, v1=0.5, BLANK);
-  draw_bitboard(pieces.w_queen, u0=1.0/6.0, v0=0.0, u1=2.0/6.0, v1=1.0/2.0, BLANK);
-  draw_bitboard(pieces.w_rook, u0=4.0/6.0, v0=0.0, u1=5.0/6.0, v1=1.0/2.0, BLANK);
-  draw_bitboard(pieces.w_bishop, u0=2.0/6.0, v0=0.0, u1=3.0/6.0, v1=1.0/2.0, BLANK);
-  draw_bitboard(pieces.w_knight, u0=3.0/6.0, v0=0.0, u1=4.0/6.0, v1=1.0/2.0, BLANK);
-  draw_bitboard(pieces.w_pawn, u0=5.0/6.0, v0=0.0, u1=1.0, v1=1.0/2.0, BLANK);
+  using pieces;
+  draw_bitboard(w_king, u0=0.0, v0=0.0, u1=1.0/6.0, v1=0.5, BLANK);
+  draw_bitboard(w_queen, u0=1.0/6.0, v0=0.0, u1=2.0/6.0, v1=1.0/2.0, BLANK);
+  draw_bitboard(w_rook, u0=4.0/6.0, v0=0.0, u1=5.0/6.0, v1=1.0/2.0, BLANK);
+  draw_bitboard(w_bishop, u0=2.0/6.0, v0=0.0, u1=3.0/6.0, v1=1.0/2.0, BLANK);
+  draw_bitboard(w_knight, u0=3.0/6.0, v0=0.0, u1=4.0/6.0, v1=1.0/2.0, BLANK);
+  draw_bitboard(w_pawn, u0=5.0/6.0, v0=0.0, u1=1.0, v1=1.0/2.0, BLANK);
 
-  draw_bitboard(pieces.b_king, u0=0.0, v0=0.5, u1=1.0/6.0, v1=1.0, BLANK);
-  draw_bitboard(pieces.b_queen, u0=1.0/6.0, v0=0.5, u1=2.0/6.0, v1=1.0, BLANK);
-  draw_bitboard(pieces.b_rook, u0=4.0/6.0, v0=0.5, u1=5.0/6.0, v1=1.0, BLANK);
-  draw_bitboard(pieces.b_bishop, u0=2.0/6.0, v0=0.5, u1=3.0/6.0, v1=1.0, BLANK);
-  draw_bitboard(pieces.b_knight, u0=3.0/6.0, v0=0.5, u1=4.0/6.0, v1=1.0, BLANK);
-  draw_bitboard(pieces.b_pawn, u0=5.0/6.0, v0=0.5, u1=1.0, v1=1.0, BLANK);
+  draw_bitboard(b_king, u0=0.0, v0=0.5, u1=1.0/6.0, v1=1.0, BLANK);
+  draw_bitboard(b_queen, u0=1.0/6.0, v0=0.5, u1=2.0/6.0, v1=1.0, BLANK);
+  draw_bitboard(b_rook, u0=4.0/6.0, v0=0.5, u1=5.0/6.0, v1=1.0, BLANK);
+  draw_bitboard(b_bishop, u0=2.0/6.0, v0=0.5, u1=3.0/6.0, v1=1.0, BLANK);
+  draw_bitboard(b_knight, u0=3.0/6.0, v0=0.5, u1=4.0/6.0, v1=1.0, BLANK);
+  draw_bitboard(b_pawn, u0=5.0/6.0, v0=0.5, u1=1.0, v1=1.0, BLANK);
 
-  draw_bitboard :: (bit_board: u64, $u0: float, $v0: float, $u1: float, $v1: float, $c: Vector4) #expand {
-    value := bit_board;
+  LESS :: Vector4.{1.0, 1.0, 1.0, 0.25};
+  draw_bitboard(w_king, u0=0.0, v0=0.0, u1=1.0/6.0, v1=0.5, BLANK, true);
+  draw_bitboard(w_queen, u0=1.0/6.0, v0=0.0, u1=2.0/6.0, v1=1.0/2.0, BLANK, true);
+  draw_bitboard(w_rook, u0=4.0/6.0, v0=0.0, u1=5.0/6.0, v1=1.0/2.0, BLANK, true);
+  draw_bitboard(w_bishop, u0=2.0/6.0, v0=0.0, u1=3.0/6.0, v1=1.0/2.0, BLANK, true);
+  draw_bitboard(w_knight, u0=3.0/6.0, v0=0.0, u1=4.0/6.0, v1=1.0/2.0, BLANK, true);
+  draw_bitboard(w_pawn, u0=5.0/6.0, v0=0.0, u1=1.0, v1=1.0/2.0, BLANK, true);
+ 
+  draw_bitboard(b_king, u0=0.0, v0=0.5, u1=1.0/6.0, v1=1.0, BLANK, true);
+  draw_bitboard(b_queen, u0=1.0/6.0, v0=0.5, u1=2.0/6.0, v1=1.0, BLANK, true);
+  draw_bitboard(b_rook, u0=4.0/6.0, v0=0.5, u1=5.0/6.0, v1=1.0, BLANK, true);
+  draw_bitboard(b_bishop, u0=2.0/6.0, v0=0.5, u1=3.0/6.0, v1=1.0, BLANK, true);
+  draw_bitboard(b_knight, u0=3.0/6.0, v0=0.5, u1=4.0/6.0, v1=1.0, BLANK, true);
+  draw_bitboard(b_pawn, u0=5.0/6.0, v0=0.5, u1=1.0, v1=1.0, BLANK, true);
+
+  draw_bitboard :: (bit_board: u64, $u0: float, $v0: float, $u1: float, $v1: float, $c: Vector4, $draw_mouse_drag := false) #expand {
+    value: u64 = bit_board;
+    #if !draw_mouse_drag 
+      value &= ~highlight_square;
+    else 
+      value &= highlight_square;
+
     while value {
       index := serialize_bit(value);
       i := 0;
@@ -116,9 +137,25 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
         i = 7 - index &  7;
         j = 7 - index >> 3;
       }
-      posx := x + i*square_len;
-      posy := y + j*square_len;
-      im_draw_rect(posx, posy + square_len, posx + square_len, posy, u0=u0, v0=v0, u1=u1, v1=v1, c=c);
+
+      #if draw_mouse_drag {
+        if mouse_button_1_state == .MOUSE_HOLD {
+          posx := x + i*square_len;
+          posy := y + j*square_len;
+          im_draw_rect(posx, posy + square_len, posx + square_len, posy, u0=u0, v0=v0, u1=u1, v1=v1, c=LESS);
+          posx = mouse_position_x - square_len*0.5;   
+          posy = height - mouse_position_y - square_len*0.5;   
+          im_draw_rect(posx, posy + square_len, posx + square_len, posy, u0=u0, v0=v0, u1=u1, v1=v1, c=c);
+        } else {
+          posx := x + i*square_len;
+          posy := y + j*square_len;
+          im_draw_rect(posx, posy + square_len, posx + square_len, posy, u0=u0, v0=v0, u1=u1, v1=v1, c=c);
+        }
+      } else {
+        posx := x + i*square_len;
+        posy := y + j*square_len;
+        im_draw_rect(posx, posy + square_len, posx + square_len, posy, u0=u0, v0=v0, u1=u1, v1=v1, c=c);
+      }
       value &= (value - 1);
     }
   }
