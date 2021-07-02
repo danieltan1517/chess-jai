@@ -29,7 +29,6 @@ main :: () {
     destroy_texture(t);
   }
 
-
   while !glfwWindowShouldClose(window) {
     width, height : s32;
     glfwGetFramebufferSize(window, *width, *height);
@@ -77,6 +76,8 @@ draw_chessboard :: (width: float, height: float, white_side := true) {
   }
 }
 
+WHITE :: Vector4.{1,1,1,1};
+
 draw_chesspieces :: (width: float, height: float, t: *Texture) {
   im_set_texture(t);
   cen_x := width * 0.5; 
@@ -87,7 +88,44 @@ draw_chesspieces :: (width: float, height: float, t: *Texture) {
   x := cen_x - len*.5;
   y := cen_y + len*.5;
   white_color :: Vector4.{1.0, 1.0, 1.0, 1.0};
-  im_draw_rect(x, y, x + 6*square_len, y - 2*square_len, c=white_color);
+  // white king
+  im_draw_rect(x, y, x + square_len, y - square_len, u0=0.0, v0=0.0, u1=1.0/6.0, v1=0.5, c=white_color);
+
+  // white queen
+  x += square_len;
+  im_draw_rect(x, y, x + square_len, y - square_len, u0=1.0/6.0, v0=0.0, u1=2.0/6.0, v1=1.0/2.0 , c=white_color);
+  // white bishop
+  x += square_len;
+  im_draw_rect(x, y, x + square_len, y - square_len, u0=2.0/6.0, v0=0.0, u1=3.0/6.0, v1=1.0/2.0 , c=white_color);
+  // white knight
+  x += square_len;
+  im_draw_rect(x, y, x + square_len, y - square_len, u0=3.0/6.0, v0=0.0, u1=4.0/6.0, v1=1.0/2.0 , c=white_color);
+  // white rook
+  x += square_len;
+  im_draw_rect(x, y, x + square_len, y - square_len, u0=4.0/6.0, v0=0.0, u1=5.0/6.0, v1=1.0/2.0 , c=white_color);
+  // white pawn 
+  x += square_len;
+  im_draw_rect(x, y, x + square_len, y - square_len, u0=5.0/6.0, v0=0.0, u1=1.0, v1=1.0/2.0 , c=white_color);
+
+  // black king
+  x = cen_x - len*.5;
+  y -= square_len;
+  im_draw_rect(x, y, x + square_len, y - square_len, u0=0.0, v0=0.5, u1=1.0/6.0, v1=1.0, c=white_color);
+  // black queen
+  x += square_len;
+  im_draw_rect(x, y, x + square_len, y - square_len, u0=1.0/6.0, v0=0.5, u1=2.0/6.0, v1=1.0, c=white_color);
+  // black bishop
+  x += square_len;
+  im_draw_rect(x, y, x + square_len, y - square_len, u0=2.0/6.0, v0=0.5, u1=3.0/6.0, v1=1.0, c=white_color);
+  // black knight
+  x += square_len;
+  im_draw_rect(x, y, x + square_len, y - square_len, u0=3.0/6.0, v0=0.5, u1=4.0/6.0, v1=1.0, c=white_color);
+  // black rook
+  x += square_len;
+  im_draw_rect(x, y, x + square_len, y - square_len, u0=4.0/6.0, v0=0.5, u1=5.0/6.0, v1=1.0, c=white_color);
+  // black pawn 
+  x += square_len;
+  im_draw_rect(x, y, x + square_len, y - square_len, u0=5.0/6.0, v0=0.5, u1=1.0, v1=1.0 , c=white_color);
 }
 
 
