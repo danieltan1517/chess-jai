@@ -1,5 +1,3 @@
-#import "Basic";
-
 using bboard :: enum_flags u64 {
   a1; b1; c1; d1; e1; f1; g1; h1;
   a2; b2; c2; d2; e2; f2; g2; h2;
@@ -30,6 +28,41 @@ using bboard :: enum_flags u64 {
   rank_7 :: a7 | b7 | c7 | d7 | e7 | f7 | g7 | h7;
   rank_8 :: a8 | b8 | c8 | d8 | e8 | f8 | g8 | h8;
 }
+
+Piece_Bitboards :: struct {
+  w_king :  u64;
+  w_queen:  u64;
+  w_rook:   u64;
+  w_bishop: u64;
+  w_knight: u64;
+  w_pawn:   u64; 
+
+  b_king :  u64;
+  b_queen:  u64;
+  b_rook:   u64;
+  b_bishop: u64;
+  b_knight: u64;
+  b_pawn:   u64; 
+}
+
+chess_start_pos :: () -> Piece_Bitboards {
+  start_pos: Piece_Bitboards;
+  start_pos.w_king   = xx e1;
+  start_pos.w_queen  = xx d1;
+  start_pos.w_rook   = xx a1 | h1;
+  start_pos.w_bishop = xx c1 | f1;
+  start_pos.w_knight = xx b1 | g1;
+  start_pos.w_pawn   = xx rank_2;
+
+  start_pos.b_king   = xx e8;
+  start_pos.b_queen  = xx d8;
+  start_pos.b_rook   = xx a8 | h8;
+  start_pos.b_bishop = xx c8 | f8;
+  start_pos.b_knight = xx b8 | g8;
+  start_pos.b_pawn   = xx rank_7;
+  return start_pos;
+}
+
 
 white_pawn_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
   up1 := (slider << 8) & ~occupied;
@@ -158,6 +191,7 @@ a_diags :: bboard.[
 serialize_bit :: trailing_zeros;
 
 print_bitboard :: (b: u64) {
+  #import "Basic";
   loop(xx a8, "8 ");
   loop(xx a7, "7 ");
   loop(xx a6, "6 ");
