@@ -19,6 +19,17 @@ main :: () {
   gl_load(*gl, glfwGetProcAddress);
   im_init_gl();
 
+  t := New(Texture);
+  if !load_texture_from_file(t, "resources/chess_pieces.png") {
+    print("Error loading texture");
+    return;
+  }
+
+  defer {
+    destroy_texture(t);
+  }
+
+
   while !glfwWindowShouldClose(window) {
     width, height : s32;
     glfwGetFramebufferSize(window, *width, *height);
@@ -28,6 +39,7 @@ main :: () {
     im_draw_setup_gl();
     im_set_viewport_transform(2.0/width, 2.0/height, -1, -1);
     draw_chessboard(xx width, xx height);
+    draw_chesspieces(xx width, xx height, t);
     im_flush();
 
     glfwSwapBuffers(window);
@@ -47,6 +59,7 @@ draw_chessboard :: (width: float, height: float, white_side := true) {
 
   white_color :: Vector4.{238.0/255.0, 238.0/255.0, 210.0/255.0, 1.0};
   black_color :: Vector4.{118.0/255.0, 150.0/255.0,  86.0/255.0, 1.0};
+  im_set_texture(null);
 
   TF := ifx white_side false else true;
   for i: 0..7 {
@@ -64,7 +77,18 @@ draw_chessboard :: (width: float, height: float, white_side := true) {
   }
 }
 
+draw_chesspieces :: (width: float, height: float, t: *Texture) {
+  im_set_texture(t);
+  cen_x := width * 0.5; 
+  cen_y := height * 0.5;
 
+  len := min(width, height) * 0.8;
+  square_len := len / 8.0;
+  x := cen_x - len*.5;
+  y := cen_y + len*.5;
+  white_color :: Vector4.{1.0, 1.0, 1.0, 1.0};
+  im_draw_rect(x, y, x + 6*square_len, y - 2*square_len, c=white_color);
+}
 
 
 
