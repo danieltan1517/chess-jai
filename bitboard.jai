@@ -130,6 +130,10 @@ generate_legal_moves :: (p: *Piece_Bitboards, whose_turn: bool) -> u64 {
     
     king := p.w_king;
     i := serialize_bit(king);
+    k_file := file_of(i);
+    k_rank := rank_of(i);
+    k_diag := diag_of(i);
+    k_adia := adiag_of(i);
 
     // pawn checks
     checks = checks | (white_pawn_captures(king) & p.b_pawn);
@@ -137,9 +141,31 @@ generate_legal_moves :: (p: *Piece_Bitboards, whose_turn: bool) -> u64 {
     // knight checks
     checks = checks | (knight_moves(0, 0, king) & p.b_knight);
 
-    rook_pin, rook_at := xray_rook_attacks(all_pieces, w_pieces, i, king); // & (p.b_rook | p.b_queen);
-    bishop_pin, bishop_at := xray_bishop_attacks(all_pieces, w_pieces, i, king); // & (p.b_bishop | p.b_queen);
-    return (rook_pin | bishop_pin) | (rook_at | bishop_at);
+    xray_rook, king_r_ray := xray_rook_attacks(all_pieces, w_pieces, i, king);
+    rook_pin := xray_rook & (p.b_rook | p.b_queen);
+    while rook_pin {
+      sq: u64 = xx  (1 << serialize_bit(rook_pin));
+      if sq & k_file {
+        pins |= (sliding(king, sq, k_file) ^ xray_rook) & w_pieces & king_r_ray;
+      } else {
+        pins |= (sliding(king, sq, k_rank) ^ xray_rook) & w_pieces & king_r_ray;
+      }
+      rook_pin = rook_pin & (rook_pin - 1);
+    }
+
+    xray_bishop, king_b_ray := xray_bishop_attacks(all_pieces, w_pieces, i, king);
+    bishop_pin := xray_bishop & (p.b_bishop | p.b_queen);
+    while bishop_pin {
+      sq: u64 = xx  (1 << serialize_bit(bishop_pin));
+      if sq & k_diag {
+        pins |= (sliding(king, sq, k_diag) ^ xray_bishop) & w_pieces & king_b_ray;
+      } else {
+        pins |= (sliding(king, sq, k_adia) ^ xray_bishop) & w_pieces & king_b_ray;
+      }
+      bishop_pin = bishop_pin & (bishop_pin - 1);
+    }
+
+    return pins;
 
   } else {
     attacks := generate_white_attacks(p, all_pieces);
@@ -149,6 +175,10 @@ generate_legal_moves :: (p: *Piece_Bitboards, whose_turn: bool) -> u64 {
 
     king := p.b_king;
     i := serialize_bit(king);
+    k_file := file_of(i);
+    k_rank := rank_of(i);
+    k_diag := diag_of(i);
+    k_adia := adiag_of(i);
 
     // pawn checks
     checks = checks | (black_pawn_captures(king) & p.w_pawn);
@@ -156,10 +186,31 @@ generate_legal_moves :: (p: *Piece_Bitboards, whose_turn: bool) -> u64 {
     // knight checks
     checks = checks | (knight_moves(0, 0, king) & p.w_knight);
 
-    rook_pin, rook_at := xray_rook_attacks(all_pieces, b_pieces, i, king);// & (p.w_rook | p.w_queen);
-    bishop_pin, bishop_at := xray_bishop_attacks(all_pieces, b_pieces, i, king); // & (p.w_bishop | p.w_queen);
-    return (rook_pin | bishop_pin) | (rook_at | bishop_at);
+    xray_rook, king_r_ray := xray_rook_attacks(all_pieces, b_pieces, i, king); 
+    rook_pin := xray_rook & (p.w_rook | p.w_queen);
+    while rook_pin {
+      sq: u64 = xx  (1 << serialize_bit(rook_pin));
+      if sq & k_file {
+        pins |= (sliding(king, sq, k_file) ^ xray_rook) & b_pieces & king_r_ray;
+      } else {
+        pins |= (sliding(king, sq, k_rank) ^ xray_rook) & b_pieces & king_r_ray;
+      }
+      rook_pin = rook_pin & (rook_pin - 1);
+    }
 
+    xray_bishop, king_b_ray := xray_bishop_attacks(all_pieces, b_pieces, i, king); 
+    bishop_pin := xray_bishop & (p.w_bishop | p.w_queen);
+    while bishop_pin {
+      sq: u64 = xx  (1 << serialize_bit(bishop_pin));
+      if sq & k_diag {
+        pins |= (sliding(king, sq, k_diag) ^ xray_bishop) & b_pieces & king_b_ray;
+      } else {                                      
+        pins |= (sliding(king, sq, k_adia) ^ xray_bishop) & b_pieces & king_b_ray;
+      }
+      bishop_pin = bishop_pin & (bishop_pin - 1);
+    }
+
+    return pins;
   }
 }
 
