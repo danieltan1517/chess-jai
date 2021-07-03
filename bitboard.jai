@@ -45,6 +45,46 @@ Piece_Bitboards :: struct {
   b_pawn:   u64; 
 }
 
+serialized_bb :: enum s16 {
+  a1; b1; c1; d1; e1; f1; g1; h1;
+  a2; b2; c2; d2; e2; f2; g2; h2;
+  a3; b3; c3; d3; e3; f3; g3; h3;
+  a4; b4; c4; d4; e4; f4; g4; h4;
+  a5; b5; c5; d5; e5; f5; g5; h5;
+  a6; b6; c6; d6; e6; f6; g6; h6;
+  a7; b7; c7; d7; e7; f7; g7; h7;
+  a8; b8; c8; d8; e8; f8; g8; h8;
+}
+
+// from chess programming wiki:
+Move16 :: enum s16 {
+  Quiet :: 0;
+  Double_Pawn_Push;
+  King_Castle;
+  Queen_Castle;
+  Capture;
+  Ep_Capture;
+  Knight_Promotion;
+  Bishop_Promotion;
+  Rook_Promotion;
+  Queen_Promotion;
+  Knight_Promotion_Capture;
+  Bishop_Promotion_Capture;
+  Rook_Promotion_Capture;
+  Queen_Promotion_Capture;
+}
+
+generate_move :: inline (x: u64, y: u64, flags: Move16) -> Move16 {
+  from := serialize_bit(x);
+  to   := serialize_bit(y);
+  return xx ((from << 10) | (to << 4) | (xx flags));
+}
+
+// Type of move, From, To.
+decode_move :: inline (mov: Move16) -> Move16, int, int {
+  return  mov & (xx 0xF),  xx (mov & (xx 0xFC00) >> 10), xx (mov & (xx 0x03F0) >> 4);
+}
+
 chess_start_pos :: () -> Piece_Bitboards {
   start_pos: Piece_Bitboards;
   start_pos.w_king   = xx e1;
@@ -79,6 +119,14 @@ can_move :: (using piece_bitboards: *Piece_Bitboards, sq: u64, whose_turn: bool)
 }
 
 make_move_no_checking :: (using piece_bitboards: *Piece_Bitboards, from: u64, to: u64, whose_turn: bool) {
+
+  mov := generate_move(from, to, Move16.Quiet);
+  print("(type: %) (from: %) (to: %)\n", 
+        mov & (xx 0xF), 
+        cast(serialized_bb) (mov & (xx 0xFC00) >> 10),
+        cast(serialized_bb) (mov & (xx 0x03F0) >> 4)
+  );
+
   // TODO: this is very naive.
   if whose_turn == true {
     maybe_make_move(w_king);

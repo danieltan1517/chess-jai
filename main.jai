@@ -275,18 +275,16 @@ x_key_state: enum { XKEY_IDLE; XKEY_PRESS; } = .XKEY_IDLE;
 handle_flip_board :: (window: *GLFWwindow, white_side: bool)->bool {
   state := glfwGetKey(window, GLFW_KEY_X);
   if x_key_state == {
-
   case .XKEY_IDLE;
     if state == GLFW_PRESS {
       x_key_state = .XKEY_PRESS;
-      return !white_side;
+      white_side = !white_side;
     }
   case .XKEY_PRESS;
     if state == GLFW_RELEASE {
       x_key_state = .XKEY_IDLE;
     }
   }
-
   return white_side;
 }
 
