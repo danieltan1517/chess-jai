@@ -112,7 +112,7 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
   draw_bitboard(b_knight, u0=3.0/6.0, v0=0.5, u1=4.0/6.0, v1=1.0, BLANK);
   draw_bitboard(b_pawn, u0=5.0/6.0, v0=0.5, u1=1.0, v1=1.0, BLANK);
 
-  // draw the piece being dragged
+  // draw the piece being dragged/dropped.
   draw_bitboard(w_king, u0=0.0, v0=0.0, u1=1.0/6.0, v1=0.5, BLANK, true);
   draw_bitboard(w_queen, u0=1.0/6.0, v0=0.0, u1=2.0/6.0, v1=1.0/2.0, BLANK, true);
   draw_bitboard(w_rook, u0=4.0/6.0, v0=0.0, u1=5.0/6.0, v1=1.0/2.0, BLANK, true);
@@ -270,11 +270,21 @@ handle_board_click :: (width: float, height: float, piece_bitboard: *Piece_Bitbo
   }
 }
 
+x_key_state: enum { XKEY_IDLE; XKEY_PRESS; } = .XKEY_IDLE;
+
 handle_flip_board :: (window: *GLFWwindow, white_side: bool)->bool {
   state := glfwGetKey(window, GLFW_KEY_X);
-  if (state == GLFW_PRESS)
-  {
-    return !white_side;
+  if x_key_state == {
+
+  case .XKEY_IDLE;
+    if state == GLFW_PRESS {
+      x_key_state = .XKEY_PRESS;
+      return !white_side;
+    }
+  case .XKEY_PRESS;
+    if state == GLFW_RELEASE {
+      x_key_state = .XKEY_IDLE;
+    }
   }
 
   return white_side;
