@@ -88,8 +88,10 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
   LESS     :: Vector4.{1.0, 1.0, 1.0, 0.25};
   RED      :: Vector4.{1, 0.25, 0.25, 0.5};
   attacks := generate_legal_moves(pieces, whose_turn);
+  if attacks
+    print("check! %\n", cast(bboard) attacks);
   draw_bitboard(attacks, u0=0.0, v0=0.0, u1=1.0, v1=1.0, RED);
-  //draw_bitboard(last_move_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, YELLOW);
+  draw_bitboard(last_move_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, YELLOW);
   draw_bitboard(possible_moves_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, GREY);
 
   im_set_texture(texture);

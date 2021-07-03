@@ -117,7 +117,9 @@ make_move_no_checking :: (using piece_bitboards: *Piece_Bitboards, from: u64, to
 }
 
 // TODO: figure out what to return.
-// TODO: not correct.
+// TODO: pins are a pain in the ass to figure out. i don't know if this is fully
+// correct. but it works pretty robustly...
+
 generate_legal_moves :: (p: *Piece_Bitboards, whose_turn: bool) -> u64 {
   w_pieces := get_white_pieces(p);
   b_pieces := get_black_pieces(p);
@@ -165,8 +167,10 @@ generate_legal_moves :: (p: *Piece_Bitboards, whose_turn: bool) -> u64 {
       bishop_pin = bishop_pin & (bishop_pin - 1);
     }
 
-    return pins;
+    checks = checks | (king_r_ray & (p.b_rook   | p.b_queen));
+    checks = checks | (king_b_ray & (p.b_bishop | p.b_queen));
 
+    return checks;
   } else {
     attacks := generate_white_attacks(p, all_pieces);
     // check for attacks around the black king
@@ -210,7 +214,9 @@ generate_legal_moves :: (p: *Piece_Bitboards, whose_turn: bool) -> u64 {
       bishop_pin = bishop_pin & (bishop_pin - 1);
     }
 
-    return pins;
+    checks = checks | (king_r_ray & (p.w_rook   | p.w_queen));
+    checks = checks | (king_b_ray & (p.w_bishop | p.w_queen));
+    return checks;
   }
 }
 
@@ -321,22 +327,6 @@ possible_moves_for :: (using piece_bitboards: *Piece_Bitboards, b: u64, whose_tu
     }
   }
 }
-
-/*
-pinned = 0;
-pinner = xrayRookAttacks(occupiedBB, ownPieces, squareOfKing) & opRQ;
-while ( pinner ) {
-   int sq  = bitScanForward(pinner);
-   pinned |= obstructed(sq, squareOfKing) & ownPieces;
-   pinner &= pinner - 1;
-}
-pinner = xrayBishopAttacks(occupiedBB, ownPieces, squareOfKing) & opBQ;
-while ( pinner ) {
-   int sq  = bitScanForward(pinner);
-   pinned |= obstructed(sq, squareOfKing) & ownPieces;
-   pinner &= pinner - 1;
-}
-*/
 
 xray_rook_attacks :: (occ: u64, blockers: u64, i: int, rook_sq: u64) -> u64, u64 {
   attacks := rook_moves(occ, i, rook_sq);
