@@ -118,28 +118,52 @@ make_move_no_checking :: (using piece_bitboards: *Piece_Bitboards, from: u64, to
 
 // TODO: figure out what to return.
 // TODO: not correct.
-generate_legal_moves :: (using p: *Piece_Bitboards, whose_turn: bool) -> u64 {
+generate_legal_moves :: (p: *Piece_Bitboards, whose_turn: bool) -> u64 {
   w_pieces := get_white_pieces(p);
   b_pieces := get_black_pieces(p);
   all_pieces := w_pieces | b_pieces;
-
   if whose_turn {
     attacks := generate_black_attacks(p, all_pieces);
+    // check for attacks around the white king
+    checks: u64 = 0;
+    pins: u64 = 0;
+    
+    king := p.w_king;
+    i := serialize_bit(king);
 
-    if attacks & w_king {
-      print("white king is in check!\n");
-    }
+    // pawn checks
+    checks = checks | (white_pawn_captures(king) & p.b_pawn);
 
-    return attacks;
+    // knight checks
+    checks = checks | (knight_moves(0, 0, king) & p.b_knight);
+
+    rook_pin, rook_at := xray_rook_attacks(all_pieces, w_pieces, i, king); // & (p.b_rook | p.b_queen);
+    bishop_pin, bishop_at := xray_bishop_attacks(all_pieces, w_pieces, i, king); // & (p.b_bishop | p.b_queen);
+    return (rook_pin | bishop_pin) | (rook_at | bishop_at);
+
   } else {
     attacks := generate_white_attacks(p, all_pieces);
-    if attacks & b_king {
-      print("black king is in check!\n");
-    }
-    return attacks;
+    // check for attacks around the black king
+    checks: u64 = 0;
+    pins: u64 = 0;
+
+    king := p.b_king;
+    i := serialize_bit(king);
+
+    // pawn checks
+    checks = checks | (black_pawn_captures(king) & p.w_pawn);
+
+    // knight checks
+    checks = checks | (knight_moves(0, 0, king) & p.w_knight);
+
+    rook_pin, rook_at := xray_rook_attacks(all_pieces, b_pieces, i, king);// & (p.w_rook | p.w_queen);
+    bishop_pin, bishop_at := xray_bishop_attacks(all_pieces, b_pieces, i, king); // & (p.w_bishop | p.w_queen);
+    return (rook_pin | bishop_pin) | (rook_at | bishop_at);
+
   }
 }
 
+// TODO: optimize attack generation...
 generate_white_attacks :: (using p: *Piece_Bitboards, all_pieces: u64) -> u64 {
   // generate white attacks
   w_king_attacks := king_moves(0, 0, w_king); 
@@ -178,6 +202,7 @@ generate_white_attacks :: (using p: *Piece_Bitboards, all_pieces: u64) -> u64 {
   return w_king_attacks | w_queen_attacks | w_rook_attacks | w_bishop_attacks | w_knight_attacks | w_pawn_attacks;
 }
 
+// TODO: optimize attack generation...
 generate_black_attacks :: (using p: *Piece_Bitboards, all_pieces: u64) -> u64 {
   // generate black attacks
   b_king_attacks := king_moves(0, 0, b_king); 
@@ -244,6 +269,34 @@ possible_moves_for :: (using piece_bitboards: *Piece_Bitboards, b: u64, whose_tu
       `return move_funct(all_pieces, i, b, friends);
     }
   }
+}
+
+/*
+pinned = 0;
+pinner = xrayRookAttacks(occupiedBB, ownPieces, squareOfKing) & opRQ;
+while ( pinner ) {
+   int sq  = bitScanForward(pinner);
+   pinned |= obstructed(sq, squareOfKing) & ownPieces;
+   pinner &= pinner - 1;
+}
+pinner = xrayBishopAttacks(occupiedBB, ownPieces, squareOfKing) & opBQ;
+while ( pinner ) {
+   int sq  = bitScanForward(pinner);
+   pinned |= obstructed(sq, squareOfKing) & ownPieces;
+   pinner &= pinner - 1;
+}
+*/
+
+xray_rook_attacks :: (occ: u64, blockers: u64, i: int, rook_sq: u64) -> u64, u64 {
+  attacks := rook_moves(occ, i, rook_sq);
+  blockers &= attacks;
+  return attacks ^ rook_moves(occ ^ blockers, i, rook_sq), attacks;
+}
+
+xray_bishop_attacks :: (occ: u64, blockers: u64, i: int, bishop_sq: u64) -> u64, u64 {
+  attacks := bishop_moves(occ, i, bishop_sq);
+  blockers &= attacks;
+  return attacks ^ bishop_moves(occ ^ blockers, i, bishop_sq), attacks;
 }
 
 white_pawn_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
@@ -368,11 +421,22 @@ print_bitboard :: (b: u64) {
 #scope_file
 
 // o = occupied, r = piece, m = mask
-sliding :: inline (o: u64, r: u64, m: u64)->u64 {
+sliding :: inline (o: u64, r: u64, m: u64) -> u64 {
   o_bar := bit_reverse64(o & m);
   r_bar := bit_reverse64(r);
   return (((o & m) - (2*r)) ^ bit_reverse64(o_bar - (2*r_bar))) & m;
 }
+
+sliding_half_1 :: inline (o: u64, r: u64) -> u64 {
+  return o - (2*r);
+}
+
+sliding_half_2 :: inline (o: u64, r: u64) -> u64 {
+  o_bar := bit_reverse64(o);
+  r_bar := bit_reverse64(r);
+  return bit_reverse64(o_bar - (2*r_bar));
+}
+
 
 diags :: bboard.[
   h1,
