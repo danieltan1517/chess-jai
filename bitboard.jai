@@ -147,11 +147,7 @@ generate_legal_moves :: (p: *Piece_Bitboards, whose_turn: bool) -> u64 {
     rook_pin := xray_rook & (p.b_rook | p.b_queen);
     while rook_pin {
       sq: u64 = xx  (1 << serialize_bit(rook_pin));
-      if sq & k_file {
-        pins |= (sliding(king, sq, k_file) ^ xray_rook) & w_pieces & king_r_ray;
-      } else {
-        pins |= (sliding(king, sq, k_rank) ^ xray_rook) & w_pieces & king_r_ray;
-      }
+      pins = pins | between_bitboard(sq, king) & w_pieces;
       rook_pin = rook_pin & (rook_pin - 1);
     }
 
@@ -159,18 +155,14 @@ generate_legal_moves :: (p: *Piece_Bitboards, whose_turn: bool) -> u64 {
     bishop_pin := xray_bishop & (p.b_bishop | p.b_queen);
     while bishop_pin {
       sq: u64 = xx  (1 << serialize_bit(bishop_pin));
-      if sq & k_diag {
-        pins |= (sliding(king, sq, k_diag) ^ xray_bishop) & w_pieces & king_b_ray;
-      } else {
-        pins |= (sliding(king, sq, k_adia) ^ xray_bishop) & w_pieces & king_b_ray;
-      }
+      pins = pins | between_bitboard(sq, king) & w_pieces;
       bishop_pin = bishop_pin & (bishop_pin - 1);
     }
 
     checks = checks | (king_r_ray & (p.b_rook   | p.b_queen));
     checks = checks | (king_b_ray & (p.b_bishop | p.b_queen));
 
-    return checks;
+    return pins;
   } else {
     attacks := generate_white_attacks(p, all_pieces);
     // check for attacks around the black king
@@ -194,11 +186,7 @@ generate_legal_moves :: (p: *Piece_Bitboards, whose_turn: bool) -> u64 {
     rook_pin := xray_rook & (p.w_rook | p.w_queen);
     while rook_pin {
       sq: u64 = xx  (1 << serialize_bit(rook_pin));
-      if sq & k_file {
-        pins |= (sliding(king, sq, k_file) ^ xray_rook) & b_pieces & king_r_ray;
-      } else {
-        pins |= (sliding(king, sq, k_rank) ^ xray_rook) & b_pieces & king_r_ray;
-      }
+      pins = pins | between_bitboard(sq, king) & b_pieces;
       rook_pin = rook_pin & (rook_pin - 1);
     }
 
@@ -206,17 +194,13 @@ generate_legal_moves :: (p: *Piece_Bitboards, whose_turn: bool) -> u64 {
     bishop_pin := xray_bishop & (p.w_bishop | p.w_queen);
     while bishop_pin {
       sq: u64 = xx  (1 << serialize_bit(bishop_pin));
-      if sq & k_diag {
-        pins |= (sliding(king, sq, k_diag) ^ xray_bishop) & b_pieces & king_b_ray;
-      } else {                                      
-        pins |= (sliding(king, sq, k_adia) ^ xray_bishop) & b_pieces & king_b_ray;
-      }
+      pins = pins | between_bitboard(sq, king) & b_pieces;
       bishop_pin = bishop_pin & (bishop_pin - 1);
     }
 
     checks = checks | (king_r_ray & (p.w_rook   | p.w_queen));
     checks = checks | (king_b_ray & (p.w_bishop | p.w_queen));
-    return checks;
+    return pins;
   }
 }
 
@@ -428,7 +412,6 @@ adiag_of :: inline (i: int)->u64 {
   return xx a_diags[index];
 }
 
-
 serialize_bit :: trailing_zeros;
 
 print_bitboard :: (b: u64) {
@@ -458,6 +441,48 @@ print_bitboard :: (b: u64) {
   }
 }
 
+// TODO: This function is WAY to slow...
+// Actually, I don't know whether this is okay or too slow...can't tell....
+init_global_bitboards :: () {
+  for i: 0..63 {
+    bb1: u64 = xx (1 << i);
+    for j: (i+1)..63 {
+      if between_look_up_table[i][j] != 0 continue;
+      bb2: u64 = xx (1 << j);
+      
+      f := file_of(i);
+      if f & bb2 {
+        bb_file := sliding(bb1, bb2, f) & ~(bb1|bb2);
+        between_look_up_table[i][j] = bb_file;
+        between_look_up_table[j][i] = bb_file;
+        continue;
+      }
+
+      r := rank_of(i);
+      if r & bb2 {
+        bb_rank := sliding(bb1, bb2, r) & ~(bb1|bb2);
+        between_look_up_table[i][j] = bb_rank;
+        between_look_up_table[j][i] = bb_rank;
+        continue;
+      }
+
+      d := diag_of(i);
+      if d & bb2 {
+        bb_diag := sliding(bb1, bb2, d) & ~(bb1|bb2);
+        between_look_up_table[i][j] = bb_diag;
+        between_look_up_table[j][i] = bb_diag;
+        continue;
+      }
+
+      a := adiag_of(i);
+      if a & bb2 {
+        bb_adia := sliding(bb1, bb2, a) & ~(bb1|bb2);
+        between_look_up_table[i][j] = bb_adia;
+        between_look_up_table[j][i] = bb_adia;
+      } 
+    } 
+  }
+}
 
 #scope_file
 
@@ -478,6 +503,16 @@ sliding_half_2 :: inline (o: u64, r: u64) -> u64 {
   return bit_reverse64(o_bar - (2*r_bar));
 }
 
+between_bitboard :: (i: u64, j: u64) -> u64 {
+  ii := serialize_bit(i);
+  jj := serialize_bit(j);
+  ret := between_look_up_table[ii][jj];
+  return ret;
+}
+
+// this look-up table can be found inside stockfish chess engine.
+// I don't know whether it is correct... might be a bit slow...
+between_look_up_table: [64][64] u64;
 
 diags :: bboard.[
   h1,
