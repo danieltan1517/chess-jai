@@ -84,9 +84,11 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
   // chess.com uses yellow, so we follow their example...
   BLANK    :: Vector4.{1,1,1,1}; 
   GREY     :: Vector4.{.5,.5,.2,.35}; 
-  YELLOW :: Vector4.{.9,.9,0,.35}; 
-  LESS :: Vector4.{1.0, 1.0, 1.0, 0.25};
-
+  YELLOW   :: Vector4.{.9,.9,0,.35}; 
+  LESS     :: Vector4.{1.0, 1.0, 1.0, 0.25};
+  RED      :: Vector4.{1, 0.25, 0.25, 0.5};
+  attacks := generate_legal_moves(pieces, whose_turn);
+  draw_bitboard(attacks, u0=0.0, v0=0.0, u1=1.0, v1=1.0, RED);
   draw_bitboard(last_move_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, YELLOW);
   draw_bitboard(possible_moves_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, GREY);
 

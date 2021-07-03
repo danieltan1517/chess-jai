@@ -116,6 +116,106 @@ make_move_no_checking :: (using piece_bitboards: *Piece_Bitboards, from: u64, to
   }
 }
 
+// TODO: figure out what to return.
+// TODO: not correct.
+generate_legal_moves :: (using p: *Piece_Bitboards, whose_turn: bool) -> u64 {
+  w_pieces := get_white_pieces(p);
+  b_pieces := get_black_pieces(p);
+  all_pieces := w_pieces | b_pieces;
+
+  if whose_turn {
+    attacks := generate_black_attacks(p, all_pieces);
+
+    if attacks & w_king {
+      print("white king is in check!\n");
+    }
+
+    return attacks;
+  } else {
+    attacks := generate_white_attacks(p, all_pieces);
+    if attacks & b_king {
+      print("black king is in check!\n");
+    }
+    return attacks;
+  }
+}
+
+generate_white_attacks :: (using p: *Piece_Bitboards, all_pieces: u64) -> u64 {
+  // generate white attacks
+  w_king_attacks := king_moves(0, 0, w_king); 
+  w_queen_attacks: u64 = 0;
+  {
+    value := w_queen;
+    while value {
+      i := serialize_bit(value);
+      bb: u64 = xx (1 << i);
+      w_queen_attacks = w_queen_attacks | queen_moves(all_pieces, i, bb);
+      value = value & (value - 1);
+    }
+  }
+  w_rook_attacks: u64 = 0;
+  {
+    value := w_rook;
+    while value {
+      i := serialize_bit(value);
+      bb: u64 = xx (1 << i);
+      w_rook_attacks = w_rook_attacks | rook_moves(all_pieces, i, bb);
+      value = value & (value - 1);
+    }
+  }
+  w_bishop_attacks: u64 = 0;
+  {
+    value := w_bishop;
+    while value {
+      i := serialize_bit(value);
+      bb: u64 = xx (1 << i);
+      w_bishop_attacks = w_bishop_attacks | bishop_moves(all_pieces, i, bb);
+      value = value & (value - 1);
+    }
+  }
+  w_knight_attacks := knight_moves(all_pieces, 0, w_knight);
+  w_pawn_attacks := white_pawn_captures(w_pawn);
+  return w_king_attacks | w_queen_attacks | w_rook_attacks | w_bishop_attacks | w_knight_attacks | w_pawn_attacks;
+}
+
+generate_black_attacks :: (using p: *Piece_Bitboards, all_pieces: u64) -> u64 {
+  // generate black attacks
+  b_king_attacks := king_moves(0, 0, b_king); 
+  b_queen_attacks: u64 = 0;
+  {
+    value := b_queen;
+    while value {
+      i := serialize_bit(value);
+      bb: u64 = xx (1 << i);
+      b_queen_attacks = b_queen_attacks | queen_moves(all_pieces, i, bb);
+      value = value & (value - 1);
+    }
+  }
+  b_rook_attacks: u64 = 0;
+  {
+    value := b_rook;
+    while value {
+      i := serialize_bit(value);
+      bb: u64 = xx (1 << i);
+      b_rook_attacks = b_rook_attacks | rook_moves(all_pieces, i, bb);
+      value = value & (value - 1);
+    }
+  }
+  b_bishop_attacks: u64 = 0;
+  {
+    value := b_bishop;
+    while value {
+      i := serialize_bit(value);
+      bb: u64 = xx (1 << i);
+      b_bishop_attacks = b_bishop_attacks | bishop_moves(all_pieces, i, bb);
+      value = value & (value - 1);
+    }
+  }
+  b_knight_attacks := knight_moves(all_pieces, 0, b_knight);
+  b_pawn_attacks := black_pawn_captures(b_pawn);
+  return b_king_attacks | b_queen_attacks | b_rook_attacks | b_bishop_attacks | b_knight_attacks | b_pawn_attacks;
+}
+
 possible_moves_for :: (using piece_bitboards: *Piece_Bitboards, b: u64, whose_turn: bool) -> u64 {
   w_pieces := get_white_pieces(piece_bitboards);
   b_pieces := get_black_pieces(piece_bitboards);

@@ -101,9 +101,13 @@ install :: () {
 }
 
 todo :: () {
-  // glfw needs to get working
-  // imgui needs to get working
-  // draw chessboard on screen
+  // legal move generation
+  //   -- move struct
+  //   -- check
+  //   -- pins 
+  //   -- en peasant
+  //   -- castling
+  //   -- promote pieces
 }
 
 
