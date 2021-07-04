@@ -27,9 +27,7 @@ main :: () {
     print("Error loading texture");
     return;
   }
-
   init_global_bitboards();
-
   piece_bitboard := chess_start_pos();
 
   white_side := true;
