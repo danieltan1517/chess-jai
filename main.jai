@@ -28,10 +28,7 @@ main :: () {
     return;
   }
 
-  tt := get_time();
   init_global_bitboards();
-  tt = get_time() - tt;
-  print("Time initializing: % secs\n", tt);
 
   piece_bitboard := chess_start_pos();
 
