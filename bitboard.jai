@@ -165,8 +165,6 @@ make_move_no_checking :: (using piece_bitboards: *Piece_Bitboards, from: u64, to
 }
 
 // TODO: figure out what to return.
-// TODO: pins are a pain in the ass to figure out. i don't know if this is fully
-// correct. but it works pretty robustly...
 generate_legal_moves :: (p: *Piece_Bitboards, whose_turn: bool) -> u64 {
   w_pieces := get_white_pieces(p);
   b_pieces := get_black_pieces(p);
@@ -188,10 +186,11 @@ generate_moves_for :: (occupied: u64, pieces: u64, opp_pieces: u64,
                        king: u64,     queen: u64,     rook: u64,     bishop: u64,     knight: u64,     pawn: u64,
                        opp_king: u64, opp_queen: u64, opp_rook: u64, opp_bishop: u64, opp_knight: u64, opp_pawn: u64,
                        whose_turn: bool) -> u64 {
-  // TODO: really need to fix this!!!!!
   attacks := generate_attacks(occ=occupied, 
                king=opp_king, queen=opp_queen, rook=opp_rook, bishop=opp_bishop, knight=opp_knight, pawn=opp_pawn, 
                whose_turn=!whose_turn);
+
+  moves_arr: [..] Move16;
 
   checks: u64 = 0;
   pins: u64 = 0;
@@ -207,7 +206,13 @@ generate_moves_for :: (occupied: u64, pieces: u64, opp_pieces: u64,
   checks = checks | (knight_moves(0, 0, king) & opp_knight);
 
   xray_rook, king_r_ray := xray_rook_attacks(occupied, pieces, i, king);
+  xray_bishop, king_b_ray := xray_bishop_attacks(occupied, pieces, i, king);
   rook_pin := xray_rook & (opp_rook | opp_queen);
+  bishop_pin := xray_bishop & (opp_bishop | opp_queen);
+
+  checks = checks | (king_r_ray & (opp_rook | opp_queen));
+  checks = checks | (king_b_ray & (opp_bishop | opp_queen));
+
   while rook_pin {
     sq: u64 = xx  (1 << serialize_bit(rook_pin));
     between_sqs := between_bitboard(sq, king);
@@ -236,8 +241,6 @@ generate_moves_for :: (occupied: u64, pieces: u64, opp_pieces: u64,
     rook_pin = rook_pin & (rook_pin - 1);
   }
 
-  xray_bishop, king_b_ray := xray_bishop_attacks(occupied, pieces, i, king);
-  bishop_pin := xray_bishop & (opp_bishop | opp_queen);
   while bishop_pin {
     sq: u64 = xx  (1 << serialize_bit(bishop_pin));
     between_sqs := between_bitboard(sq, king);
@@ -247,13 +250,13 @@ generate_moves_for :: (occupied: u64, pieces: u64, opp_pieces: u64,
 
     // pawn diagonal moves only, if pawn is pinned, there is only one possible move.
     if whose_turn {
-      pawn_moves := white_pawn_captures(pawn) & opp_pieces & between_sqs;
-      if pawn_moves {
+      pawn_move := white_pawn_captures(pawn) & opp_pieces & between_sqs;
+      if pawn_move {
      
       }
     } else {
-      pawn_moves := black_pawn_captures(pawn) & opp_pieces & between_sqs;
-      if pawn_moves {
+      pawn_move := black_pawn_captures(pawn) & opp_pieces & between_sqs;
+      if pawn_move {
      
       }
     }
@@ -267,9 +270,6 @@ generate_moves_for :: (occupied: u64, pieces: u64, opp_pieces: u64,
     bishop_pin = bishop_pin & (bishop_pin - 1);
   }
 
-  checks = checks | (king_r_ray & (opp_rook | opp_queen));
-  checks = checks | (king_b_ray & (opp_bishop | opp_queen));
-
   // eliminate pieces already handled by pins.
   queen  &= ~pins;
   rook   &= ~pins;
@@ -277,7 +277,7 @@ generate_moves_for :: (occupied: u64, pieces: u64, opp_pieces: u64,
   knight &= ~pins;
   pawn   &= ~pins;
 
-  return attacks;
+  return pins;
 }
 
 // TODO: should we return the piece attacks separately or together?
