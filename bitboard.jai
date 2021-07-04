@@ -74,7 +74,11 @@ Move16 :: enum s16 {
   Queen_Promotion_Capture;
 }
 
-generate_move :: inline (f: u64, t: u64, flags: Move16) -> Move16 {
+encode_move :: inline (from: int, to: int, flags: Move16) -> Move16 {
+  return xx ((from << 10) | (to << 4) | (xx flags));
+}
+
+encode_move_bb :: inline (f: u64, t: u64, flags: Move16) -> Move16 {
   from := serialize_bit(f);
   to   := serialize_bit(t);
   return xx ((from << 10) | (to << 4) | (xx flags));
@@ -83,6 +87,57 @@ generate_move :: inline (f: u64, t: u64, flags: Move16) -> Move16 {
 // Type of move, From, To.
 decode_move :: inline (mov: Move16) -> Move16, int, int {
   return  mov & (xx 0xF),  xx (mov & (xx 0xFC00) >> 10), xx (mov & (xx 0x03F0) >> 4);
+}
+
+// generates normal moves. NOTE: does not handle special moves.
+generate_normal_moves_from_bitboard :: (moves_arr: *[..]Move16, from: u64, to: u64, opp_pieces: u64) {
+  using Move16;
+  while to {
+    to_bb := cast(u64)(1 << serialize_bit(to));
+    flags := ifx (to_bb & opp_pieces) Capture else Quiet; 
+    move := encode_move_bb(from, to_bb, flags);
+    array_add(moves_arr, move);
+    to = to & (to - 1);
+  }
+}
+
+// handle pawn moves except for en paesant
+generate_pawn_moves_from_bitboard :: (moves_arr: *[..]Move16, from: u64, to: u64, opp_pieces: u64) {
+  using Move16;
+
+  while to {
+    to_bb := cast(u64)(1 << serialize_bit(to));
+    // promotion
+    if to_bb & (xx rank_8) {
+      // add all promotion possibilities 
+      if to_bb & opp_pieces {
+        array_add(moves_arr, encode_move_bb(from, to_bb, Knight_Promotion_Capture));
+        array_add(moves_arr, encode_move_bb(from, to_bb, Bishop_Promotion_Capture));
+        array_add(moves_arr, encode_move_bb(from, to_bb, Rook_Promotion_Capture));
+        array_add(moves_arr, encode_move_bb(from, to_bb, Queen_Promotion_Capture));
+      } else {
+        array_add(moves_arr, encode_move_bb(from, to_bb, Knight_Promotion));
+        array_add(moves_arr, encode_move_bb(from, to_bb, Bishop_Promotion));
+        array_add(moves_arr, encode_move_bb(from, to_bb, Rook_Promotion));
+        array_add(moves_arr, encode_move_bb(from, to_bb, Queen_Promotion));
+      }
+
+    } else {
+      // non-promotion
+      flags: Move16;
+      ifx to_bb & opp_pieces {
+        flags = Capture;
+      } else if ((from|to_bb) & xx (rank_2|rank_4)) || ((from|to_bb) & xx (rank_5|rank_7)) {
+        flags = Double_Pawn_Push;
+      } else {
+        flags = Quiet;
+      }
+
+      move := encode_move_bb(from, to_bb, flags);
+      array_add(moves_arr, move);
+    }
+    to = to & (to - 1);
+  }
 }
 
 chess_start_pos :: () -> Piece_Bitboards {
@@ -120,7 +175,7 @@ can_move :: (using piece_bitboards: *Piece_Bitboards, sq: u64, whose_turn: bool)
 
 make_move_no_checking :: (using piece_bitboards: *Piece_Bitboards, from: u64, to: u64, whose_turn: bool) {
 
-  mov := generate_move(from, to, Move16.Quiet);
+  mov := encode_move_bb(from, to, Move16.Quiet);
   print("(type: %) (from: %) (to: %)\n", 
         mov & (xx 0xF), 
         cast(serialized_bb) (mov & (xx 0xFC00) >> 10),
@@ -165,7 +220,7 @@ make_move_no_checking :: (using piece_bitboards: *Piece_Bitboards, from: u64, to
 }
 
 // TODO: figure out what to return.
-generate_legal_moves :: (p: *Piece_Bitboards, whose_turn: bool) -> u64 {
+generate_legal_moves :: (p: *Piece_Bitboards, whose_turn: bool) -> [..] Move16 #must {
   w_pieces := get_white_pieces(p);
   b_pieces := get_black_pieces(p);
   all_pieces := w_pieces | b_pieces;
@@ -185,12 +240,13 @@ generate_legal_moves :: (p: *Piece_Bitboards, whose_turn: bool) -> u64 {
 generate_moves_for :: (occupied: u64, pieces: u64, opp_pieces: u64, 
                        king: u64,     queen: u64,     rook: u64,     bishop: u64,     knight: u64,     pawn: u64,
                        opp_king: u64, opp_queen: u64, opp_rook: u64, opp_bishop: u64, opp_knight: u64, opp_pawn: u64,
-                       whose_turn: bool) -> u64 {
+                       whose_turn: bool) -> [..] Move16 #must {
+
+  moves_arr: [..] Move16;
+  array_reserve(*moves_arr, 50);
   attacks := generate_attacks(occ=occupied, 
                king=opp_king, queen=opp_queen, rook=opp_rook, bishop=opp_bishop, knight=opp_knight, pawn=opp_pawn, 
                whose_turn=!whose_turn);
-
-  moves_arr: [..] Move16;
 
   checks: u64 = 0;
   pins: u64 = 0;
@@ -212,62 +268,69 @@ generate_moves_for :: (occupied: u64, pieces: u64, opp_pieces: u64,
 
   checks = checks | (king_r_ray & (opp_rook | opp_queen));
   checks = checks | (king_b_ray & (opp_bishop | opp_queen));
+  num_checks := popcount(checks);
+
+  // handle double-check.
+  if num_checks == 2 {
+    // we only need to generate king moves during a double-check
+    king_moves_bb := king_moves(occupied, i, king, pieces) & ~attacks;
+    generate_normal_moves_from_bitboard(*moves_arr, king, king_moves_bb, opp_pieces);
+    return moves_arr;
+  }
 
   while rook_pin {
     sq: u64 = xx  (1 << serialize_bit(rook_pin));
     between_sqs := between_bitboard(sq, king);
     pinned_piece := between_sqs & pieces;
+    pins = pins | pinned_piece;
+    rook_pin = rook_pin & (rook_pin - 1);
+    if num_checks == 1 continue; // ignore pinned pieces when in check
 
     // no knight/bishop
     // pawn vertical only, NO pawn horizontal, since pawns cannot move horizontally
     if (pawn & pinned_piece & k_file) {
       if whose_turn {
-        // REMEMBER: There is double pawn push!
         move := (pinned_piece << 8) & ~occupied;
         move = move | ((move & xx rank_3) << 8) & ~occupied;
+        generate_pawn_moves_from_bitboard(*moves_arr, pinned_piece, move, opp_pieces);
       } else {
-        // REMEMBER: There is double pawn push!
         move := (pinned_piece >> 8) & ~occupied;
         move = move | ((move & xx rank_6) >> 8) & ~occupied;
+        generate_pawn_moves_from_bitboard(*moves_arr, pinned_piece, move, opp_pieces);
       }
     }
 
     if (queen|rook) & pinned_piece {
       valid_moves := (between_sqs | sq) & ~pinned_piece;
       // make pinned piece moves.
+      generate_normal_moves_from_bitboard(*moves_arr, pinned_piece, valid_moves, opp_pieces);
     }
-
-    pins = pins | pinned_piece;
-    rook_pin = rook_pin & (rook_pin - 1);
   }
 
   while bishop_pin {
     sq: u64 = xx  (1 << serialize_bit(bishop_pin));
     between_sqs := between_bitboard(sq, king);
     pinned_piece := between_sqs & pieces;
+    pins = pins | pinned_piece;
+    bishop_pin = bishop_pin & (bishop_pin - 1);
 
+    if num_checks == 1 continue; // ignore pinned pieces when in check
     // no rooks/knights
 
     // pawn diagonal moves only, if pawn is pinned, there is only one possible move.
     if whose_turn {
       pawn_move := white_pawn_captures(pawn) & opp_pieces & between_sqs;
-      if pawn_move {
-     
-      }
+      generate_pawn_moves_from_bitboard(*moves_arr, pinned_piece, pawn_move, opp_pieces);
     } else {
       pawn_move := black_pawn_captures(pawn) & opp_pieces & between_sqs;
-      if pawn_move {
-     
-      }
+      generate_pawn_moves_from_bitboard(*moves_arr, pinned_piece, pawn_move, opp_pieces);
     }
 
     if (queen|bishop) & pinned_piece {
-      valid_moves := (between_sqs | sq) & ~pinned_piece;
       // make pinned piece moves.
+      valid_moves := (between_sqs | sq) & ~pinned_piece;
+      generate_normal_moves_from_bitboard(*moves_arr, pinned_piece, valid_moves, opp_pieces);
     }
-
-    pins = pins | pinned_piece;
-    bishop_pin = bishop_pin & (bishop_pin - 1);
   }
 
   // eliminate pieces already handled by pins.
@@ -276,8 +339,46 @@ generate_moves_for :: (occupied: u64, pieces: u64, opp_pieces: u64,
   bishop &= ~pins;
   knight &= ~pins;
   pawn   &= ~pins;
-
-  return pins;
+  check_sqs := ifx (num_checks == 1) between_bitboard(checks, king) else ~0;
+  while queen {
+    i := serialize_bit(queen);
+    from_bb := cast(u64)(1 << i);
+    to_bb := queen_moves(occupied, i, from_bb, pieces) & check_sqs;
+    generate_normal_moves_from_bitboard(*moves_arr, from_bb, to_bb, opp_pieces);
+    queen = queen & (queen-1);
+  }
+  while rook {
+    i := serialize_bit(rook);
+    from_bb := cast(u64)(1 << i);
+    to_bb := rook_moves(occupied, i, from_bb, pieces) & check_sqs;
+    generate_normal_moves_from_bitboard(*moves_arr, from_bb, to_bb, opp_pieces);
+    rook = rook & (rook-1);
+  }
+  while bishop {
+    i := serialize_bit(bishop);
+    from_bb := cast(u64)(1 << i);
+    to_bb := bishop_moves(occupied, i, from_bb, pieces) & check_sqs;
+    generate_normal_moves_from_bitboard(*moves_arr, from_bb, to_bb, opp_pieces);
+    bishop = bishop & (bishop-1);
+  }
+  while knight {
+    i := serialize_bit(knight);
+    from_bb := cast(u64)(1 << i);
+    to_bb := knight_moves(occupied, i, from_bb, pieces) & check_sqs;
+    generate_normal_moves_from_bitboard(*moves_arr, from_bb, to_bb, opp_pieces);
+    knight = knight & (knight-1);
+  }
+  while pawn {
+    i := serialize_bit(pawn);
+    from_bb := cast(u64)(1 << i);
+    to_bb := ifx whose_turn   white_pawn_moves(occupied, i, from_bb, pieces) & check_sqs
+             else             black_pawn_moves(occupied, i, from_bb, pieces) & check_sqs;
+    generate_pawn_moves_from_bitboard(*moves_arr, from_bb, to_bb, opp_pieces);
+    pawn = pawn & (pawn-1);
+  }
+  king_moves_bb := king_moves(occupied, i, king, pieces) & ~attacks;
+  generate_normal_moves_from_bitboard(*moves_arr, king, king_moves_bb, opp_pieces);
+  return moves_arr;
 }
 
 // TODO: should we return the piece attacks separately or together?
