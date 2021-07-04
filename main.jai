@@ -28,7 +28,9 @@ main :: () {
     return;
   }
   init_global_bitboards();
+  moves_arr: [..] Move16;
   piece_bitboard := chess_start_pos();
+  generate_legal_moves(*piece_bitboard, *moves_arr, true);
 
   white_side := true;
 
@@ -42,7 +44,7 @@ main :: () {
     im_draw_setup_gl();
     im_set_viewport_transform(2.0/width, 2.0/height, -1, -1);
     white_side = handle_flip_board(window, white_side);
-    handle_board_click(xx width, xx height, *piece_bitboard, white_side=white_side);
+    handle_board_click(xx width, xx height, *piece_bitboard, moves_arr, white_side=white_side);
     draw_chess(xx width, xx height, *piece_bitboard, t, highlight_the_square, possible_moves_bb, last_move_bb, white_side);
     im_flush();
 
@@ -88,8 +90,6 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
   YELLOW   :: Vector4.{.9,.9,0,.35}; 
   LESS     :: Vector4.{1.0, 1.0, 1.0, 0.25};
   RED      :: Vector4.{1, 0.25, 0.25, 0.5};
-  //attacks := generate_legal_moves(pieces, whose_turn);
-  //draw_bitboard(attacks, u0=0.0, v0=0.0, u1=1.0, v1=1.0, RED);
   draw_bitboard(last_move_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, YELLOW);
   draw_bitboard(possible_moves_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, GREY);
 
@@ -203,7 +203,7 @@ read_mouse_input :: (window: *GLFWwindow) {
   }
 }
 
-handle_board_click :: (width: float, height: float, piece_bitboard: *Piece_Bitboards, white_side := true) {
+handle_board_click :: (width: float, height: float, piece_bitboard: *Piece_Bitboards, moves_arr: [..] Move16, white_side := true) {
   cen_x := width * 0.5; 
   cen_y := height * 0.5;
 
@@ -243,7 +243,7 @@ handle_board_click :: (width: float, height: float, piece_bitboard: *Piece_Bitbo
     if can_move(piece_bitboard, sq, whose_turn) && mouse_button_1_state == .MOUSE_PRESSED {
       highlight_the_square ^= xx sq;
       piece_select_state = .PIECE_SELECTED;
-      possible_moves_bb = possible_moves_for(piece_bitboard, sq, whose_turn);
+      possible_moves_bb = possible_moves_for(moves_arr, sq);
     }
   case .PIECE_SELECTED;
     if highlight_the_square == sq && mouse_button_1_state == .MOUSE_PRESSED {
@@ -261,6 +261,8 @@ handle_board_click :: (width: float, height: float, piece_bitboard: *Piece_Bitbo
         make_move_no_checking(piece_bitboard, from, to, whose_turn);
         last_move_bb = from | to;
         whose_turn = !whose_turn;
+        array_reset(*moves_arr);
+        generate_legal_moves(piece_bitboard, *moves_arr, whose_turn);
       }
       highlight_the_square = 0;
       possible_moves_bb = 0;
