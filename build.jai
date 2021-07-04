@@ -102,9 +102,6 @@ install :: () {
 
 todo :: () {
   // legal move generation
-  //   -- move struct
-  //   -- check
-  //   -- pins 
   //   -- en peasant
   //   -- castling
   //   -- promote pieces

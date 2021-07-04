@@ -109,13 +109,6 @@ can_move :: (using piece_bitboards: *Piece_Bitboards, sq: u64, whose_turn: bool)
 
 make_move_no_checking :: (using piece_bitboards: *Piece_Bitboards, from: u64, to: u64, whose_turn: bool) {
 
-  mov := encode_move_bb(from, to, Move16.Quiet);
-  print("(type: %) (from: %) (to: %)\n", 
-        mov & (xx 0xF), 
-        cast(serialized_bb) (mov & (xx 0xFC00) >> 10),
-        cast(serialized_bb) (mov & (xx 0x03F0) >> 4)
-  );
-
   // TODO: this is very naive.
   if whose_turn == true {
     maybe_make_move(w_king);
@@ -249,10 +242,10 @@ generate_moves_for :: (moves_arr: *[..] Move16, occupied: u64, pieces: u64, opp_
 
     // pawn diagonal moves only, if pawn is pinned, there is only one possible move.
     if whose_turn {
-      pawn_move := white_pawn_captures(pawn) & opp_pieces & between_sqs;
+      pawn_move := white_pawn_captures(pawn) & opp_pieces & (between_sqs|sq);
       generate_pawn_moves_from_bitboard(moves_arr, pinned_piece, pawn_move, opp_pieces);
     } else {
-      pawn_move := black_pawn_captures(pawn) & opp_pieces & between_sqs;
+      pawn_move := black_pawn_captures(pawn) & opp_pieces & (between_sqs|sq);
       generate_pawn_moves_from_bitboard(moves_arr, pinned_piece, pawn_move, opp_pieces);
     }
 
@@ -269,7 +262,13 @@ generate_moves_for :: (moves_arr: *[..] Move16, occupied: u64, pieces: u64, opp_
   bishop &= ~pins;
   knight &= ~pins;
   pawn   &= ~pins;
-  check_sqs := ifx (num_checks == 1) between_bitboard(checks, king) else ~0;
+  check_sqs : u64 = 0;
+  if num_checks == 1 {
+    check_sqs = between_bitboard(checks, king) | checks;
+  } else {
+    check_sqs = ~0;
+  }
+
   while queen {
     i := serialize_bit(queen);
     from_bb := cast(u64)(1 << i);
@@ -347,42 +346,12 @@ generate_attacks :: (occ: u64, king: u64, queen: u64, rook: u64, bishop: u64, kn
   return king_attacks | queen_attacks | rook_attacks | bishop_attacks | knight_attacks | pawn_attacks;
 }
 
-possible_moves_for :: (using piece_bitboards: *Piece_Bitboards, b: u64, whose_turn: bool) -> u64 {
-  w_pieces := get_white_pieces(piece_bitboards);
-  b_pieces := get_black_pieces(piece_bitboards);
-  all_pieces := w_pieces | b_pieces;
-  i := serialize_bit(b);
-  if whose_turn {
-    do_piece(w_king, w_pieces, king_moves);
-    do_piece(w_queen, w_pieces, queen_moves);
-    do_piece(w_rook, w_pieces, rook_moves);
-    do_piece(w_bishop, w_pieces, bishop_moves);
-    do_piece(w_knight, w_pieces, knight_moves);
-    do_piece(w_pawn, w_pieces, white_pawn_moves);
-  } else {
-    do_piece(b_king, b_pieces, king_moves);
-    do_piece(b_queen, b_pieces, queen_moves);
-    do_piece(b_rook, b_pieces, rook_moves);
-    do_piece(b_bishop, b_pieces, bishop_moves);
-    do_piece(b_knight, b_pieces, knight_moves);
-    do_piece(b_pawn, b_pieces, black_pawn_moves);
-  }
-
-  return 0;
-
-  do_piece :: (bboard: u64, friends: u64, $move_funct: #type (u64,int,u64,u64)->u64 ) #expand {
-    if b & bboard {
-      `return move_funct(all_pieces, i, b, friends);
-    }
-  }
-}
-
 possible_moves_for :: (moves: [..] Move16, from: u64) -> u64 {
   ret: u64 = 0;
   for move: moves {
     type, i, j := decode_move(move);
     from_move := cast(u64) (1 << i);
-    to_move   := cast(u64) (1 << i);
+    to_move   := cast(u64) (1 << j);
     if from == from_move {
       ret = ret | to_move;
     }
