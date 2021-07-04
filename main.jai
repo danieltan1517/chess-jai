@@ -29,7 +29,6 @@ main :: () {
   }
   init_global_bitboards();
   piece_bitboard := chess_start_pos();
-  arrs := generate_legal_moves(*piece_bitboard, true);
 
   white_side := true;
 

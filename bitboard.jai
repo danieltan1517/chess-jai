@@ -74,72 +74,6 @@ Move16 :: enum s16 {
   Queen_Promotion_Capture;
 }
 
-encode_move :: inline (from: int, to: int, flags: Move16) -> Move16 {
-  return xx ((from << 10) | (to << 4) | (xx flags));
-}
-
-encode_move_bb :: inline (f: u64, t: u64, flags: Move16) -> Move16 {
-  from := serialize_bit(f);
-  to   := serialize_bit(t);
-  return xx ((from << 10) | (to << 4) | (xx flags));
-}
-
-// Type of move, From, To.
-decode_move :: inline (mov: Move16) -> Move16, int, int {
-  return  mov & (xx 0xF),  xx (mov & (xx 0xFC00) >> 10), xx (mov & (xx 0x03F0) >> 4);
-}
-
-// generates normal moves. NOTE: does not handle special moves.
-generate_normal_moves_from_bitboard :: (moves_arr: *[..]Move16, from: u64, to: u64, opp_pieces: u64) {
-  using Move16;
-  while to {
-    to_bb := cast(u64)(1 << serialize_bit(to));
-    flags := ifx (to_bb & opp_pieces) Capture else Quiet; 
-    move := encode_move_bb(from, to_bb, flags);
-    array_add(moves_arr, move);
-    to = to & (to - 1);
-  }
-}
-
-// handle pawn moves except for en paesant
-generate_pawn_moves_from_bitboard :: (moves_arr: *[..]Move16, from: u64, to: u64, opp_pieces: u64) {
-  using Move16;
-
-  while to {
-    to_bb := cast(u64)(1 << serialize_bit(to));
-    // promotion
-    if to_bb & (xx rank_8) {
-      // add all promotion possibilities 
-      if to_bb & opp_pieces {
-        array_add(moves_arr, encode_move_bb(from, to_bb, Knight_Promotion_Capture));
-        array_add(moves_arr, encode_move_bb(from, to_bb, Bishop_Promotion_Capture));
-        array_add(moves_arr, encode_move_bb(from, to_bb, Rook_Promotion_Capture));
-        array_add(moves_arr, encode_move_bb(from, to_bb, Queen_Promotion_Capture));
-      } else {
-        array_add(moves_arr, encode_move_bb(from, to_bb, Knight_Promotion));
-        array_add(moves_arr, encode_move_bb(from, to_bb, Bishop_Promotion));
-        array_add(moves_arr, encode_move_bb(from, to_bb, Rook_Promotion));
-        array_add(moves_arr, encode_move_bb(from, to_bb, Queen_Promotion));
-      }
-
-    } else {
-      // non-promotion
-      flags: Move16;
-      ifx to_bb & opp_pieces {
-        flags = Capture;
-      } else if ((from|to_bb) & xx (rank_2|rank_4)) || ((from|to_bb) & xx (rank_5|rank_7)) {
-        flags = Double_Pawn_Push;
-      } else {
-        flags = Quiet;
-      }
-
-      move := encode_move_bb(from, to_bb, flags);
-      array_add(moves_arr, move);
-    }
-    to = to & (to - 1);
-  }
-}
-
 chess_start_pos :: () -> Piece_Bitboards {
   start_pos: Piece_Bitboards;
   start_pos.w_king   = xx e1;
@@ -710,4 +644,70 @@ a_diags :: bboard.[
   g8 | h7,
   h8,
 ];
+
+encode_move :: inline (from: int, to: int, flags: Move16) -> Move16 {
+  return xx ((from << 10) | (to << 4) | (xx flags));
+}
+
+encode_move_bb :: inline (f: u64, t: u64, flags: Move16) -> Move16 {
+  from := serialize_bit(f);
+  to   := serialize_bit(t);
+  return xx ((from << 10) | (to << 4) | (xx flags));
+}
+
+// Type of move, From, To.
+decode_move :: inline (mov: Move16) -> Move16, int, int {
+  return  mov & (xx 0xF),  xx (mov & (xx 0xFC00) >> 10), xx (mov & (xx 0x03F0) >> 4);
+}
+
+// generates normal moves. NOTE: does not handle special moves.
+generate_normal_moves_from_bitboard :: (moves_arr: *[..]Move16, from: u64, to: u64, opp_pieces: u64) {
+  using Move16;
+  while to {
+    to_bb := cast(u64)(1 << serialize_bit(to));
+    flags := ifx (to_bb & opp_pieces) Capture else Quiet; 
+    move := encode_move_bb(from, to_bb, flags);
+    array_add(moves_arr, move);
+    to = to & (to - 1);
+  }
+}
+
+// handle pawn moves except for en paesant
+generate_pawn_moves_from_bitboard :: (moves_arr: *[..]Move16, from: u64, to: u64, opp_pieces: u64) {
+  using Move16;
+
+  while to {
+    to_bb := cast(u64)(1 << serialize_bit(to));
+    // promotion
+    if to_bb & (xx rank_8) {
+      // add all promotion possibilities 
+      if to_bb & opp_pieces {
+        array_add(moves_arr, encode_move_bb(from, to_bb, Knight_Promotion_Capture));
+        array_add(moves_arr, encode_move_bb(from, to_bb, Bishop_Promotion_Capture));
+        array_add(moves_arr, encode_move_bb(from, to_bb, Rook_Promotion_Capture));
+        array_add(moves_arr, encode_move_bb(from, to_bb, Queen_Promotion_Capture));
+      } else {
+        array_add(moves_arr, encode_move_bb(from, to_bb, Knight_Promotion));
+        array_add(moves_arr, encode_move_bb(from, to_bb, Bishop_Promotion));
+        array_add(moves_arr, encode_move_bb(from, to_bb, Rook_Promotion));
+        array_add(moves_arr, encode_move_bb(from, to_bb, Queen_Promotion));
+      }
+
+    } else {
+      // non-promotion
+      flags: Move16;
+      ifx to_bb & opp_pieces {
+        flags = Capture;
+      } else if ((from|to_bb) & xx (rank_2|rank_4)) || ((from|to_bb) & xx (rank_5|rank_7)) {
+        flags = Double_Pawn_Push;
+      } else {
+        flags = Quiet;
+      }
+
+      move := encode_move_bb(from, to_bb, flags);
+      array_add(moves_arr, move);
+    }
+    to = to & (to - 1);
+  }
+}
 
