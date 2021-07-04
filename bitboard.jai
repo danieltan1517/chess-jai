@@ -146,17 +146,17 @@ make_move_no_checking :: (using piece_bitboards: *Piece_Bitboards, from: u64, to
   }
 }
 
-generate_legal_moves :: (p: *Piece_Bitboards, moves_arr: *[..] Move16, whose_turn: bool) {
+generate_legal_moves :: (p: *Piece_Bitboards, moves_arr: *[..] Move16, whose_turn: bool) -> bool {
   w_pieces := get_white_pieces(p);
   b_pieces := get_black_pieces(p);
   all_pieces := w_pieces | b_pieces;
   if whose_turn {
-     generate_moves_for(moves_arr=moves_arr, occupied=all_pieces, pieces=w_pieces, opp_pieces=b_pieces,
+     return generate_moves_for(moves_arr=moves_arr, occupied=all_pieces, pieces=w_pieces, opp_pieces=b_pieces,
        king=p.w_king,     queen=p.w_queen,     rook=p.w_rook,     bishop=p.w_bishop,     knight=p.w_knight,     pawn=p.w_pawn,
        opp_king=p.b_king, opp_queen=p.b_queen, opp_rook=p.b_rook, opp_bishop=p.b_bishop, opp_knight=p.b_knight, opp_pawn=p.b_pawn,
        whose_turn=whose_turn);
   } else {
-     generate_moves_for(moves_arr=moves_arr, occupied=all_pieces, pieces=b_pieces, opp_pieces=w_pieces,
+     return generate_moves_for(moves_arr=moves_arr, occupied=all_pieces, pieces=b_pieces, opp_pieces=w_pieces,
        king=p.b_king,     queen=p.b_queen,     rook=p.b_rook,     bishop=p.b_bishop,     knight=p.b_knight,     pawn=p.b_pawn,
        opp_king=p.w_king, opp_queen=p.w_queen, opp_rook=p.w_rook, opp_bishop=p.w_bishop, opp_knight=p.w_knight, opp_pawn=p.w_pawn,
        whose_turn=whose_turn);
@@ -166,7 +166,7 @@ generate_legal_moves :: (p: *Piece_Bitboards, moves_arr: *[..] Move16, whose_tur
 generate_moves_for :: (moves_arr: *[..] Move16, occupied: u64, pieces: u64, opp_pieces: u64, 
                        king: u64,     queen: u64,     rook: u64,     bishop: u64,     knight: u64,     pawn: u64,
                        opp_king: u64, opp_queen: u64, opp_rook: u64, opp_bishop: u64, opp_knight: u64, opp_pawn: u64,
-                       whose_turn: bool) {
+                       whose_turn: bool) -> bool {
   attacks := generate_attacks(occ=occupied, 
                king=opp_king, queen=opp_queen, rook=opp_rook, bishop=opp_bishop, knight=opp_knight, pawn=opp_pawn, 
                whose_turn=!whose_turn);
@@ -198,7 +198,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, occupied: u64, pieces: u64, opp_
     // we only need to generate king moves during a double-check
     king_moves_bb := king_moves(occupied, i, king, pieces) & ~attacks;
     generate_normal_moves_from_bitboard(moves_arr, king, king_moves_bb, opp_pieces);
-    return;
+    return num_checks > 0;
   }
 
   while rook_pin {
@@ -307,6 +307,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, occupied: u64, pieces: u64, opp_
   }
   king_moves_bb := king_moves(occupied, i, king, pieces) & ~attacks;
   generate_normal_moves_from_bitboard(moves_arr, king, king_moves_bb, opp_pieces);
+  return num_checks > 0;
 }
 
 // TODO: should we return the piece attacks separately or together?

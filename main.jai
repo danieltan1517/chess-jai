@@ -261,7 +261,18 @@ handle_board_click :: (width: float, height: float, piece_bitboard: *Piece_Bitbo
         last_move_bb = from | to;
         whose_turn = !whose_turn;
         array_reset(moves_arr);
-        generate_legal_moves(piece_bitboard, moves_arr, whose_turn);
+        check := generate_legal_moves(piece_bitboard, moves_arr, whose_turn);
+        if moves_arr.count == 0 {
+          if check {
+            if whose_turn {
+              print("Black wins! Checkmate!\n");
+            } else {
+              print("White wins! Checkmate!\n");
+            }
+          } else {
+            print("Stalemate\n");
+          }
+        }
       }
       highlight_the_square = 0;
       possible_moves_bb = 0;
