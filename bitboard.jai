@@ -74,9 +74,9 @@ Move16 :: enum s16 {
   Queen_Promotion_Capture;
 }
 
-generate_move :: inline (x: u64, y: u64, flags: Move16) -> Move16 {
-  from := serialize_bit(x);
-  to   := serialize_bit(y);
+generate_move :: inline (f: u64, t: u64, flags: Move16) -> Move16 {
+  from := serialize_bit(f);
+  to   := serialize_bit(t);
   return xx ((from << 10) | (to << 4) | (xx flags));
 }
 
@@ -185,6 +185,12 @@ generate_legal_moves :: (p: *Piece_Bitboards, whose_turn: bool) -> u64 {
     k_diag := diag_of(i);
     k_adia := adiag_of(i);
 
+    queen_no_pin  := p.w_queen;
+    rook_no_pin   := p.w_rook;
+    bishop_no_pin := p.w_bishop;
+    knight_no_pin := p.w_knight;
+    pawn_no_pin   := p.w_pawn;
+
     // pawn checks
     checks = checks | (white_pawn_captures(king) & p.b_pawn);
 
@@ -195,7 +201,8 @@ generate_legal_moves :: (p: *Piece_Bitboards, whose_turn: bool) -> u64 {
     rook_pin := xray_rook & (p.b_rook | p.b_queen);
     while rook_pin {
       sq: u64 = xx  (1 << serialize_bit(rook_pin));
-      pins = pins | between_bitboard(sq, king) & w_pieces;
+      pinned_piece := between_bitboard(sq, king) & w_pieces;
+      pins = pins | pinned_piece;
       rook_pin = rook_pin & (rook_pin - 1);
     }
 
@@ -203,7 +210,8 @@ generate_legal_moves :: (p: *Piece_Bitboards, whose_turn: bool) -> u64 {
     bishop_pin := xray_bishop & (p.b_bishop | p.b_queen);
     while bishop_pin {
       sq: u64 = xx  (1 << serialize_bit(bishop_pin));
-      pins = pins | between_bitboard(sq, king) & w_pieces;
+      pinned_piece := between_bitboard(sq, king) & w_pieces;
+      pins = pins | pinned_piece;
       bishop_pin = bishop_pin & (bishop_pin - 1);
     }
 
@@ -489,46 +497,70 @@ print_bitboard :: (b: u64) {
   }
 }
 
+//bb_file := sliding(bb1, bb2, f) & ~(bb1|bb2);
 // TODO: This function is WAY to slow...
 // Actually, I don't know whether this is okay or too slow...can't tell....
 init_global_bitboards :: () {
-  for i: 0..63 {
-    bb1: u64 = xx (1 << i);
-    for j: (i+1)..63 {
-      if between_look_up_table[i][j] != 0 continue;
-      bb2: u64 = xx (1 << j);
-      
-      f := file_of(i);
-      if f & bb2 {
-        bb_file := sliding(bb1, bb2, f) & ~(bb1|bb2);
-        between_look_up_table[i][j] = bb_file;
-        between_look_up_table[j][i] = bb_file;
-        continue;
-      }
+  init_lines(a1, a8, file_a, 8);
+  init_lines(b1, b8, file_b, 8);
+  init_lines(c1, c8, file_c, 8);
+  init_lines(d1, d8, file_d, 8);
+  init_lines(e1, e8, file_e, 8);
+  init_lines(f1, f8, file_f, 8);
+  init_lines(g1, g8, file_g, 8);
+  init_lines(h1, h8, file_h, 8);
 
-      r := rank_of(i);
-      if r & bb2 {
-        bb_rank := sliding(bb1, bb2, r) & ~(bb1|bb2);
-        between_look_up_table[i][j] = bb_rank;
-        between_look_up_table[j][i] = bb_rank;
-        continue;
-      }
+  init_lines(a1, h1, rank_1, 1);
+  init_lines(a2, h2, rank_2, 1);
+  init_lines(a3, h3, rank_3, 1);
+  init_lines(a4, h4, rank_4, 1);
+  init_lines(a5, h5, rank_5, 1);
+  init_lines(a6, h6, rank_6, 1);
+  init_lines(a7, h7, rank_7, 1);
+  init_lines(a8, h8, rank_8, 1);
 
-      d := diag_of(i);
-      if d & bb2 {
-        bb_diag := sliding(bb1, bb2, d) & ~(bb1|bb2);
-        between_look_up_table[i][j] = bb_diag;
-        between_look_up_table[j][i] = bb_diag;
-        continue;
-      }
+  init_lines(f1, h3, f1|g2|h3, 9);
+  init_lines(e1, h4, e1|f2|g3|h4, 9);
+  init_lines(d1, h5, d1|e2|f3|g4|h5, 9);
+  init_lines(c1, h6, c1|d2|e3|f4|g5|h6, 9);
+  init_lines(b1, h7, b1|c2|d3|e4|f5|g6|h7, 9);
+  init_lines(a1, h8, a1|b2|c3|d4|e5|f6|g7|h8, 9);
+  init_lines(a2, g8, a2|b3|c4|d5|e6|f7|g8, 9);
+  init_lines(a3, f8, a3|b4|c5|d6|e7|f8, 9);
+  init_lines(a4, e8, a4|b5|c6|d7|e8, 9);
+  init_lines(a5, d8, a5|b6|c7|d8, 9);
+  init_lines(a6, c8, a6|b7|c8, 9);
 
-      a := adiag_of(i);
-      if a & bb2 {
-        bb_adia := sliding(bb1, bb2, a) & ~(bb1|bb2);
-        between_look_up_table[i][j] = bb_adia;
-        between_look_up_table[j][i] = bb_adia;
-      } 
-    } 
+  init_lines(c1, a3, a3|b2|c1, 7);
+  init_lines(d1, a4, a4|b3|c2|d1, 7);
+  init_lines(e1, a5, a5|b4|c3|d2|e1, 7);
+  init_lines(f1, a6, a6|b5|c4|d3|e2|f1, 7);
+  init_lines(g1, a7, a7|b6|c5|d4|e3|f2|g1, 7);
+  init_lines(h1, a8, a8|b7|c6|d5|e4|f3|g2|h1, 7);
+  init_lines(h2, b8, b8|c7|d6|e5|f4|g3|h2, 7);
+  init_lines(h3, c8, c8|d7|e6|f5|g4|h3, 7);
+  init_lines(h4, d8, d8|e7|f6|g5|h4, 7);
+  init_lines(h5, e8, e8|f7|g6|h5, 7);
+  init_lines(h6, f8, f8|g7|h6, 7);
+
+  init_lines :: (a: bboard, b: bboard, file: bboard, $num: int) {
+    ff := file;
+    yy := b;
+    while yy != a {
+      iii := a;
+      file_entry := ff;
+      while iii != yy {
+        i := serialize_bit(xx iii);
+        j := serialize_bit(xx yy);
+        entry := file_entry & ~(iii|yy);
+        between_look_up_table[i][j] = xx entry;
+        between_look_up_table[j][i] = xx entry;
+        file_entry = file_entry & ~iii;
+        iii = iii << num;
+      }
+      ff = ff & ~yy;
+      yy = yy >> num;
+    }
   }
 }
 
