@@ -103,9 +103,9 @@ install :: () {
 todo :: () {
   //   -- unmake move
   //   -- promote pieces => gui interface for this.
-  //   -- chess ai get started..
   //   -- output/input redirection for UCI interface.
   //   -- parse FEN strings
+  //   -- chess ai get started..
 }
 
 

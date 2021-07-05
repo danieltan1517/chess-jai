@@ -130,13 +130,14 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
   // TODO: this is the promotion interface:
   /*im_set_texture(null);
   draw_bitboard(~0, u0=0.0, v0=0.0, u1=1.0, v1=1.0, Vector4.{0.2, 0.2, 0.2, 0.65});
-  draw_bitboard(xx d8|d7|d6|d5, u0=0.0, v0=0.0, u1=1.0, v1=1.0, BLANK);
+  y += square_len;
+  draw_bitboard(xx d8|e8|f8|g8, u0=0.0, v0=0.0, u1=1.0, v1=1.0, BLANK);
 
   im_set_texture(texture);
   draw_bitboard(xx d8, u0=1.0/6.0, v0=0.0, u1=2.0/6.0, v1=1.0/2.0, BLANK);
-  draw_bitboard(xx d7, u0=4.0/6.0, v0=0.0, u1=5.0/6.0, v1=1.0/2.0, BLANK);
-  draw_bitboard(xx d6, u0=2.0/6.0, v0=0.0, u1=3.0/6.0, v1=1.0/2.0, BLANK);
-  draw_bitboard(xx d5, u0=3.0/6.0, v0=0.0, u1=4.0/6.0, v1=1.0/2.0, BLANK);*/
+  draw_bitboard(xx e8, u0=4.0/6.0, v0=0.0, u1=5.0/6.0, v1=1.0/2.0, BLANK);
+  draw_bitboard(xx f8, u0=2.0/6.0, v0=0.0, u1=3.0/6.0, v1=1.0/2.0, BLANK);
+  draw_bitboard(xx g8, u0=3.0/6.0, v0=0.0, u1=4.0/6.0, v1=1.0/2.0, BLANK);*/
 
   draw_bitboard :: (bit_board: u64, $u0: float, $v0: float, $u1: float, $v1: float, $c: Vector4, $draw_mouse_drag := false) #expand {
     value: u64 = 0;
