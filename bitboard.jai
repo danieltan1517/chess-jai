@@ -116,7 +116,7 @@ can_move :: (using piece_bitboards: *Piece_Bitboards, sq: u64, whose_turn: bool)
 }
 
 // TODO: this is bad code...
-make_move:: (using pieces: *Piece_Bitboards, move: Move16, whose_turn: bool) {
+make_move :: (using pieces: *Piece_Bitboards, move: Move16, whose_turn: bool) {
   type, from, to := decode_move(move);
   from_bit := cast(u64) (1 << from);
   to_bit   := cast(u64) (1 << to);
@@ -406,29 +406,17 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, occupied: u64
     safe_sqs := ~attacks;
     not_occu := ~occupied;
     if whose_turn {
-      if c_flags & Castling.W_KS {
-        castle_sqs :: cast(u64) (f1|g1);
-        if popcount(safe_sqs & not_occu & castle_sqs) == 2 {
-          array_add(moves_arr, encode_move_bb(xx e1, xx g1, Move16.King_Castle));
-        }
-      }
-      if c_flags & Castling.W_QS {
-        castle_sqs :: cast(u64) (c1|d1);
-        if popcount(safe_sqs & not_occu & castle_sqs) == 2 {
-          array_add(moves_arr, encode_move_bb(xx e1, xx c1, Move16.Queen_Castle));
-        }
-      }
+      handle_castling(Castling.W_KS, cast(u64) (f1|g1), cast(u64)e1, cast(u64)g1, Move16.King_Castle);
+      handle_castling(Castling.W_QS, cast(u64) (c1|d1), cast(u64)e1, cast(u64)c1, Move16.Queen_Castle);
     } else {
-      if c_flags & Castling.B_KS {
-        castle_sqs :: cast(u64) (f8|g8);
+      handle_castling(Castling.B_KS, cast(u64) (f8|g8), cast(u64)e8, cast(u64)g8, Move16.King_Castle);
+      handle_castling(Castling.B_QS, cast(u64) (c8|d8), cast(u64)e8, cast(u64)c8, Move16.Queen_Castle);
+    }
+
+    handle_castling :: ($F: Castling, $castle_sqs: u64, $from: u64, $to: u64, $flags: Move16) #expand {
+      if c_flags & F {
         if popcount(safe_sqs & not_occu & castle_sqs) == 2 {
-          array_add(moves_arr, encode_move_bb(xx e8, xx g8, Move16.King_Castle));
-        }
-      }
-      if c_flags & Castling.B_QS {
-        castle_sqs :: cast(u64) (c8|d8);
-        if popcount(safe_sqs & not_occu & castle_sqs) == 2 {
-          array_add(moves_arr, encode_move_bb(xx e8, xx c8, Move16.Queen_Castle));
+          array_add(moves_arr, encode_move_bb(from, to, flags));
         }
       }
     }
