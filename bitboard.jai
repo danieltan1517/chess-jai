@@ -494,21 +494,64 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     }
     generate_pawn_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces);
 
-    // en paesant move. TODO: need to handle the strange special en_paesant pin...
+    // en paesant move. need to handle the strange special en_paesant pin...
+    //    - - - - -  EP - - -
+    //    K - - - WP BP - - R   -- WP cannot capture BP. need to check if there are multiple rooks on the same rank...
+    //    - - - - -  -  - - -
     en_paesant_bb: u64 = 0;
     if whose_turn {
       ep_bb : u64 = ep_sq << 8;
       white_caps : u64 = white_pawn_captures(from_bb);
       en_paesant_bb = white_caps & ep_bb & check_sqs;
+      opp_qr := (opp_queen | opp_rook) & (xx rank_5);
       if en_paesant_bb {
-        array_add(moves_arr, encode_move_bb(from_bb, en_paesant_bb, Move16.Ep_Capture));
+        // handle ugly corner case for en paesant pin...
+        if (king & xx rank_5) && opp_qr {
+          TF := true;
+          while opp_qr {
+            ooo := cast(u64) (1 << serialize_bit(opp_qr));
+            btwn := between_bitboard(king, ooo);
+            erase_both := occupied & ~(from_bb|ep_sq);
+            if (btwn & erase_both) == 0 {
+              // there is no blocker, doing the en paesant capture puts king in check.
+              TF = false;
+              break;
+            }
+            opp_qr &= opp_qr - 1;
+          }
+          if TF {
+            array_add(moves_arr, encode_move_bb(from_bb, en_paesant_bb, Move16.Ep_Capture));
+          }
+        } else {
+          array_add(moves_arr, encode_move_bb(from_bb, en_paesant_bb, Move16.Ep_Capture));
+        }
       }
     } else {
       ep_bb : u64 = ep_sq >> 8;
       black_caps : u64 = black_pawn_captures(from_bb);
       en_paesant_bb = black_caps & ep_bb & check_sqs;
+      opp_qr := (opp_queen | opp_rook) & (xx rank_4);
       if en_paesant_bb {
-        array_add(moves_arr, encode_move_bb(from_bb, en_paesant_bb, Move16.Ep_Capture));
+        // handle ugly corner case for en paesant pin...
+        if (king & xx rank_4) && opp_qr {
+          TF := true;
+          while opp_qr {
+            ooo := cast(u64) (1 << serialize_bit(opp_qr));
+            btwn := between_bitboard(king, ooo);
+            erase_both := occupied & ~(from_bb|ep_sq);
+            if (btwn & erase_both) == 0 {
+              // there is no blocker, doing the en paesant capture puts king in check.
+              TF = false;
+              break;
+            }
+            opp_qr &= opp_qr - 1;
+          }
+          if TF {
+            array_add(moves_arr, encode_move_bb(from_bb, en_paesant_bb, Move16.Ep_Capture));
+          }
+        } else {
+          array_add(moves_arr, encode_move_bb(from_bb, en_paesant_bb, Move16.Ep_Capture));
+        }
       }
     }
     pawn = pawn & (pawn-1);
