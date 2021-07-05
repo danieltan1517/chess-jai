@@ -833,6 +833,12 @@ find_move :: (moves: [..]Move16, from: u64, to: u64) -> Move16 {
   return 0;
 }
 
+move_is_promotion :: inline (using m: Move16) -> bool {
+  type, from, to := decode_move(m);
+  return Knight_Promotion <= type && type <= Queen_Promotion_Capture;
+}
+
+
 #scope_file
 
 // o = occupied, r = piece, m = mask

@@ -85,12 +85,6 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
     TF = TF ^ true;
   }
 
-  // chess.com uses yellow, so we follow their example...
-  BLANK    :: Vector4.{1,1,1,1}; 
-  GREY     :: Vector4.{.5,.5,.2,.35}; 
-  YELLOW   :: Vector4.{.9,.9,0,.35}; 
-  LESS     :: Vector4.{1.0, 1.0, 1.0, 0.25};
-  RED      :: Vector4.{1, 0.25, 0.25, 0.5};
   draw_bitboard(last_move_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, YELLOW);
   draw_bitboard(possible_moves_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, RED);
 
@@ -98,46 +92,42 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
 
   using pieces;
   // draw the idle piece
-  draw_bitboard(w_king, u0=0.0, v0=0.0, u1=1.0/6.0, v1=0.5, BLANK);
-  draw_bitboard(w_queen, u0=1.0/6.0, v0=0.0, u1=2.0/6.0, v1=1.0/2.0, BLANK);
-  draw_bitboard(w_rook, u0=4.0/6.0, v0=0.0, u1=5.0/6.0, v1=1.0/2.0, BLANK);
-  draw_bitboard(w_bishop, u0=2.0/6.0, v0=0.0, u1=3.0/6.0, v1=1.0/2.0, BLANK);
-  draw_bitboard(w_knight, u0=3.0/6.0, v0=0.0, u1=4.0/6.0, v1=1.0/2.0, BLANK);
-  draw_bitboard(w_pawn, u0=5.0/6.0, v0=0.0, u1=1.0, v1=1.0/2.0, BLANK);
+  draw_every_piece(draw_mouse_drag=false);
+  if piece_select_state == {
+  case .PIECE_IDLE; #through;
+  case .PIECE_SELECTED;
+    // draw the piece being dragged/dropped.
+    draw_every_piece(draw_mouse_drag=true);
+  case .PIECE_PROMOTION;
+    // need to be done.
+    im_set_texture(null);
+    im_draw_rect(x, y, x + len*8.0, y + len*8.0, c=GREY_SHADE_BOARD);
+  }
 
-  draw_bitboard(b_king, u0=0.0, v0=0.5, u1=1.0/6.0, v1=1.0, BLANK);
-  draw_bitboard(b_queen, u0=1.0/6.0, v0=0.5, u1=2.0/6.0, v1=1.0, BLANK);
-  draw_bitboard(b_rook, u0=4.0/6.0, v0=0.5, u1=5.0/6.0, v1=1.0, BLANK);
-  draw_bitboard(b_bishop, u0=2.0/6.0, v0=0.5, u1=3.0/6.0, v1=1.0, BLANK);
-  draw_bitboard(b_knight, u0=3.0/6.0, v0=0.5, u1=4.0/6.0, v1=1.0, BLANK);
-  draw_bitboard(b_pawn, u0=5.0/6.0, v0=0.5, u1=1.0, v1=1.0, BLANK);
+  //draw_bitboard(~0, u0=0.0, v0=0.0, u1=1.0, v1=1.0, GREY_SHADE_BOARD);
+  // chess.com uses yellow, so we follow their example...
+  BLANK    :: Vector4.{1,1,1,1}; 
+  GREY     :: Vector4.{.5,.5,.2,.35}; 
+  YELLOW   :: Vector4.{.9,.9,0,.35}; 
+  LESS     :: Vector4.{1.0, 1.0, 1.0, 0.25};
+  RED      :: Vector4.{1, 0.25, 0.25, 0.5};
+  GREY_SHADE_BOARD :: Vector4.{0.2, 0.2, 0.2, 0.35};
 
-  // draw the piece being dragged/dropped.
-  draw_bitboard(w_king, u0=0.0, v0=0.0, u1=1.0/6.0, v1=0.5, BLANK, true);
-  draw_bitboard(w_queen, u0=1.0/6.0, v0=0.0, u1=2.0/6.0, v1=1.0/2.0, BLANK, true);
-  draw_bitboard(w_rook, u0=4.0/6.0, v0=0.0, u1=5.0/6.0, v1=1.0/2.0, BLANK, true);
-  draw_bitboard(w_bishop, u0=2.0/6.0, v0=0.0, u1=3.0/6.0, v1=1.0/2.0, BLANK, true);
-  draw_bitboard(w_knight, u0=3.0/6.0, v0=0.0, u1=4.0/6.0, v1=1.0/2.0, BLANK, true);
-  draw_bitboard(w_pawn, u0=5.0/6.0, v0=0.0, u1=1.0, v1=1.0/2.0, BLANK, true);
+  draw_every_piece :: ($draw_mouse_drag := false) #expand {
+    draw_bitboard(w_king & ~promotion_sq, u0=0.0, v0=0.0, u1=1.0/6.0, v1=0.5, BLANK, draw_mouse_drag=draw_mouse_drag);
+    draw_bitboard(w_queen & ~promotion_sq, u0=1.0/6.0, v0=0.0, u1=2.0/6.0, v1=1.0/2.0, BLANK, draw_mouse_drag=draw_mouse_drag);
+    draw_bitboard(w_rook & ~promotion_sq, u0=4.0/6.0, v0=0.0, u1=5.0/6.0, v1=1.0/2.0, BLANK,draw_mouse_drag=draw_mouse_drag );
+    draw_bitboard(w_bishop & ~promotion_sq, u0=2.0/6.0, v0=0.0, u1=3.0/6.0, v1=1.0/2.0, BLANK, draw_mouse_drag=draw_mouse_drag);
+    draw_bitboard(w_knight & ~promotion_sq, u0=3.0/6.0, v0=0.0, u1=4.0/6.0, v1=1.0/2.0, BLANK,draw_mouse_drag=draw_mouse_drag );
+    draw_bitboard(w_pawn & ~promotion_sq, u0=5.0/6.0, v0=0.0, u1=1.0, v1=1.0/2.0, BLANK,draw_mouse_drag=draw_mouse_drag);
  
-  draw_bitboard(b_king, u0=0.0, v0=0.5, u1=1.0/6.0, v1=1.0, BLANK, true);
-  draw_bitboard(b_queen, u0=1.0/6.0, v0=0.5, u1=2.0/6.0, v1=1.0, BLANK, true);
-  draw_bitboard(b_rook, u0=4.0/6.0, v0=0.5, u1=5.0/6.0, v1=1.0, BLANK, true);
-  draw_bitboard(b_bishop, u0=2.0/6.0, v0=0.5, u1=3.0/6.0, v1=1.0, BLANK, true);
-  draw_bitboard(b_knight, u0=3.0/6.0, v0=0.5, u1=4.0/6.0, v1=1.0, BLANK, true);
-  draw_bitboard(b_pawn, u0=5.0/6.0, v0=0.5, u1=1.0, v1=1.0, BLANK, true);
-
-  // TODO: this is the promotion interface:
-  /*im_set_texture(null);
-  draw_bitboard(~0, u0=0.0, v0=0.0, u1=1.0, v1=1.0, Vector4.{0.2, 0.2, 0.2, 0.65});
-  y += square_len;
-  draw_bitboard(xx d8|e8|f8|g8, u0=0.0, v0=0.0, u1=1.0, v1=1.0, BLANK);
-
-  im_set_texture(texture);
-  draw_bitboard(xx d8, u0=1.0/6.0, v0=0.0, u1=2.0/6.0, v1=1.0/2.0, BLANK);
-  draw_bitboard(xx e8, u0=4.0/6.0, v0=0.0, u1=5.0/6.0, v1=1.0/2.0, BLANK);
-  draw_bitboard(xx f8, u0=2.0/6.0, v0=0.0, u1=3.0/6.0, v1=1.0/2.0, BLANK);
-  draw_bitboard(xx g8, u0=3.0/6.0, v0=0.0, u1=4.0/6.0, v1=1.0/2.0, BLANK);*/
+    draw_bitboard(b_king & ~promotion_sq, u0=0.0, v0=0.5, u1=1.0/6.0, v1=1.0, BLANK,draw_mouse_drag=draw_mouse_drag);
+    draw_bitboard(b_queen & ~promotion_sq, u0=1.0/6.0, v0=0.5, u1=2.0/6.0, v1=1.0, BLANK,draw_mouse_drag=draw_mouse_drag);
+    draw_bitboard(b_rook & ~promotion_sq, u0=4.0/6.0, v0=0.5, u1=5.0/6.0, v1=1.0, BLANK,draw_mouse_drag=draw_mouse_drag);
+    draw_bitboard(b_bishop & ~promotion_sq, u0=2.0/6.0, v0=0.5, u1=3.0/6.0, v1=1.0, BLANK,draw_mouse_drag=draw_mouse_drag);
+    draw_bitboard(b_knight & ~promotion_sq, u0=3.0/6.0, v0=0.5, u1=4.0/6.0, v1=1.0, BLANK,draw_mouse_drag=draw_mouse_drag);
+    draw_bitboard(b_pawn & ~promotion_sq, u0=5.0/6.0, v0=0.5, u1=1.0, v1=1.0, BLANK,draw_mouse_drag=draw_mouse_drag);
+  }
 
   draw_bitboard :: (bit_board: u64, $u0: float, $v0: float, $u1: float, $v1: float, $c: Vector4, $draw_mouse_drag := false) #expand {
     value: u64 = 0;
@@ -179,6 +169,18 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
       value &= (value - 1);
     }
   }
+
+  // TODO: this is the promotion interface:
+  /*im_set_texture(null);
+  draw_bitboard(~0, u0=0.0, v0=0.0, u1=1.0, v1=1.0, Vector4.{0.2, 0.2, 0.2, 0.65});
+  y += square_len;
+  draw_bitboard(xx d8|e8|f8|g8, u0=0.0, v0=0.0, u1=1.0, v1=1.0, BLANK);
+
+  im_set_texture(texture);
+  draw_bitboard(xx d8, u0=1.0/6.0, v0=0.0, u1=2.0/6.0, v1=1.0/2.0, BLANK);
+  draw_bitboard(xx e8, u0=4.0/6.0, v0=0.0, u1=5.0/6.0, v1=1.0/2.0, BLANK);
+  draw_bitboard(xx f8, u0=2.0/6.0, v0=0.0, u1=3.0/6.0, v1=1.0/2.0, BLANK);
+  draw_bitboard(xx g8, u0=3.0/6.0, v0=0.0, u1=4.0/6.0, v1=1.0/2.0, BLANK);*/
 }
 
 mouse_position_x:     float = 0.0;
@@ -230,22 +232,29 @@ handle_board_click :: (width: float, height: float, piece_bitboard: *Piece_Bitbo
   y1 := cen_y + len*.5;
 
   sq: u64 = 0;
-  if mouse_button_1_state == .MOUSE_PRESSED || mouse_button_1_state == .MOUSE_RELEASE {
-    if x0 <= mouse_position_x && mouse_position_x <= x1 {
-      if y0 <= mouse_position_y && mouse_position_y <= y1 {
-        if white_side {
-          sq_x_clicked: int = xx ((mouse_position_x - x0) / square_len);
-          sq_y_clicked: int = 7 - xx ((mouse_position_y - y0) / square_len);
-          i := sq_x_clicked + sq_y_clicked * 8;
-          sq = xx (1 << i);
-        } else {
-          sq_x_clicked: int = 7 - xx ((mouse_position_x - x0) / square_len);
-          sq_y_clicked: int = xx ((mouse_position_y - y0) / square_len);
-          i := sq_x_clicked + sq_y_clicked * 8;
-          sq = xx (1 << i);
+  if piece_select_state == {
+  case .PIECE_IDLE; #through;
+  case .PIECE_SELECTED;
+    promotion_sq = 0; // paranoid, make sure the promotion_sq is 0.
+    if mouse_button_1_state == .MOUSE_PRESSED || mouse_button_1_state == .MOUSE_RELEASE {
+      if x0 <= mouse_position_x && mouse_position_x <= x1 {
+        if y0 <= mouse_position_y && mouse_position_y <= y1 {
+          if white_side {
+            sq_x_clicked: int = xx ((mouse_position_x - x0) / square_len);
+            sq_y_clicked: int = 7 - xx ((mouse_position_y - y0) / square_len);
+            i := sq_x_clicked + sq_y_clicked * 8;
+            sq = xx (1 << i);
+          } else {
+            sq_x_clicked: int = 7 - xx ((mouse_position_x - x0) / square_len);
+            sq_y_clicked: int = xx ((mouse_position_y - y0) / square_len);
+            i := sq_x_clicked + sq_y_clicked * 8;
+            sq = xx (1 << i);
+          }
         }
       }
     }
+  case .PIECE_PROMOTION;
+
   }
   // only deal with things that output a 'sq', when 0, return
   if sq == 0 then return;
@@ -272,27 +281,34 @@ handle_board_click :: (width: float, height: float, piece_bitboard: *Piece_Bitbo
       to   := sq;
       if to & possible_moves_bb {
         mov := find_move(<<moves_arr, from, to);
-        make_move(piece_bitboard, flags, ep_sq, mov, whose_turn);
-        last_move_bb = from | to;
-        whose_turn = !whose_turn;
-        array_reset(moves_arr);
-        check := generate_legal_moves(piece_bitboard, <<flags, <<ep_sq, moves_arr, whose_turn);
-        if moves_arr.count == 0 {
-          if check {
-            if whose_turn {
-              print("Black wins! Checkmate!\n");
+        if move_is_promotion(mov) {
+          // bring up promotion interface.
+          piece_select_state = .PIECE_PROMOTION;
+          promotion_sq = to;
+        } else {
+          make_move(piece_bitboard, flags, ep_sq, mov, whose_turn);
+          last_move_bb = from | to;
+          whose_turn = !whose_turn;
+          array_reset(moves_arr);
+          check := generate_legal_moves(piece_bitboard, <<flags, <<ep_sq, moves_arr, whose_turn);
+          if moves_arr.count == 0 {
+            if check {
+              if whose_turn {
+                print("Black wins! Checkmate!\n");
+              } else {
+                print("White wins! Checkmate!\n");
+              }
             } else {
-              print("White wins! Checkmate!\n");
+              print("Stalemate\n");
             }
-          } else {
-            print("Stalemate\n");
           }
+          highlight_the_square = 0;
+          possible_moves_bb = 0;
+          piece_select_state = .PIECE_IDLE;
         }
       }
-      highlight_the_square = 0;
-      possible_moves_bb = 0;
-      piece_select_state = .PIECE_IDLE;
     }
+  case .PIECE_PROMOTION;
   }
 }
 
@@ -314,14 +330,11 @@ handle_flip_board :: (window: *GLFWwindow, white_side: bool)->bool {
   return white_side;
 }
 
-// true=white, 
-// false=black.
-whose_turn := true; 
-
+whose_turn := true;  // whose_turn=true=white, whose_turn=false=black.
+promotion_sq : u64 = 0;
 highlight_the_square: u64 = 0;
-piece_select_state: enum { PIECE_IDLE; PIECE_SELECTED; } = .PIECE_IDLE;
+piece_select_state: enum { PIECE_IDLE; PIECE_SELECTED; PIECE_PROMOTION; } = .PIECE_IDLE;
 possible_moves_bb: u64 = 0;
-
 last_move_bb: u64 = 0;
 
 
