@@ -101,8 +101,7 @@ install :: () {
 }
 
 todo :: () {
-  // legal move generation
-  //   -- en peasant
+  //   -- en peasant rook|queen pin horizontal
   //   -- promote pieces => gui interface for this.
 }
 

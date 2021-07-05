@@ -116,7 +116,7 @@ can_move :: (using piece_bitboards: *Piece_Bitboards, sq: u64, whose_turn: bool)
 }
 
 // TODO: this is bad code...
-make_move :: (using pieces: *Piece_Bitboards, flags: *Castling, move: Move16, whose_turn: bool) {
+make_move :: (using pieces: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, move: Move16, whose_turn: bool) {
   type, from, to := decode_move(move);
   from_bit := cast(u64) (1 << from);
   to_bit   := cast(u64) (1 << to);
@@ -128,6 +128,7 @@ make_move :: (using pieces: *Piece_Bitboards, flags: *Castling, move: Move16, wh
       white_piece_move();
     case Double_Pawn_Push;
       w_pawn = (w_pawn & ~from_bit) | to_bit;
+      <<ep_sq = to_bit;
     case King_Castle;
       w_king = (w_king & ~from_bit) | to_bit;
       w_rook = (w_rook & xx ~h1) | xx f1;
@@ -146,25 +147,25 @@ make_move :: (using pieces: *Piece_Bitboards, flags: *Castling, move: Move16, wh
       black_piece_taken();
       #through;
     case Knight_Promotion;
-      w_pawn = w_pawn & ~to_bit;
+      w_pawn = w_pawn & ~from_bit;
       w_knight = w_knight | to_bit;
     case Bishop_Promotion_Capture;
       black_piece_taken();
       #through;
     case Bishop_Promotion;
-      w_pawn = w_pawn & ~to_bit;
+      w_pawn = w_pawn & ~from_bit;
       w_bishop = w_bishop | to_bit;
     case Rook_Promotion_Capture;
       black_piece_taken();
       #through;
     case Rook_Promotion;
-      w_pawn = w_pawn & ~to_bit;
+      w_pawn = w_pawn & ~from_bit;
       w_rook = w_rook | to_bit;
     case Queen_Promotion_Capture;
       black_piece_taken();
       #through;
     case Queen_Promotion;
-      w_pawn = w_pawn & ~to_bit;
+      w_pawn = w_pawn & ~from_bit;
       w_queen = w_queen | to_bit;
     }
     if !(w_rook & cast(u64)a1) {
@@ -180,6 +181,7 @@ make_move :: (using pieces: *Piece_Bitboards, flags: *Castling, move: Move16, wh
       black_piece_move();
     case Double_Pawn_Push;
       b_pawn = (b_pawn & ~from_bit) | to_bit;
+      <<ep_sq = to_bit;
     case King_Castle;
       b_king = (b_king & ~from_bit) | to_bit;
       b_rook = (b_rook & xx ~h8) | xx f8;
@@ -193,30 +195,30 @@ make_move :: (using pieces: *Piece_Bitboards, flags: *Castling, move: Move16, wh
       white_piece_taken();
     case Ep_Capture;
       b_pawn = (b_pawn & ~from_bit) | to_bit;
-      w_pawn = w_pawn & ~(to_bit >> 8);
+      w_pawn = w_pawn & ~(to_bit << 8);
     case Knight_Promotion_Capture;
       white_piece_taken();
       #through;
     case Knight_Promotion;
-      b_pawn = b_pawn & ~to_bit;
+      b_pawn = b_pawn & ~from_bit;
       b_knight = b_knight | to_bit;
     case Bishop_Promotion_Capture;
       white_piece_taken();
       #through;
     case Bishop_Promotion;
-      b_pawn = b_pawn & ~to_bit;
+      b_pawn = b_pawn & ~from_bit;
       b_bishop = b_bishop | to_bit;
     case Rook_Promotion_Capture;
       white_piece_taken();
       #through;
     case Rook_Promotion;
-      b_pawn = b_pawn & ~to_bit;
+      b_pawn = b_pawn & ~from_bit;
       b_rook = b_rook | to_bit;
     case Queen_Promotion_Capture;
       white_piece_taken();
       #through;
     case Queen_Promotion;
-      b_pawn = b_pawn & ~to_bit;
+      b_pawn = b_pawn & ~from_bit;
       b_queen = b_queen | to_bit;
     }
     if !(b_rook & cast(u64)a8) {
@@ -301,28 +303,31 @@ make_move :: (using pieces: *Piece_Bitboards, flags: *Castling, move: Move16, wh
   }
 }
 
-generate_legal_moves :: (p: *Piece_Bitboards, c_flags: Castling, moves_arr: *[..] Move16, whose_turn: bool) -> bool {
+generate_legal_moves :: (p: *Piece_Bitboards, c_flags: Castling, ep_sq: u64, moves_arr: *[..] Move16, whose_turn: bool) -> bool {
   w_pieces := get_white_pieces(p);
   b_pieces := get_black_pieces(p);
   occupied := w_pieces | b_pieces;
   if whose_turn {
-     return generate_moves_for(moves_arr=moves_arr, c_flags=c_flags, occupied=occupied, pieces=w_pieces, opp_pieces=b_pieces,
+     return generate_moves_for(moves_arr=moves_arr, c_flags=c_flags, ep_sq=ep_sq, occupied=occupied, pieces=w_pieces, opp_pieces=b_pieces,
        king=p.w_king,     queen=p.w_queen,     rook=p.w_rook,     bishop=p.w_bishop,     knight=p.w_knight,     pawn=p.w_pawn,
        opp_king=p.b_king, opp_queen=p.b_queen, opp_rook=p.b_rook, opp_bishop=p.b_bishop, opp_knight=p.b_knight, opp_pawn=p.b_pawn,
        whose_turn=whose_turn);
   } else {
-     return generate_moves_for(moves_arr=moves_arr, c_flags=c_flags, occupied=occupied, pieces=b_pieces, opp_pieces=w_pieces,
+     return generate_moves_for(moves_arr=moves_arr, c_flags=c_flags, ep_sq=ep_sq, occupied=occupied, pieces=b_pieces, opp_pieces=w_pieces,
        king=p.b_king,     queen=p.b_queen,     rook=p.b_rook,     bishop=p.b_bishop,     knight=p.b_knight,     pawn=p.b_pawn,
        opp_king=p.w_king, opp_queen=p.w_queen, opp_rook=p.w_rook, opp_bishop=p.w_bishop, opp_knight=p.w_knight, opp_pawn=p.w_pawn,
        whose_turn=whose_turn);
   }
 }
 
-generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, occupied: u64, pieces: u64, opp_pieces: u64, 
+generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, occupied: u64, pieces: u64, opp_pieces: u64, 
                        king: u64,     queen: u64,     rook: u64,     bishop: u64,     knight: u64,     pawn: u64,
                        opp_king: u64, opp_queen: u64, opp_rook: u64, opp_bishop: u64, opp_knight: u64, opp_pawn: u64,
                        whose_turn: bool) -> bool {
-  attacks := generate_attacks(occ=occupied, 
+
+  // NOTE: we do (occupied & ~king) so that if    R - - - K - - -,
+  // then the sliding will go through the king to cover other the unsafe squares
+  attacks := generate_attacks(occ=occupied & ~king, 
                king=opp_king, queen=opp_queen, rook=opp_rook, bishop=opp_bishop, knight=opp_knight, pawn=opp_pawn, 
                whose_turn=!whose_turn);
   checks: u64 = 0;
@@ -396,11 +401,21 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, occupied: u64
 
     // pawn diagonal moves only, if pawn is pinned, there is only one possible move.
     if whose_turn {
-      pawn_move := white_pawn_captures(pawn) & opp_pieces & (between_sqs|sq);
+      wp_attacks := white_pawn_captures(pawn);
+      pawn_move := wp_attacks & opp_pieces & (between_sqs|sq);
       generate_pawn_moves_from_bitboard(moves_arr, pinned_piece, pawn_move, opp_pieces);
+      ep_bb : u64 = (ep_sq << 8);
+      if wp_attacks & ep_bb & between_sqs {
+        array_add(moves_arr, encode_move_bb(pinned_piece, ep_bb, Move16.Ep_Capture));
+      }
     } else {
-      pawn_move := black_pawn_captures(pawn) & opp_pieces & (between_sqs|sq);
+      bp_attacks := black_pawn_captures(pawn);
+      pawn_move := bp_attacks & opp_pieces & (between_sqs|sq);
       generate_pawn_moves_from_bitboard(moves_arr, pinned_piece, pawn_move, opp_pieces);
+      ep_bb : u64 = (ep_sq >> 8);
+      if bp_attacks & ep_bb & between_sqs {
+        array_add(moves_arr, encode_move_bb(pinned_piece, ep_bb, Move16.Ep_Capture));
+      }
     }
 
     if (queen|bishop) & pinned_piece {
@@ -471,9 +486,31 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, occupied: u64
   while pawn {
     i := serialize_bit(pawn);
     from_bb := cast(u64)(1 << i);
-    to_bb := ifx whose_turn then white_pawn_moves(occupied, i, from_bb, pieces) & check_sqs
-             else             black_pawn_moves(occupied, i, from_bb, pieces) & check_sqs;
+    to_bb: u64 = 0;
+    if whose_turn then {
+      to_bb = white_pawn_moves(occupied, i, from_bb, pieces) & check_sqs;
+    } else {
+      to_bb = black_pawn_moves(occupied, i, from_bb, pieces) & check_sqs;
+    }
     generate_pawn_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces);
+
+    // en paesant move. TODO: need to handle the strange special en_paesant pin...
+    en_paesant_bb: u64 = 0;
+    if whose_turn {
+      ep_bb : u64 = ep_sq << 8;
+      white_caps : u64 = white_pawn_captures(from_bb);
+      en_paesant_bb = white_caps & ep_bb & check_sqs;
+      if en_paesant_bb {
+        array_add(moves_arr, encode_move_bb(from_bb, en_paesant_bb, Move16.Ep_Capture));
+      }
+    } else {
+      ep_bb : u64 = ep_sq >> 8;
+      black_caps : u64 = black_pawn_captures(from_bb);
+      en_paesant_bb = black_caps & ep_bb & check_sqs;
+      if en_paesant_bb {
+        array_add(moves_arr, encode_move_bb(from_bb, en_paesant_bb, Move16.Ep_Capture));
+      }
+    }
     pawn = pawn & (pawn-1);
   }
   king_moves_bb := king_moves(occupied, i, king, pieces) & ~attacks;
