@@ -30,7 +30,7 @@ main :: () {
   init_global_bitboards();
   moves_arr: [..] Move16;
   piece_bitboard := chess_start_pos();
-  generate_legal_moves(*piece_bitboard, *moves_arr, true);
+  generate_legal_moves(*piece_bitboard, Castling.All, *moves_arr, true);
 
   white_side := true;
 
@@ -90,7 +90,7 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
   LESS     :: Vector4.{1.0, 1.0, 1.0, 0.25};
   RED      :: Vector4.{1, 0.25, 0.25, 0.5};
   draw_bitboard(last_move_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, YELLOW);
-  draw_bitboard(possible_moves_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, GREY);
+  draw_bitboard(possible_moves_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, RED);
 
   im_set_texture(texture);
 
@@ -262,10 +262,7 @@ handle_board_click :: (width: float, height: float, piece_bitboard: *Piece_Bitbo
         last_move_bb = from | to;
         whose_turn = !whose_turn;
         array_reset(moves_arr);
-        tt := get_time();
-        check := generate_legal_moves(piece_bitboard, moves_arr, whose_turn);
-        tt = get_time() - tt;
-        print("Move gen takes: %\n", tt);
+        check := generate_legal_moves(piece_bitboard, Castling.All, moves_arr, whose_turn);
         if moves_arr.count == 0 {
           if check {
             if whose_turn {

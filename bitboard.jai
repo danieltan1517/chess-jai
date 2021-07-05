@@ -74,6 +74,14 @@ Move16 :: enum s16 {
   Queen_Promotion_Capture;
 }
 
+Castling :: enum_flags {
+  W_KS;
+  W_QS;
+  B_KS;
+  B_QS;
+  All :: W_KS|W_QS|B_KS|B_QS;
+}
+
 chess_start_pos :: () -> Piece_Bitboards {
   start_pos: Piece_Bitboards;
   start_pos.w_king   = xx e1;
@@ -275,24 +283,24 @@ make_move:: (using pieces: *Piece_Bitboards, move: Move16, whose_turn: bool) {
   }
 }
 
-generate_legal_moves :: (p: *Piece_Bitboards, moves_arr: *[..] Move16, whose_turn: bool) -> bool {
+generate_legal_moves :: (p: *Piece_Bitboards, c_flags: Castling, moves_arr: *[..] Move16, whose_turn: bool) -> bool {
   w_pieces := get_white_pieces(p);
   b_pieces := get_black_pieces(p);
-  all_pieces := w_pieces | b_pieces;
+  occupied := w_pieces | b_pieces;
   if whose_turn {
-     return generate_moves_for(moves_arr=moves_arr, occupied=all_pieces, pieces=w_pieces, opp_pieces=b_pieces,
+     return generate_moves_for(moves_arr=moves_arr, c_flags=c_flags, occupied=occupied, pieces=w_pieces, opp_pieces=b_pieces,
        king=p.w_king,     queen=p.w_queen,     rook=p.w_rook,     bishop=p.w_bishop,     knight=p.w_knight,     pawn=p.w_pawn,
        opp_king=p.b_king, opp_queen=p.b_queen, opp_rook=p.b_rook, opp_bishop=p.b_bishop, opp_knight=p.b_knight, opp_pawn=p.b_pawn,
        whose_turn=whose_turn);
   } else {
-     return generate_moves_for(moves_arr=moves_arr, occupied=all_pieces, pieces=b_pieces, opp_pieces=w_pieces,
+     return generate_moves_for(moves_arr=moves_arr, c_flags=c_flags, occupied=occupied, pieces=b_pieces, opp_pieces=w_pieces,
        king=p.b_king,     queen=p.b_queen,     rook=p.b_rook,     bishop=p.b_bishop,     knight=p.b_knight,     pawn=p.b_pawn,
        opp_king=p.w_king, opp_queen=p.w_queen, opp_rook=p.w_rook, opp_bishop=p.w_bishop, opp_knight=p.w_knight, opp_pawn=p.w_pawn,
        whose_turn=whose_turn);
   }
 }
 
-generate_moves_for :: (moves_arr: *[..] Move16, occupied: u64, pieces: u64, opp_pieces: u64, 
+generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, occupied: u64, pieces: u64, opp_pieces: u64, 
                        king: u64,     queen: u64,     rook: u64,     bishop: u64,     knight: u64,     pawn: u64,
                        opp_king: u64, opp_queen: u64, opp_rook: u64, opp_bishop: u64, opp_knight: u64, opp_pawn: u64,
                        whose_turn: bool) -> bool {
@@ -395,6 +403,35 @@ generate_moves_for :: (moves_arr: *[..] Move16, occupied: u64, pieces: u64, opp_
     check_sqs = between_bitboard(checks, king) | checks;
   } else {
     check_sqs = ~0;
+    safe_sqs := ~attacks;
+    not_occu := ~occupied;
+    if whose_turn {
+      if c_flags & Castling.W_KS {
+        castle_sqs :: cast(u64) (f1|g1);
+        if popcount(safe_sqs & not_occu & castle_sqs) == 2 {
+          array_add(moves_arr, encode_move_bb(xx e1, xx g1, Move16.King_Castle));
+        }
+      }
+      if c_flags & Castling.W_QS {
+        castle_sqs :: cast(u64) (c1|d1);
+        if popcount(safe_sqs & not_occu & castle_sqs) == 2 {
+          array_add(moves_arr, encode_move_bb(xx e1, xx c1, Move16.Queen_Castle));
+        }
+      }
+    } else {
+      if c_flags & Castling.B_KS {
+        castle_sqs :: cast(u64) (f8|g8);
+        if popcount(safe_sqs & not_occu & castle_sqs) == 2 {
+          array_add(moves_arr, encode_move_bb(xx e8, xx g8, Move16.King_Castle));
+        }
+      }
+      if c_flags & Castling.B_QS {
+        castle_sqs :: cast(u64) (c8|d8);
+        if popcount(safe_sqs & not_occu & castle_sqs) == 2 {
+          array_add(moves_arr, encode_move_bb(xx e8, xx c8, Move16.Queen_Castle));
+        }
+      }
+    }
   }
 
   while queen {
@@ -428,7 +465,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, occupied: u64, pieces: u64, opp_
   while pawn {
     i := serialize_bit(pawn);
     from_bb := cast(u64)(1 << i);
-    to_bb := ifx whose_turn   white_pawn_moves(occupied, i, from_bb, pieces) & check_sqs
+    to_bb := ifx whose_turn then white_pawn_moves(occupied, i, from_bb, pieces) & check_sqs
              else             black_pawn_moves(occupied, i, from_bb, pieces) & check_sqs;
     generate_pawn_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces);
     pawn = pawn & (pawn-1);
@@ -685,10 +722,6 @@ init_global_bitboards :: () {
   }
 }
 
-encode_move :: inline (from: int, to: int, flags: Move16) -> Move16 {
-  return xx ((from << 10) | (to << 4) | (xx flags));
-}
-
 encode_move_bb :: inline (f: u64, t: u64, flags: Move16) -> Move16 {
   from := serialize_bit(f);
   to   := serialize_bit(t);
@@ -697,7 +730,9 @@ encode_move_bb :: inline (f: u64, t: u64, flags: Move16) -> Move16 {
 
 // Type of move, From, To.
 decode_move :: inline (mov: Move16) -> flags: Move16, from: int, to: int {
-  return  mov & (xx 0xF),  xx (mov & (xx 0xFC00) >> 10), xx (mov & (xx 0x03F0) >> 4);
+  // NOTE: this cast is neccesssary to prevent the release build from doing something stupid...
+  cast_mov := cast(int) mov;
+  return  mov & (xx 0xF), (cast_mov & 0xFC00) >> 10, (cast_mov & 0x03F0) >> 4;
 }
 
 find_move :: (moves: [..]Move16, from: u64, to: u64) -> Move16 {
