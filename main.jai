@@ -29,8 +29,9 @@ main :: () {
   }
   init_global_bitboards();
   moves_arr: [..] Move16;
+  flags: Castling = Castling.All;
   piece_bitboard := chess_start_pos();
-  generate_legal_moves(*piece_bitboard, Castling.All, *moves_arr, true);
+  generate_legal_moves(*piece_bitboard, flags, *moves_arr, true);
 
   white_side := true;
 
@@ -44,7 +45,7 @@ main :: () {
     im_draw_setup_gl();
     im_set_viewport_transform(2.0/width, 2.0/height, -1, -1);
     white_side = handle_flip_board(window, white_side);
-    handle_board_click(xx width, xx height, *piece_bitboard, *moves_arr, white_side=white_side);
+    handle_board_click(xx width, xx height, *piece_bitboard, *flags, *moves_arr, white_side=white_side);
     draw_chess(xx width, xx height, *piece_bitboard, t, highlight_the_square, possible_moves_bb, last_move_bb, white_side);
     im_flush();
     glfwSwapBuffers(window);
@@ -202,7 +203,7 @@ read_mouse_input :: (window: *GLFWwindow) {
   }
 }
 
-handle_board_click :: (width: float, height: float, piece_bitboard: *Piece_Bitboards, moves_arr: *[..] Move16, white_side := true) {
+handle_board_click :: (width: float, height: float, piece_bitboard: *Piece_Bitboards, flags: *Castling, moves_arr: *[..] Move16, white_side := true) {
   cen_x := width * 0.5; 
   cen_y := height * 0.5;
 
@@ -258,11 +259,11 @@ handle_board_click :: (width: float, height: float, piece_bitboard: *Piece_Bitbo
       to   := sq;
       if to & possible_moves_bb {
         mov := find_move(<<moves_arr, from, to);
-        make_move(piece_bitboard, mov, whose_turn);
+        make_move(piece_bitboard, flags, mov, whose_turn);
         last_move_bb = from | to;
         whose_turn = !whose_turn;
         array_reset(moves_arr);
-        check := generate_legal_moves(piece_bitboard, Castling.All, moves_arr, whose_turn);
+        check := generate_legal_moves(piece_bitboard, <<flags, moves_arr, whose_turn);
         if moves_arr.count == 0 {
           if check {
             if whose_turn {

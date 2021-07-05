@@ -116,7 +116,7 @@ can_move :: (using piece_bitboards: *Piece_Bitboards, sq: u64, whose_turn: bool)
 }
 
 // TODO: this is bad code...
-make_move :: (using pieces: *Piece_Bitboards, move: Move16, whose_turn: bool) {
+make_move :: (using pieces: *Piece_Bitboards, flags: *Castling, move: Move16, whose_turn: bool) {
   type, from, to := decode_move(move);
   from_bit := cast(u64) (1 << from);
   to_bit   := cast(u64) (1 << to);
@@ -131,9 +131,11 @@ make_move :: (using pieces: *Piece_Bitboards, move: Move16, whose_turn: bool) {
     case King_Castle;
       w_king = (w_king & ~from_bit) | to_bit;
       w_rook = (w_rook & xx ~h1) | xx f1;
+      <<flags &= ~(Castling.W_KS | Castling.W_QS);
     case Queen_Castle;
       w_king = (w_king & ~from_bit) | to_bit;
       w_rook = (w_rook & xx ~a1) | xx d1;
+      <<flags &= ~(Castling.W_KS | Castling.W_QS);
     case Capture;
       white_piece_move();
       black_piece_taken();
@@ -165,6 +167,13 @@ make_move :: (using pieces: *Piece_Bitboards, move: Move16, whose_turn: bool) {
       w_pawn = w_pawn & ~to_bit;
       w_queen = w_queen | to_bit;
     }
+    if !(w_rook & cast(u64)a1) {
+      <<flags &= ~Castling.W_QS;
+    }
+
+    if !(w_rook & cast(u64)h1) {
+      <<flags &= ~Castling.W_KS;
+    }
   } else {
     if #complete type == {
     case Quiet;
@@ -174,9 +183,11 @@ make_move :: (using pieces: *Piece_Bitboards, move: Move16, whose_turn: bool) {
     case King_Castle;
       b_king = (b_king & ~from_bit) | to_bit;
       b_rook = (b_rook & xx ~h8) | xx f8;
+      <<flags &= ~(Castling.B_KS | Castling.B_QS);
     case Queen_Castle;
       b_king = (b_king & ~from_bit) | to_bit;
       b_rook = (b_rook & xx ~a8) | xx d8;
+      <<flags &= ~(Castling.B_KS | Castling.B_QS);
     case Capture;
       black_piece_move();
       white_piece_taken();
@@ -207,6 +218,13 @@ make_move :: (using pieces: *Piece_Bitboards, move: Move16, whose_turn: bool) {
     case Queen_Promotion;
       b_pawn = b_pawn & ~to_bit;
       b_queen = b_queen | to_bit;
+    }
+    if !(b_rook & cast(u64)a8) {
+      <<flags &= ~Castling.B_QS;
+    }
+
+    if !(b_rook & cast(u64)h8) {
+      <<flags &= ~Castling.B_KS;
     }
   }
 

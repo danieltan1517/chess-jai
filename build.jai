@@ -103,7 +103,6 @@ install :: () {
 todo :: () {
   // legal move generation
   //   -- en peasant
-  //   -- castling
   //   -- promote pieces => gui interface for this.
 }
 
