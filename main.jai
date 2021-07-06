@@ -29,8 +29,8 @@ main :: () {
   }
   init_global_bitboards();
   moves_arr: [..] Move16;
-  array_reserve(*moves_arr, 70);
-  array_reserve(*move_record, 100);
+  array_reserve(*moves_arr, 70);    // generates all legal moves
+  array_reserve(*move_record, 200); // records the game down. I use this struct to backtrack and undo moves
   flags: Castling = Castling.All;
   ep_sq: u64 = 0;
   piece_bitboard := chess_start_pos();
