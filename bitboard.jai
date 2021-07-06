@@ -352,50 +352,81 @@ unmake_move :: (using pieces: *Piece_Bitboards, captured: PieceType, move: Move1
   from_bb := cast(u64) (1 << from);
   to_bb   := cast(u64) (1 << to);
   using Move16;
-  print("Unmake move type=%, from=%, to=%\n", type, cast(bboard)from_bb, cast(bboard)to_bb);
   if !whose_turn {
-    if captured == {
-    case PieceType.Queen;
-      b_queen |= to_bb;
-    case PieceType.Rook;
-      b_rook  |= to_bb;
-    case PieceType.Bishop;
-      b_bishop |= to_bb;
-    case PieceType.Knight;
-      b_knight |= to_bb;
-    case PieceType.Pawn;
-      b_pawn |= to_bb;
-    }
     if type == {
     case King_Castle;
+      black_piece_undo_capture(); 
       w_king = xx e1;
       w_rook = (w_rook & xx ~f1) | (xx h1);
     case Queen_Castle;
+      black_piece_undo_capture(); 
       w_king = xx e1;
       w_rook = (w_rook & xx ~d1) | (xx a1);
     case Knight_Promotion_Capture; #through;
     case Knight_Promotion;
+      black_piece_undo_capture(); 
       w_knight &= xx ~to_bb;
       w_pawn = w_pawn | from_bb;
     case Bishop_Promotion_Capture; #through;
     case Bishop_Promotion;
+      black_piece_undo_capture(); 
       w_bishop &= xx ~to_bb;
       w_pawn = w_pawn | from_bb;
     case Rook_Promotion_Capture; #through;
     case Rook_Promotion;
+      black_piece_undo_capture(); 
       w_bishop &= xx ~to_bb;
       w_pawn = w_pawn | from_bb;
     case Queen_Promotion_Capture; #through;
     case Queen_Promotion;
+      black_piece_undo_capture(); 
       w_queen = (w_queen & ~to_bb);
       w_pawn = w_pawn | from_bb;
     case Ep_Capture;
       w_pawn = (w_pawn & ~to_bb) | from_bb;
       b_pawn = b_pawn | (to_bb >> 8);
     case;
+      black_piece_undo_capture(); 
       white_piece_undo_move();
     }
   } else {
+    if type == {
+    case King_Castle;
+      b_king = xx e8;
+      b_rook = (b_rook & xx ~f8) | (xx h8);
+    case Queen_Castle;
+      b_king = xx e8;
+      b_rook = (b_rook & xx ~d8) | (xx a8);
+    case Knight_Promotion_Capture; #through;
+    case Knight_Promotion;
+      white_piece_undo_capture();
+      b_knight &= xx ~to_bb;
+      b_pawn = b_pawn | from_bb;
+    case Bishop_Promotion_Capture; #through;
+    case Bishop_Promotion;
+      white_piece_undo_capture();
+      b_bishop &= xx ~to_bb;
+      b_pawn = b_pawn | from_bb;
+    case Rook_Promotion_Capture; #through;
+    case Rook_Promotion;
+      white_piece_undo_capture();
+      b_bishop &= ~to_bb;
+      b_pawn = b_pawn | from_bb;
+    case Queen_Promotion_Capture; #through;
+    case Queen_Promotion;
+      white_piece_undo_capture();
+      b_queen &= ~to_bb;
+      b_pawn = b_pawn | from_bb;
+    case Ep_Capture;
+      b_pawn = (b_pawn & ~to_bb) | from_bb;
+      w_pawn = w_pawn | (to_bb << 8);
+    case;
+      white_piece_undo_capture();
+      black_piece_undo_move();
+    }
+  }
+
+  white_piece_undo_capture :: () #expand {
     if captured == {
     case PieceType.Queen;
       w_queen |= to_bb;
@@ -408,35 +439,22 @@ unmake_move :: (using pieces: *Piece_Bitboards, captured: PieceType, move: Move1
     case PieceType.Pawn;
       w_pawn |= to_bb;
     }
-    if type == {
-    case King_Castle;
-      b_king = xx e8;
-      b_rook = (b_rook & xx ~f8) | (xx h8);
-    case Queen_Castle;
-      b_king = xx e8;
-      b_rook = (b_rook & xx ~d8) | (xx a8);
-    case Knight_Promotion_Capture; #through;
-    case Knight_Promotion;
-      b_knight &= xx ~to_bb;
-      b_pawn = b_pawn | from_bb;
-    case Bishop_Promotion_Capture; #through;
-    case Bishop_Promotion;
-      b_bishop &= xx ~to_bb;
-      b_pawn = b_pawn | from_bb;
-    case Rook_Promotion_Capture; #through;
-    case Rook_Promotion;
-      b_bishop &= ~to_bb;
-      b_pawn = b_pawn | from_bb;
-    case Queen_Promotion_Capture; #through;
-    case Queen_Promotion;
-      b_queen &= ~to_bb;
-      b_pawn = b_pawn | from_bb;
-    case Ep_Capture;
-      b_pawn = (b_pawn & ~to_bb) | from_bb;
-      w_pawn = w_pawn | (to_bb << 8);
-    case;
-      black_piece_undo_move();
+  }
+
+  black_piece_undo_capture :: () #expand {
+    if captured == {
+    case PieceType.Queen;
+      b_queen |= to_bb;
+    case PieceType.Rook;
+      b_rook  |= to_bb;
+    case PieceType.Bishop;
+      b_bishop |= to_bb;
+    case PieceType.Knight;
+      b_knight |= to_bb;
+    case PieceType.Pawn;
+      b_pawn |= to_bb;
     }
+
   }
 
   white_piece_undo_move :: () #expand {
@@ -1120,7 +1138,6 @@ generate_pawn_moves_from_bitboard :: (moves_arr: *[..]Move16, from: u64, to: u64
     if to_bb & xx (rank_1|rank_8) {
       // add all promotion possibilities 
       num := moves_arr.count;
-      print("Generating pawn move: % to %\n", cast(bboard)from, cast(bboard)to_bb);
       if to_bb & opp_pieces {
         array_add(moves_arr, encode_move_bb(from, to_bb, Knight_Promotion_Capture));
         array_add(moves_arr, encode_move_bb(from, to_bb, Bishop_Promotion_Capture));
@@ -1133,8 +1150,6 @@ generate_pawn_moves_from_bitboard :: (moves_arr: *[..]Move16, from: u64, to: u64
         array_add(moves_arr, encode_move_bb(from, to_bb, Queen_Promotion));
       }
       num = moves_arr.count - num;
-      print("Generated % moves\n", num);
-
     } else {
       // non-promotion
       flags: Move16;

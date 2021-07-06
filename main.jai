@@ -48,7 +48,7 @@ main :: () {
     im_draw_setup_gl();
     im_set_viewport_transform(2.0/width, 2.0/height, -1, -1);
     white_side = handle_flip_board(window, white_side);
-    handle_undo_move(window, *piece_bitboard, *flags, *ep_sq);
+    handle_undo_move(window, *piece_bitboard, *flags, *ep_sq, *moves_arr);
     handle_board_click(xx width, xx height, *piece_bitboard, *flags, *ep_sq, *moves_arr, white_side=white_side);
     draw_chess(xx width, xx height, *piece_bitboard, t, highlight_the_square, possible_moves_bb, last_move_bb, white_side);
     im_flush();
@@ -347,7 +347,6 @@ handle_board_click :: (width: float, height: float, piece_bitboard: *Piece_Bitbo
         number += 1;
       }
   }
-
   // piece selection state machine.
   if piece_select_state == {
   case .PIECE_IDLE;
@@ -439,7 +438,10 @@ handle_flip_board :: (window: *GLFWwindow, white_side: bool)->bool {
 
 undo_key_state: enum {UNDO_KEY_IDLE; UNDO_KEY_PRESS; } = .UNDO_KEY_IDLE;
 
-handle_undo_move :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64) {
+handle_undo_move :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..] Move16) {
+  // cannot use undo when in the promote pawn UI.
+  if piece_select_state == .PIECE_PROMOTION then
+    return;
   z_state    := glfwGetKey(window, GLFW_KEY_Z);
   l_ctrl_key := glfwGetKey(window, GLFW_KEY_LEFT_CONTROL);
   r_ctrl_key := glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL);
@@ -447,16 +449,32 @@ handle_undo_move :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flag
   case .UNDO_KEY_IDLE;
     if z_state == GLFW_PRESS && (l_ctrl_key == GLFW_PRESS || r_ctrl_key == GLFW_PRESS) {
       undo_key_state = .UNDO_KEY_PRESS;
-      print("Undo.\n");
       if move_record {
         board_state := pop(*move_record);
         unmake_move(piece_bitboard, board_state.captured, board_state.move, whose_turn);
+        
+        // NOTE: need to flip whose_turn BEFORE generate_legal_moves, else we would get the opposite side's moves
+        // by accident...
         whose_turn = !whose_turn;
+        array_reset(moves_arr);
+        generate_legal_moves(piece_bitboard, <<flags, <<ep_sq, moves_arr, whose_turn);
+
         <<ep_sq = board_state.en_paesant_sq;
         <<flags = board_state.flags;
         highlight_the_square = 0;
         possible_moves_bb = 0;
         promote_move = cast(Move16) 0;
+        piece_select_state = .PIECE_IDLE;
+        highlight_the_square = 0;
+        possible_moves_bb = 0;
+        promote_move = cast(Move16) 0;
+        if move_record {
+          last_board_state := move_record[move_record.count - 1];
+          type, x, y := decode_move(last_board_state.move);
+          last_move_bb = (cast(u64)(1 << x)) | (cast(u64)(1 << y));
+        } else {
+          last_move_bb = 0;
+        }
       }
     }
   case .UNDO_KEY_PRESS;
@@ -474,7 +492,6 @@ ui_handle_move_made :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_s
   record_move.en_paesant_sq = << (ep_sq);
   record_move.captured = PieceType.None;
   make_move(piece_bitboard, flags, ep_sq, *record_move.captured, mov, whose_turn);
-  print("Piece Captured: %\n", record_move.captured);
   array_add(*move_record, record_move);
   whose_turn = !whose_turn;
   array_reset(moves_arr);
