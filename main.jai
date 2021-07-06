@@ -30,6 +30,7 @@ main :: () {
   init_global_bitboards();
   moves_arr: [..] Move16;
   array_reserve(*moves_arr, 70);
+  array_reserve(*move_record, 100);
   flags: Castling = Castling.All;
   ep_sq: u64 = 0;
   piece_bitboard := chess_start_pos();
@@ -47,6 +48,7 @@ main :: () {
     im_draw_setup_gl();
     im_set_viewport_transform(2.0/width, 2.0/height, -1, -1);
     white_side = handle_flip_board(window, white_side);
+    handle_undo_move(window, *piece_bitboard, *flags, *ep_sq);
     handle_board_click(xx width, xx height, *piece_bitboard, *flags, *ep_sq, *moves_arr, white_side=white_side);
     draw_chess(xx width, xx height, *piece_bitboard, t, highlight_the_square, possible_moves_bb, last_move_bb, white_side);
     im_flush();
@@ -171,7 +173,7 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
       posx = posx - scale_up_sq_len*4;
     }
 
-    im_draw_rect(posx, posy + scale_up_sq_len, posx + scale_up_sq_len*4, posy, c=BLANK);
+    im_draw_rect(posx, posy + scale_up_sq_len, posx + scale_up_sq_len*4, posy, c=BLANK*0.75);
     im_set_texture(texture);
     if whose_turn {
 
@@ -435,15 +437,45 @@ handle_flip_board :: (window: *GLFWwindow, white_side: bool)->bool {
   return white_side;
 }
 
+undo_key_state: enum {UNDO_KEY_IDLE; UNDO_KEY_PRESS; } = .UNDO_KEY_IDLE;
+
+handle_undo_move :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64) {
+  z_state    := glfwGetKey(window, GLFW_KEY_Z);
+  l_ctrl_key := glfwGetKey(window, GLFW_KEY_LEFT_CONTROL);
+  r_ctrl_key := glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL);
+  if undo_key_state == {
+  case .UNDO_KEY_IDLE;
+    if z_state == GLFW_PRESS && (l_ctrl_key == GLFW_PRESS || r_ctrl_key == GLFW_PRESS) {
+      undo_key_state = .UNDO_KEY_PRESS;
+      print("Undo.\n");
+      if move_record {
+        board_state := pop(*move_record);
+        unmake_move(piece_bitboard, board_state.captured, board_state.move, whose_turn);
+        whose_turn = !whose_turn;
+        <<ep_sq = board_state.en_paesant_sq;
+        <<flags = board_state.flags;
+        highlight_the_square = 0;
+        possible_moves_bb = 0;
+        promote_move = cast(Move16) 0;
+      }
+    }
+  case .UNDO_KEY_PRESS;
+    if z_state == GLFW_RELEASE || (l_ctrl_key == GLFW_RELEASE && r_ctrl_key == GLFW_RELEASE) {
+      undo_key_state = .UNDO_KEY_IDLE;
+    }
+  }
+}
+
 ui_handle_move_made :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..] Move16, mov: Move16) {
   // record the move down 
   record_move: Board_States;
   record_move.move = mov;
   record_move.flags = << (flags);
   record_move.en_paesant_sq = << (ep_sq);
+  record_move.captured = PieceType.None;
+  make_move(piece_bitboard, flags, ep_sq, *record_move.captured, mov, whose_turn);
+  print("Piece Captured: %\n", record_move.captured);
   array_add(*move_record, record_move);
-
-  make_move(piece_bitboard, flags, ep_sq, mov, whose_turn);
   whose_turn = !whose_turn;
   array_reset(moves_arr);
   check := generate_legal_moves(piece_bitboard, <<flags, <<ep_sq, moves_arr, whose_turn);
@@ -464,7 +496,6 @@ ui_handle_move_made :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_s
   promote_move = cast(Move16) 0;
 
   uci_position_command();
-
 }
 
 last_move_bb: u64 = 0;
@@ -493,6 +524,7 @@ Board_States :: struct {
   captured: PieceType;
 }
 
+// TODO: temporary storage?
 uci_position_command :: () {
   builder: String_Builder;
   defer free_buffers(*builder);

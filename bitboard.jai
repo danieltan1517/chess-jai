@@ -129,7 +129,7 @@ can_move :: (using piece_bitboards: *Piece_Bitboards, sq: u64, whose_turn: bool)
 }
 
 // TODO: this is bad code...
-make_move :: (using pieces: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, move: Move16, whose_turn: bool) {
+make_move :: (using pieces: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, captured: *PieceType, move: Move16, whose_turn: bool) {
   type, from, to := decode_move(move);
   from_bit := cast(u64) (1 << from);
   to_bit   := cast(u64) (1 << to);
@@ -155,6 +155,7 @@ make_move :: (using pieces: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, mov
     case Ep_Capture;
       w_pawn = (w_pawn & ~from_bit) | to_bit;
       b_pawn = b_pawn & ~(to_bit >> 8);
+      <<captured = PieceType.Pawn;
     case Knight_Promotion_Capture;
       black_piece_taken();
       #through;
@@ -208,6 +209,7 @@ make_move :: (using pieces: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, mov
     case Ep_Capture;
       b_pawn = (b_pawn & ~from_bit) | to_bit;
       w_pawn = w_pawn & ~(to_bit << 8);
+      <<captured = PieceType.Pawn;
     case Knight_Promotion_Capture;
       white_piece_taken();
       #through;
@@ -299,21 +301,201 @@ make_move :: (using pieces: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, mov
   }
 
   white_piece_taken :: () #expand {
-    w_queen &= ~to_bit;
-    w_rook  &= ~to_bit;
-    w_bishop &= ~to_bit;
-    w_knight &= ~to_bit;
-    w_pawn &= ~to_bit;
+    if w_queen & to_bit {
+      w_queen &= ~to_bit;
+      <<captured = PieceType.Queen;
+    }
+    if w_rook & to_bit {
+      w_rook  &= ~to_bit;
+      <<captured = PieceType.Rook;
+    }
+    if w_bishop & to_bit {
+      w_bishop &= ~to_bit;
+      <<captured = PieceType.Bishop;
+    }
+    if w_knight & to_bit {
+      w_knight &= ~to_bit;
+      <<captured = PieceType.Knight;
+    }
+    if w_pawn & to_bit {
+      w_pawn &= ~to_bit;
+      <<captured = PieceType.Pawn;
+    }
   }
 
   black_piece_taken :: () #expand {
-    b_queen &= ~to_bit;
-    b_rook  &= ~to_bit;
-    b_bishop &= ~to_bit;
-    b_knight &= ~to_bit;
-    b_pawn &= ~to_bit;
+    if b_queen & to_bit {
+      b_queen &= ~to_bit;
+      <<captured = PieceType.Queen;
+    }
+    if b_rook & to_bit {
+      b_rook  &= ~to_bit;
+      <<captured = PieceType.Rook;
+    }
+    if b_bishop & to_bit {
+      b_bishop &= ~to_bit;
+      <<captured = PieceType.Bishop;
+    }
+    if b_knight & to_bit {
+      b_knight &= ~to_bit;
+      <<captured = PieceType.Knight;
+    }
+    if b_pawn & to_bit {
+      b_pawn &= ~to_bit;
+      <<captured = PieceType.Pawn;
+    }
   }
 }
+
+unmake_move :: (using pieces: *Piece_Bitboards, captured: PieceType, move: Move16, whose_turn: bool) {
+  type, from, to := decode_move(move);
+  from_bb := cast(u64) (1 << from);
+  to_bb   := cast(u64) (1 << to);
+  using Move16;
+  print("Unmake move type=%, from=%, to=%\n", type, cast(bboard)from_bb, cast(bboard)to_bb);
+  if !whose_turn {
+    if captured == {
+    case PieceType.Queen;
+      b_queen |= to_bb;
+    case PieceType.Rook;
+      b_rook  |= to_bb;
+    case PieceType.Bishop;
+      b_bishop |= to_bb;
+    case PieceType.Knight;
+      b_knight |= to_bb;
+    case PieceType.Pawn;
+      b_pawn |= to_bb;
+    }
+    if type == {
+    case King_Castle;
+      w_king = xx e1;
+      w_rook = (w_rook & xx ~f1) | (xx h1);
+    case Queen_Castle;
+      w_king = xx e1;
+      w_rook = (w_rook & xx ~d1) | (xx a1);
+    case Knight_Promotion_Capture; #through;
+    case Knight_Promotion;
+      w_knight &= xx ~to_bb;
+      w_pawn = w_pawn | from_bb;
+    case Bishop_Promotion_Capture; #through;
+    case Bishop_Promotion;
+      w_bishop &= xx ~to_bb;
+      w_pawn = w_pawn | from_bb;
+    case Rook_Promotion_Capture; #through;
+    case Rook_Promotion;
+      w_bishop &= xx ~to_bb;
+      w_pawn = w_pawn | from_bb;
+    case Queen_Promotion_Capture; #through;
+    case Queen_Promotion;
+      w_queen = (w_queen & ~to_bb);
+      w_pawn = w_pawn | from_bb;
+    case Ep_Capture;
+      w_pawn = (w_pawn & ~to_bb) | from_bb;
+      b_pawn = b_pawn | (to_bb >> 8);
+    case;
+      white_piece_undo_move();
+    }
+  } else {
+    if captured == {
+    case PieceType.Queen;
+      w_queen |= to_bb;
+    case PieceType.Rook;
+      w_rook  |= to_bb;
+    case PieceType.Bishop;
+      w_bishop |= to_bb;
+    case PieceType.Knight;
+      w_knight |= to_bb;
+    case PieceType.Pawn;
+      w_pawn |= to_bb;
+    }
+    if type == {
+    case King_Castle;
+      b_king = xx e8;
+      b_rook = (b_rook & xx ~f8) | (xx h8);
+    case Queen_Castle;
+      b_king = xx e8;
+      b_rook = (b_rook & xx ~d8) | (xx a8);
+    case Knight_Promotion_Capture; #through;
+    case Knight_Promotion;
+      b_knight &= xx ~to_bb;
+      b_pawn = b_pawn | from_bb;
+    case Bishop_Promotion_Capture; #through;
+    case Bishop_Promotion;
+      b_bishop &= xx ~to_bb;
+      b_pawn = b_pawn | from_bb;
+    case Rook_Promotion_Capture; #through;
+    case Rook_Promotion;
+      b_bishop &= ~to_bb;
+      b_pawn = b_pawn | from_bb;
+    case Queen_Promotion_Capture; #through;
+    case Queen_Promotion;
+      b_queen &= ~to_bb;
+      b_pawn = b_pawn | from_bb;
+    case Ep_Capture;
+      b_pawn = (b_pawn & ~to_bb) | from_bb;
+      w_pawn = w_pawn | (to_bb << 8);
+    case;
+      black_piece_undo_move();
+    }
+  }
+
+  white_piece_undo_move :: () #expand {
+    if w_king & to_bb {
+      w_king = (w_king & ~to_bb) | from_bb;
+      return;
+    }
+    if w_queen & to_bb {
+      w_queen = (w_queen & ~to_bb) | from_bb;
+      return;
+    }
+    if w_rook & to_bb {
+      w_rook = (w_rook & ~to_bb) | from_bb;
+      return;
+    }
+    if w_bishop & to_bb {
+      w_bishop = (w_bishop & ~to_bb) | from_bb;
+      return;
+    }
+    if w_knight & to_bb {
+      w_knight = (w_knight & ~to_bb) | from_bb;
+      return;
+    }
+
+    if w_pawn & to_bb {
+      w_pawn = (w_pawn & ~to_bb) | from_bb;
+      return;
+    }
+  }
+
+  black_piece_undo_move :: () #expand {
+    if b_king & to_bb {
+      b_king = (b_king & ~to_bb) | from_bb;
+      return;
+    }
+    if b_queen & to_bb {
+      b_queen = (b_queen & ~to_bb) | from_bb;
+      return;
+    }
+    if b_rook & to_bb {
+      b_rook = (b_rook & ~to_bb) | from_bb;
+      return;
+    }
+    if b_bishop & to_bb {
+      b_bishop = (b_bishop & ~to_bb) | from_bb;
+      return;
+    }
+    if b_knight & to_bb {
+      b_knight = (b_knight & ~to_bb) | from_bb;
+      return;
+    }
+
+    if b_pawn & to_bb {
+      b_pawn = (b_pawn & ~to_bb) | from_bb;
+      return;
+    }
+  }
+}
+
 
 generate_legal_moves :: (p: *Piece_Bitboards, c_flags: Castling, ep_sq: u64, moves_arr: *[..] Move16, whose_turn: bool) -> bool {
   w_pieces := get_white_pieces(p);
