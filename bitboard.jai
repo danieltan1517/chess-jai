@@ -29,6 +29,9 @@ using bboard :: enum_flags u64 {
   rank_8 :: a8 | b8 | c8 | d8 | e8 | f8 | g8 | h8;
 }
 
+king_side :: file_e | file_f | file_g | file_h;
+queen_side :: ~king_side;
+
 Piece_Bitboards :: struct {
   w_king :  u64;
   w_queen:  u64;
@@ -838,7 +841,6 @@ move_is_promotion :: inline (using m: Move16) -> bool {
   return Knight_Promotion <= type && type <= Queen_Promotion_Capture;
 }
 
-
 #scope_file
 
 // o = occupied, r = piece, m = mask
@@ -924,8 +926,10 @@ generate_pawn_moves_from_bitboard :: (moves_arr: *[..]Move16, from: u64, to: u64
   while to {
     to_bb := cast(u64)(1 << serialize_bit(to));
     // promotion
-    if to_bb & (xx rank_8) {
+    if to_bb & xx (rank_1|rank_8) {
       // add all promotion possibilities 
+      num := moves_arr.count;
+      print("Generating pawn move: % to %\n", cast(bboard)from, cast(bboard)to_bb);
       if to_bb & opp_pieces {
         array_add(moves_arr, encode_move_bb(from, to_bb, Knight_Promotion_Capture));
         array_add(moves_arr, encode_move_bb(from, to_bb, Bishop_Promotion_Capture));
@@ -937,6 +941,8 @@ generate_pawn_moves_from_bitboard :: (moves_arr: *[..]Move16, from: u64, to: u64
         array_add(moves_arr, encode_move_bb(from, to_bb, Rook_Promotion));
         array_add(moves_arr, encode_move_bb(from, to_bb, Queen_Promotion));
       }
+      num = moves_arr.count - num;
+      print("Generated % moves\n", num);
 
     } else {
       // non-promotion

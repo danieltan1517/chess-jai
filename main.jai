@@ -99,9 +99,7 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
     // draw the piece being dragged/dropped.
     draw_every_piece(draw_mouse_drag=true);
   case .PIECE_PROMOTION;
-    // need to be done.
-    im_set_texture(null);
-    im_draw_rect(x, y, x + len*8.0, y + len*8.0, c=GREY_SHADE_BOARD);
+    draw_promotion_ui(promotion_sq);
   }
 
   //draw_bitboard(~0, u0=0.0, v0=0.0, u1=1.0, v1=1.0, GREY_SHADE_BOARD);
@@ -129,6 +127,71 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
     draw_bitboard(b_pawn & ~promotion_sq, u0=5.0/6.0, v0=0.5, u1=1.0, v1=1.0, BLANK,draw_mouse_drag=draw_mouse_drag);
   }
 
+  draw_promotion_ui :: (promote_sq: u64) #expand {
+    if whose_turn {
+      if promtion_type == {
+      case UI_PIECE.UI_QUEEN;
+        draw_bitboard(promotion_sq, u0=1.0/6.0, v0=0.0, u1=2.0/6.0, v1=0.5, BLANK);
+      case UI_PIECE.UI_ROOK;
+        draw_bitboard(promotion_sq, u0=4.0/6.0, v0=0.0, u1=5.0/6.0, v1=0.5, BLANK);
+      case UI_PIECE.UI_BISHOP;
+        draw_bitboard(promotion_sq, u0=2.0/6.0, v0=0.0, u1=3.0/6.0, v1=0.5, BLANK);
+      case UI_PIECE.UI_KNIGHT;
+        draw_bitboard(promotion_sq, u0=3.0/6.0, v0=0.0, u1=4.0/6.0, v1=0.5, BLANK);
+      }
+    } else {
+      if promtion_type == {
+      case UI_PIECE.UI_QUEEN;
+        draw_bitboard(promotion_sq, u0=1.0/6.0, v0=0.5, u1=2.0/6.0, v1=1.0, BLANK);
+      case UI_PIECE.UI_ROOK;
+        draw_bitboard(promotion_sq, u0=4.0/6.0, v0=0.5, u1=5.0/6.0, v1=1.0, BLANK);
+      case UI_PIECE.UI_BISHOP;
+        draw_bitboard(promotion_sq, u0=2.0/6.0, v0=0.5, u1=3.0/6.0, v1=1.0, BLANK);
+      case UI_PIECE.UI_KNIGHT;
+        draw_bitboard(promotion_sq, u0=3.0/6.0, v0=0.5, u1=4.0/6.0, v1=1.0, BLANK);
+      }
+    }
+
+    // need to be done.
+    im_set_texture(null);
+    im_draw_rect(x, y, x + len, y + len, c=GREY_SHADE_BOARD);
+    index := serialize_bit(promote_sq);
+    i, j := 0;
+    if white_side {
+      i, j = index &  7, index >> 3;
+    } else {
+      i, j = 7 - index &  7, 7 - index >> 3;
+    }
+    posx := x + square_len*0.5 + i*square_len;
+    posy := y + square_len*0.5 + j*square_len;
+    scale_up_sq_len := square_len*1.15;
+
+    if (white_side && (promote_sq & xx king_side)) || (!white_side && (promote_sq & xx queen_side)) {
+      posx = posx - scale_up_sq_len*4;
+    }
+
+    im_draw_rect(posx, posy + scale_up_sq_len, posx + scale_up_sq_len*4, posy, c=BLANK);
+    im_set_texture(texture);
+    if whose_turn {
+
+      im_draw_rect(posx, posy + scale_up_sq_len, posx + scale_up_sq_len, posy, u0=1.0/6.0, v0=0.0, u1=2.0/6.0, v1=0.5, c=BLANK);
+      posx += scale_up_sq_len;
+      im_draw_rect(posx, posy + scale_up_sq_len, posx + scale_up_sq_len, posy, u0=4.0/6.0, v0=0.0, u1=5.0/6.0, v1=0.5, c=BLANK);
+      posx += scale_up_sq_len;
+      im_draw_rect(posx, posy + scale_up_sq_len, posx + scale_up_sq_len, posy, u0=2.0/6.0, v0=0.0, u1=3.0/6.0, v1=0.5, c=BLANK);
+      posx += scale_up_sq_len;
+      im_draw_rect(posx, posy + scale_up_sq_len, posx + scale_up_sq_len, posy, u0=3.0/6.0, v0=0.0, u1=4.0/6.0, v1=0.5, c=BLANK);
+    } else {
+      im_draw_rect(posx, posy + scale_up_sq_len, posx + scale_up_sq_len, posy, u0=1.0/6.0, v0=0.5, u1=2.0/6.0, v1=1.0, c=BLANK);
+      posx += scale_up_sq_len;
+      im_draw_rect(posx, posy + scale_up_sq_len, posx + scale_up_sq_len, posy, u0=4.0/6.0, v0=0.5, u1=5.0/6.0, v1=1.0, c=BLANK);
+      posx += scale_up_sq_len;
+      im_draw_rect(posx, posy + scale_up_sq_len, posx + scale_up_sq_len, posy, u0=2.0/6.0, v0=0.5, u1=3.0/6.0, v1=1.0, c=BLANK);
+      posx += scale_up_sq_len;
+      im_draw_rect(posx, posy + scale_up_sq_len, posx + scale_up_sq_len, posy, u0=3.0/6.0, v0=0.5, u1=4.0/6.0, v1=1.0, c=BLANK);
+    }
+  }
+
   draw_bitboard :: (bit_board: u64, $u0: float, $v0: float, $u1: float, $v1: float, $c: Vector4, $draw_mouse_drag := false) #expand {
     value: u64 = 0;
     #if !draw_mouse_drag 
@@ -138,8 +201,7 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
 
     while value {
       index := serialize_bit(value);
-      i := 0;
-      j := 0;
+      i, j := 0;
       if white_side {
         i = index &  7;
         j = index >> 3;
@@ -170,17 +232,6 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
     }
   }
 
-  // TODO: this is the promotion interface:
-  /*im_set_texture(null);
-  draw_bitboard(~0, u0=0.0, v0=0.0, u1=1.0, v1=1.0, Vector4.{0.2, 0.2, 0.2, 0.65});
-  y += square_len;
-  draw_bitboard(xx d8|e8|f8|g8, u0=0.0, v0=0.0, u1=1.0, v1=1.0, BLANK);
-
-  im_set_texture(texture);
-  draw_bitboard(xx d8, u0=1.0/6.0, v0=0.0, u1=2.0/6.0, v1=1.0/2.0, BLANK);
-  draw_bitboard(xx e8, u0=4.0/6.0, v0=0.0, u1=5.0/6.0, v1=1.0/2.0, BLANK);
-  draw_bitboard(xx f8, u0=2.0/6.0, v0=0.0, u1=3.0/6.0, v1=1.0/2.0, BLANK);
-  draw_bitboard(xx g8, u0=3.0/6.0, v0=0.0, u1=4.0/6.0, v1=1.0/2.0, BLANK);*/
 }
 
 mouse_position_x:     float = 0.0;
@@ -227,10 +278,9 @@ handle_board_click :: (width: float, height: float, piece_bitboard: *Piece_Bitbo
 
   x0 := cen_x - len*.5;
   y0 := cen_y - len*.5;
-
   x1 := cen_x + len*.5;
   y1 := cen_y + len*.5;
-
+  wants_to_promote : bool = false;
   sq: u64 = 0;
   if piece_select_state == {
   case .PIECE_IDLE; #through;
@@ -253,11 +303,47 @@ handle_board_click :: (width: float, height: float, piece_bitboard: *Piece_Bitbo
         }
       }
     }
+    // only deal with things that output a 'sq', when 0, return
+    if sq == 0 then return;
   case .PIECE_PROMOTION;
+    wants_to_promote = mouse_button_1_state == .MOUSE_PRESSED;
+    x := cen_x - len*.5;
+    y := cen_y - len*.5;
+    index := serialize_bit(promotion_sq);
+    i, j := 0;
+    if white_side {
+      i, j = index &  7, index >> 3;
+    } else {
+      i, j = 7 - index &  7, 7 - index >> 3;
+    }
+    posx := x + square_len*0.5 + i*square_len;
+    posy := len - (y + square_len*0.5 + j*square_len);
+    scale_up_sq_len := square_len*1.15;
 
+    if (white_side && (promotion_sq & xx king_side)) || (!white_side && (promotion_sq & xx queen_side)) {
+      posx = posx - scale_up_sq_len*4;
+    }
+      number := 0;
+      posy += square_len;
+      while number < 4 {
+        if posx <= mouse_position_x && mouse_position_x <= (posx + scale_up_sq_len) {
+          if posy <= mouse_position_y && mouse_position_y <= (posy + scale_up_sq_len) {
+            if number == {
+            case 0;
+              promtion_type = UI_PIECE.UI_QUEEN;
+            case 1;
+              promtion_type = UI_PIECE.UI_ROOK;
+            case 2;
+              promtion_type = UI_PIECE.UI_BISHOP;
+            case 3;
+              promtion_type = UI_PIECE.UI_KNIGHT;
+            }
+          }
+        }
+        posx += scale_up_sq_len;
+        number += 1;
+      }
   }
-  // only deal with things that output a 'sq', when 0, return
-  if sq == 0 then return;
 
   // piece selection state machine.
   if piece_select_state == {
@@ -285,6 +371,7 @@ handle_board_click :: (width: float, height: float, piece_bitboard: *Piece_Bitbo
           // bring up promotion interface.
           piece_select_state = .PIECE_PROMOTION;
           promotion_sq = to;
+          promote_move = mov;
         } else {
           make_move(piece_bitboard, flags, ep_sq, mov, whose_turn);
           last_move_bb = from | to;
@@ -309,6 +396,57 @@ handle_board_click :: (width: float, height: float, piece_bitboard: *Piece_Bitbo
       }
     }
   case .PIECE_PROMOTION;
+    if wants_to_promote {
+      type, from_i, to_i := decode_move(promote_move);
+      from := cast(u64) (1 << from_i);
+      to   := cast(u64) (1 << to_i);
+      mov: Move16;
+      if Move16.Knight_Promotion <= type && type <= Move16.Queen_Promotion {
+        if promtion_type == {
+        case UI_PIECE.UI_QUEEN;
+          mov = encode_move_bb(from, to, Move16.Queen_Promotion);
+        case UI_PIECE.UI_ROOK;
+          mov = encode_move_bb(from, to, Move16.Rook_Promotion);
+        case UI_PIECE.UI_BISHOP;
+          mov = encode_move_bb(from, to, Move16.Bishop_Promotion);
+        case UI_PIECE.UI_KNIGHT;
+          mov = encode_move_bb(from, to, Move16.Knight_Promotion); 
+        }
+      } else {
+        if promtion_type == {
+        case UI_PIECE.UI_QUEEN;
+          mov = encode_move_bb(from, to, Move16.Queen_Promotion_Capture);
+        case UI_PIECE.UI_ROOK;
+          mov = encode_move_bb(from, to, Move16.Rook_Promotion_Capture);
+        case UI_PIECE.UI_BISHOP;
+          mov = encode_move_bb(from, to, Move16.Bishop_Promotion_Capture);
+        case UI_PIECE.UI_KNIGHT;
+          mov = encode_move_bb(from, to, Move16.Knight_Promotion_Capture); 
+        }
+      }
+
+      make_move(piece_bitboard, flags, ep_sq, mov, whose_turn);
+      last_move_bb = from | to;
+      whose_turn = !whose_turn;
+      array_reset(moves_arr);
+      check := generate_legal_moves(piece_bitboard, <<flags, <<ep_sq, moves_arr, whose_turn);
+      if moves_arr.count == 0 {
+        if check {
+          if whose_turn {
+            print("Black wins! Checkmate!\n");
+          } else {
+            print("White wins! Checkmate!\n");
+          }
+        } else {
+          print("Stalemate\n");
+        }
+      }
+      highlight_the_square = 0;
+      possible_moves_bb = 0;
+      piece_select_state = .PIECE_IDLE;
+
+      promote_move = cast(Move16) 0;
+    }
   }
 }
 
@@ -337,5 +475,13 @@ piece_select_state: enum { PIECE_IDLE; PIECE_SELECTED; PIECE_PROMOTION; } = .PIE
 possible_moves_bb: u64 = 0;
 last_move_bb: u64 = 0;
 
+UI_PIECE :: enum {
+  UI_QUEEN;
+  UI_ROOK;
+  UI_BISHOP;
+  UI_KNIGHT;
+}
 
+promtion_type := UI_PIECE.UI_QUEEN;
+promote_move : Move16;
 
