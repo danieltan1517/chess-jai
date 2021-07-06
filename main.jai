@@ -29,6 +29,7 @@ main :: () {
   }
   init_global_bitboards();
   moves_arr: [..] Move16;
+  array_reserve(*moves_arr, 70);
   flags: Castling = Castling.All;
   ep_sq: u64 = 0;
   piece_bitboard := chess_start_pos();
@@ -373,24 +374,8 @@ handle_board_click :: (width: float, height: float, piece_bitboard: *Piece_Bitbo
           promotion_sq = to;
           promote_move = mov;
         } else {
-          make_move(piece_bitboard, flags, ep_sq, mov, whose_turn);
           last_move_bb = from | to;
-          whose_turn = !whose_turn;
-          array_reset(moves_arr);
-          check := generate_legal_moves(piece_bitboard, <<flags, <<ep_sq, moves_arr, whose_turn);
-          if moves_arr.count == 0 {
-            if check {
-              if whose_turn {
-                print("Black wins! Checkmate!\n");
-              } else {
-                print("White wins! Checkmate!\n");
-              }
-            } else {
-              print("Stalemate\n");
-            }
-          }
-          highlight_the_square = 0;
-          possible_moves_bb = 0;
+          ui_handle_move_made(piece_bitboard, flags, ep_sq, moves_arr, mov);
           piece_select_state = .PIECE_IDLE;
         }
       }
@@ -425,27 +410,9 @@ handle_board_click :: (width: float, height: float, piece_bitboard: *Piece_Bitbo
         }
       }
 
-      make_move(piece_bitboard, flags, ep_sq, mov, whose_turn);
       last_move_bb = from | to;
-      whose_turn = !whose_turn;
-      array_reset(moves_arr);
-      check := generate_legal_moves(piece_bitboard, <<flags, <<ep_sq, moves_arr, whose_turn);
-      if moves_arr.count == 0 {
-        if check {
-          if whose_turn {
-            print("Black wins! Checkmate!\n");
-          } else {
-            print("White wins! Checkmate!\n");
-          }
-        } else {
-          print("Stalemate\n");
-        }
-      }
-      highlight_the_square = 0;
-      possible_moves_bb = 0;
+      ui_handle_move_made(piece_bitboard, flags, ep_sq, moves_arr, mov);
       piece_select_state = .PIECE_IDLE;
-
-      promote_move = cast(Move16) 0;
     }
   }
 }
@@ -468,12 +435,44 @@ handle_flip_board :: (window: *GLFWwindow, white_side: bool)->bool {
   return white_side;
 }
 
+ui_handle_move_made :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..] Move16, mov: Move16) {
+  // record the move down 
+  record_move: Board_States;
+  record_move.move = mov;
+  record_move.flags = << (flags);
+  record_move.en_paesant_sq = << (ep_sq);
+  array_add(*move_record, record_move);
+
+  make_move(piece_bitboard, flags, ep_sq, mov, whose_turn);
+  whose_turn = !whose_turn;
+  array_reset(moves_arr);
+  check := generate_legal_moves(piece_bitboard, <<flags, <<ep_sq, moves_arr, whose_turn);
+  if moves_arr.count == 0 {
+    if check {
+      if whose_turn {
+        print("Black wins! Checkmate!\n");
+      } else {
+        print("White wins! Checkmate!\n");
+      }
+    } else {
+      print("Stalemate\n");
+    }
+  }
+  highlight_the_square = 0;
+  possible_moves_bb = 0;
+
+  promote_move = cast(Move16) 0;
+
+  uci_position_command();
+
+}
+
+last_move_bb: u64 = 0;
 whose_turn := true;  // whose_turn=true=white, whose_turn=false=black.
 promotion_sq : u64 = 0;
 highlight_the_square: u64 = 0;
 piece_select_state: enum { PIECE_IDLE; PIECE_SELECTED; PIECE_PROMOTION; } = .PIECE_IDLE;
 possible_moves_bb: u64 = 0;
-last_move_bb: u64 = 0;
 
 UI_PIECE :: enum {
   UI_QUEEN;
@@ -484,4 +483,60 @@ UI_PIECE :: enum {
 
 promtion_type := UI_PIECE.UI_QUEEN;
 promote_move : Move16;
+
+move_record: [..] Board_States;
+
+Board_States :: struct {
+  move: Move16;
+  flags: Castling;
+  en_paesant_sq: u64;
+  captured: PieceType;
+}
+
+uci_position_command :: () {
+  builder: String_Builder;
+  defer free_buffers(*builder);
+
+  print_to_builder(*builder, "position startpos moves ");
+  for move: move_record {
+    type, from, to := decode_move(move.move);
+    if move_is_promotion(type) {
+      //character
+      c := get_promotion_character(type);
+      print_to_builder(*builder, " %1%2", cast(serialized_bb) from, cast(serialized_bb) to);
+      append(*builder, c);
+    } else {
+      print_to_builder(*builder, " %1%2", cast(serialized_bb) from, cast(serialized_bb) to);
+    }
+  }
+  print_to_builder(*builder, "\n");
+  str := builder_to_string(*builder);
+  defer free(str);
+  write_string(str);
+
+  get_promotion_character :: (using type: Move16) -> u8 {
+    if type == {
+    case Knight_Promotion_Capture; #through;
+    case Knight_Promotion;
+      return #char "n";
+    case Bishop_Promotion; #through;
+    case Bishop_Promotion_Capture;
+      return #char "b";
+    case Rook_Promotion; #through;
+    case Rook_Promotion_Capture;
+      return #char "r";
+    case Queen_Promotion; #through;
+    case Queen_Promotion_Capture;
+      return #char "q";
+    case;
+      return 0;
+    } 
+  }
+}
+
+
+
+
+
+
 

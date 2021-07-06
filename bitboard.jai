@@ -77,6 +77,16 @@ Move16 :: enum s16 {
   Queen_Promotion_Capture;
 }
 
+PieceType :: enum u8 {
+  None;
+  King;
+  Queen;
+  Rook;
+  Bishop;
+  Knight;
+  Pawn;
+}
+
 Castling :: enum_flags {
   W_KS;
   W_QS;
@@ -123,7 +133,6 @@ make_move :: (using pieces: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, mov
   type, from, to := decode_move(move);
   from_bit := cast(u64) (1 << from);
   to_bit   := cast(u64) (1 << to);
-  print("(Move: %) (From: %) (To: %)\n", type, cast(bboard)from_bit, cast(bboard)to_bit);
   using Move16;
   if whose_turn {
     if #complete type == {

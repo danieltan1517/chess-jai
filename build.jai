@@ -102,11 +102,33 @@ install :: () {
 
 todo :: () {
   //   -- unmake move
-  //   -- promote pieces => gui interface for this.
   //   -- output/input redirection for UCI interface.
   //   -- parse FEN strings
   //   -- chess ai get started..
 }
+
+notes_about_uci :: () {
+  //    https://ucichessengine.wordpress.com/introduction/
+  //    -- specification is independent of the operating system.
+  //    -- engine is a normal executable file, either console or "real" application
+  //    -- all communication is done via standard IO with text commands
+  //    -- engine should boot and wiat for GUI input
+  //    -- engine should wait for the "isready" or "setoption" command to set up its internal parameters as the boot process should be as quick as possible
+  //    -- the engine must always be able to process input from stdin, even while thinking
+  //    -- all command strings the engine recieves will end with "\n",
+  //    -- all commands the gui recieves should end with "\n"
+  //    -- engine will alwas be in forced mode, never start calculating or pondering without recieving a "go" command first
+  //    -- before engine is asked to search on a position, there will always be a position command to tell the engine about the current position
+  //    -- opening book handled by gui
+  //    -- if unknown command, ignore it and try to parse the rest of the string
+  //    -- if engine receives command which is not supposed to come, e.g. stop when engine is not calculating, ignore it.
+
+  //    https://ucichessengine.wordpress.com/description/
+  //    -- all the information about UCI
+}
+
+
+
 
 
 
