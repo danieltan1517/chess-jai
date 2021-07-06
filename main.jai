@@ -451,16 +451,17 @@ handle_undo_move :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flag
       undo_key_state = .UNDO_KEY_PRESS;
       if move_record {
         board_state := pop(*move_record);
+        // NOTE: need to flip whose_turn BEFORE generate_legal_moves, else we would get the opposite side's moves
+        // by accident. We also need to copy the flags from the board_state BEFORE generate_legal_moves!
+        <<ep_sq = board_state.en_paesant_sq;
+        <<flags = board_state.flags;
+        whose_turn = !whose_turn;
         unmake_move(piece_bitboard, board_state.captured, board_state.move, whose_turn);
         
-        // NOTE: need to flip whose_turn BEFORE generate_legal_moves, else we would get the opposite side's moves
-        // by accident...
-        whose_turn = !whose_turn;
         array_reset(moves_arr);
         generate_legal_moves(piece_bitboard, <<flags, <<ep_sq, moves_arr, whose_turn);
 
-        <<ep_sq = board_state.en_paesant_sq;
-        <<flags = board_state.flags;
+
         highlight_the_square = 0;
         possible_moves_bb = 0;
         promote_move = cast(Move16) 0;

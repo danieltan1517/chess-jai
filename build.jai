@@ -101,7 +101,6 @@ install :: () {
 }
 
 todo :: () {
-  //   -- unmake move
   //   -- output/input redirection for UCI interface.
   //   -- parse FEN strings
   //   -- chess ai get started..

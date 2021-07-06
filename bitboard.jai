@@ -352,7 +352,7 @@ unmake_move :: (using pieces: *Piece_Bitboards, captured: PieceType, move: Move1
   from_bb := cast(u64) (1 << from);
   to_bb   := cast(u64) (1 << to);
   using Move16;
-  if !whose_turn {
+  if whose_turn {
     if type == {
     case King_Castle;
       black_piece_undo_capture(); 
