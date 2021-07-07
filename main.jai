@@ -465,6 +465,9 @@ handle_flip_board :: (window: *GLFWwindow, white_side: bool)->bool {
 undo_key_state: enum {UNDO_KEY_IDLE; UNDO_KEY_PRESS; } = .UNDO_KEY_IDLE;
 
 handle_undo_move :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..] Move16) {
+  if w_is_human == false && b_is_human == false then
+    return; // disable undo for AI vs AI.
+
   // cannot use undo when in the promote pawn UI.
   if piece_select_state == .PIECE_PROMOTION then
     return;
@@ -484,9 +487,18 @@ handle_undo_move :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flag
         whose_turn = !whose_turn;
         unmake_move(piece_bitboard, board_state.captured, board_state.move, whose_turn);
         
+        while move_record && !w_human_turn() && !b_human_turn() {
+          board_state := pop(*move_record);
+          // NOTE: need to flip whose_turn BEFORE generate_legal_moves, else we would get the opposite side's moves
+          // by accident. We also need to copy the flags from the board_state BEFORE generate_legal_moves!
+          <<ep_sq = board_state.en_paesant_sq;
+          <<flags = board_state.flags;
+          whose_turn = !whose_turn;
+          unmake_move(piece_bitboard, board_state.captured, board_state.move, whose_turn);
+        }
+
         array_reset(moves_arr);
         generate_legal_moves(piece_bitboard, <<flags, <<ep_sq, moves_arr, whose_turn);
-
 
         highlight_the_square = 0;
         possible_moves_bb = 0;
@@ -547,8 +559,8 @@ highlight_the_square: u64 = 0;
 piece_select_state: enum { PIECE_IDLE; PIECE_SELECTED; PIECE_PROMOTION; } = .PIECE_IDLE;
 possible_moves_bb: u64 = 0;
 
-w_is_human : bool = true;
-b_is_human : bool = false;
+w_is_human : bool = false;
+b_is_human : bool = true;
 
 w_human_turn :: () => (w_is_human && whose_turn);
 b_human_turn :: () => (b_is_human && !whose_turn);
@@ -658,7 +670,7 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
     }
 
   case .UCI_POS_CMD;
-    uci_write_command("go depth 1 \n\n");
+    uci_write_command("go depth 5 \n");
     uci_state = .UCI_GO_TURN;
 
   case .UCI_GO_TURN;
