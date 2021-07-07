@@ -64,6 +64,8 @@ main :: () {
       print("Error initializing UCI chess interface\n");
       return;
     }
+  } else {
+    print(welcome_message);
   }
 
   defer {
