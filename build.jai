@@ -25,7 +25,7 @@
 }
 
 executable_name :: "chess-jai";
-file_names :: string.["main.jai", "asm.jai", "bitboard.jai"];
+file_names :: string.["ui_main.jai", "asm.jai", "bitboard.jai"];
 
 build_debug :: () {
   w := compiler_create_workspace();
