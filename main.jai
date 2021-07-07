@@ -3,6 +3,8 @@
 #import "Render";
 #import "glfw";
 #import "GL";
+#import "POSIX";
+#import "String";
 
 main :: () {
   if !glfwInit() then return;
@@ -27,6 +29,22 @@ main :: () {
     print("Error loading texture");
     return;
   }
+
+  __commands_string_array.allocator = __temporary_allocator;
+
+  ai_chess_engine_name := join(#filepath, "resources/stockfish");
+  print("AI: %\n", ai_chess_engine_name);
+  if !uci_init_uci_chess_engine(ai_chess_engine_name) {
+    print("Error initializing UCI chess interface\n");
+    return;
+  }
+  defer {
+    // send quit command to the chess engine 
+    // before closing the uci chess engine.
+    uci_write_command("quit\n");
+    uci_close_chess_engine();
+  }
+
   init_global_bitboards();
   moves_arr: [..] Move16;
   array_reserve(*moves_arr, 70);    // generates all legal moves
@@ -39,22 +57,30 @@ main :: () {
   white_side := true;
 
   while !glfwWindowShouldClose(window) {
+    read_mouse_input(window);
     width, height : s32;
     glfwGetFramebufferSize(window, *width, *height);
     glViewport(0, 0, xx width, xx height);
     glClearColor(0.15555, 0.15555, 0.15555, 1.0);
     glClear(GL_COLOR_BUFFER_BIT);
 
+    uci_ai_game_loop (*piece_bitboard, *flags, *ep_sq, *moves_arr);
+
     im_draw_setup_gl();
     im_set_viewport_transform(2.0/width, 2.0/height, -1, -1);
     white_side = handle_flip_board(window, white_side);
     handle_undo_move(window, *piece_bitboard, *flags, *ep_sq, *moves_arr);
-    handle_board_click(xx width, xx height, *piece_bitboard, *flags, *ep_sq, *moves_arr, white_side=white_side);
+
+    if w_human_turn() || b_human_turn() {
+      handle_board_click(xx width, xx height, *piece_bitboard, *flags, *ep_sq, *moves_arr, white_side=white_side);
+    }
     draw_chess(xx width, xx height, *piece_bitboard, t, highlight_the_square, possible_moves_bb, last_move_bb, white_side);
     im_flush();
+
     glfwSwapBuffers(window);
     glfwPollEvents();
-    read_mouse_input(window);
+
+    reset_temporary_storage();
   }
 }
 
@@ -512,8 +538,6 @@ ui_handle_move_made :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_s
   possible_moves_bb = 0;
 
   promote_move = cast(Move16) 0;
-
-  uci_position_command();
 }
 
 last_move_bb: u64 = 0;
@@ -522,6 +546,12 @@ promotion_sq : u64 = 0;
 highlight_the_square: u64 = 0;
 piece_select_state: enum { PIECE_IDLE; PIECE_SELECTED; PIECE_PROMOTION; } = .PIECE_IDLE;
 possible_moves_bb: u64 = 0;
+
+w_is_human : bool = true;
+b_is_human : bool = false;
+
+w_human_turn :: () => (w_is_human && whose_turn);
+b_human_turn :: () => (b_is_human && !whose_turn);
 
 UI_PIECE :: enum {
   UI_QUEEN;
@@ -542,10 +572,9 @@ Board_States :: struct {
   captured: PieceType;
 }
 
-// TODO: temporary storage?
-uci_position_command :: () {
+uci_position_command :: () -> string {
   builder: String_Builder;
-  defer free_buffers(*builder);
+  builder.allocator = __temporary_allocator;
 
   print_to_builder(*builder, "position startpos moves ");
   for move: move_record {
@@ -560,9 +589,8 @@ uci_position_command :: () {
     }
   }
   print_to_builder(*builder, "\n");
-  str := builder_to_string(*builder);
-  defer free(str);
-  write_string(str);
+  str := builder_to_string(*builder, allocator=__temporary_allocator);
+  return str;
 
   get_promotion_character :: (using type: Move16) -> u8 {
     if type == {
@@ -584,6 +612,236 @@ uci_position_command :: () {
   }
 }
 
+uci_state : enum { 
+  UCI_INIT; 
+  UCI_UCIOK; 
+  UCI_ISREADY; 
+  UCI_READY_OK; 
+  UCI_NEWGAME; 
+  UCI_IDLE;
+  UCI_POS_CMD;
+  UCI_GO_TURN;
+} = .UCI_INIT;
+
+uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..]Move16) {
+  if uci_state == {
+  case .UCI_INIT;
+    uci_write_command("uci\n");
+    uci_state = .UCI_UCIOK;
+  case .UCI_UCIOK;
+    uci_read_incoming_commands();
+    while uci_has_commands() {
+      cmd_string := uci_getline();
+      if equal(cmd_string, "uciok") {
+        uci_state = .UCI_ISREADY;
+      }
+    }
+  case .UCI_ISREADY;
+    uci_write_command("isready\n");
+    uci_state = .UCI_READY_OK;
+  case .UCI_READY_OK;
+    uci_read_incoming_commands();
+    while uci_has_commands() {
+      cmd_string := uci_getline();
+      if equal(cmd_string, "readyok") {
+        uci_state = .UCI_NEWGAME;
+      }
+    }
+  case .UCI_NEWGAME;
+    uci_write_command("ucinewgame\n");
+    uci_state = .UCI_IDLE;
+  case .UCI_IDLE;
+    if !w_human_turn() && !b_human_turn() {
+      cmd_str := uci_position_command();
+      uci_write_command(cmd_str);
+      uci_state = .UCI_POS_CMD;
+    }
+
+  case .UCI_POS_CMD;
+    uci_write_command("go depth 1 \n\n");
+    uci_state = .UCI_GO_TURN;
+
+  case .UCI_GO_TURN;
+    uci_read_incoming_commands();
+    while uci_has_commands() {
+      cmd_string := uci_getline();
+      print("stockfish => %\n", cmd_string);
+      if starts_with(cmd_string, "bestmove ") {
+        print("stockfish => %\n", cmd_string);
+        TF, from, to, type := parse_best_move(cmd_string);
+        // TODO: parse best move could fail, what to do if that happens????
+        assert(TF);
+        uci_state = .UCI_IDLE;
+        actual_move := find_move(<<moves_arr, from, to, type);
+        ui_handle_move_made(piece_bitboard, flags, ep_sq, moves_arr, actual_move);
+      }
+    }
+  }
+
+  parse_best_move :: (best_move_string: string) -> TF: bool, from: u64, to: u64, type: Move16 {
+    move_sq_string := advance(best_move_string, 9);
+    if move_sq_string.count < 4 {
+      return false, 0, 0, Move16.Quiet;
+    }
+
+    // move string is like "a8h8q" or "d2d4". 
+    a := cast(int)(move_sq_string[0] - #char "a");
+    b := cast(int)(move_sq_string[1] - #char "1");
+    c := cast(int)(move_sq_string[2] - #char "a");
+    d := cast(int)(move_sq_string[3] - #char "1");
+    move := Move16.Quiet;
+    from : u64 = cast(u64) (1 << (b*8 + a));
+    to   : u64 = cast(u64) (1 << (d*8 + c));
+
+    // if move is a promotion
+    if move_sq_string.count >= 5 {
+      character := to_lower(move_sq_string[4]);
+      if character == #char "q" {
+        move = Move16.Queen_Promotion;
+      } else if character == #char "r" {
+        move = Move16.Rook_Promotion;
+      } else if character == #char "b" {
+        move = Move16.Bishop_Promotion;
+      } else if character == #char "n" {
+        move = Move16.Knight_Promotion;
+      }
+    }
+    return true, from, to, move;
+  }
+}
+
+
+#scope_file
+
+// Universal Chess Interface Protocol
+
+uci_init_uci_chess_engine :: (engine_name: string) -> bool {
+  // I wish there was a high-level library for this in Jai,
+  // but the #import "Process"; doesn't do what I want... <sigh>
+
+  pipe_1: [2] s32;
+  pipe_2: [2] s32;
+
+  if pipe(*pipe_1) == -1 {
+    print("Error creating pipe.\n");
+    return false;
+  }
+  if pipe(*pipe_2) == -1 {
+    print("Error creating pipe.\n");
+    return false;
+  }
+
+  child_pid := fork();
+  if child_pid == -1 {
+    print("Error in fork.\n");
+    return false;
+  }
+
+  if child_pid == 0 {
+    // child process
+    close(pipe_2[1]);
+    close(pipe_1[0]);
+    w := pipe_1[1];
+    r := pipe_2[0];
+    if dup2(w, STDOUT_FILENO) < 0 {
+      print("Error in child stdout.\n");
+      exit(-1);
+    }
+
+    // child input/output redirection: 
+    if dup2(r, STDIN_FILENO) < 0 {
+      print("Error in child stdin.\n");
+      exit(-1);
+    }
+
+    args: [2] *u8;
+    args[0] = to_c_string(engine_name);
+    args[1] = null;
+    execvp(args[0], args.data);
+    exit(-1);
+    return false;  // to shut the compiler up.
+  } else {
+    // parent process
+    close(pipe_1[1]);
+    close(pipe_2[0]);
+    __write_pipe = pipe_2[1];
+    __read_pipe  = pipe_1[0];
+    __commands_string_array.allocator = __temporary_allocator; 
+    return true; 
+  }
+}
+
+uci_write_command :: (command: string) {
+  write(__write_pipe, command.data, xx command.count);
+}
+
+uci_read_incoming_commands :: (num_bytes : int = 16384) {
+  __buffer := NewArray(num_bytes, u8, initialized=false, allocator=__temporary_allocator);
+  bytes_read := read(__read_pipe, __buffer.data, cast(u64)(num_bytes-1));
+  if bytes_read == 0 return;
+  if bytes_read < 0 {
+    print("uci_read_incoming_commands error, bytes_read = %.\n", bytes_read);
+    return;
+  }
+  print("Got: % bytes.\n", bytes_read);
+  data: *u8 = __buffer.data;
+  start := 0;
+  for i: 0 .. bytes_read-1 {
+    if __buffer[i] == #char "\n" {
+      cmd_string: string; 
+      cmd_string.data = data;
+      cmd_string.count = (i - start);
+      cmd_string_to_add := join(to_string(__edge_case_buffer.data, __edge_case_count), cmd_string);
+      array_add(*__commands_string_array, cmd_string_to_add);
+      data = * (__buffer[i+1]);
+      start = min(i+1, bytes_read-1);
+      break;
+    }
+  }
+
+  for i: start .. bytes_read-1 {
+    if __buffer[i] == #char "\n" {
+      cmd_string: string;
+      cmd_string.data = data;
+      cmd_string.count = (i - start);
+      array_add(*__commands_string_array, cmd_string);
+      data = * (__buffer[i+1]);
+      start = min(i+1, bytes_read-1);
+    }
+  }
+  
+  // detect an edge case.
+  if start == (bytes_read-1) {
+    __edge_case_count = bytes_read - start - 1;
+    memcpy(__edge_case_buffer.data, data, __edge_case_count);
+  }
+}
+
+uci_has_commands :: inline () -> bool {
+  return __commands_string_array.count > 0;
+}
+
+uci_getline :: inline () -> string {
+  ret := pop(*__commands_string_array);
+  print("(Chess Engine Command, str_count=%): %\n", ret.count, ret);
+  return ret;
+}
+
+uci_close_chess_engine :: () {
+  // NOTE: this function does NOT call "uci_write_command("quit")",
+  // that needs to be called explicitly
+  wait(null);
+  close(__write_pipe);
+  close(__read_pipe);
+}
+
+__buffer: [4096] u8;
+__read_pipe:  s32;
+__write_pipe: s32;
+__commands_string_array: [..] string;
+
+__edge_case_buffer: [4096] u8;
+__edge_case_count := 0;
 
 
 

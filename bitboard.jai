@@ -1033,13 +1033,24 @@ decode_move :: inline (mov: Move16) -> flags: Move16, from: int, to: int {
   return  mov & (xx 0xF), (cast_mov & 0xFC00) >> 10, (cast_mov & 0x03F0) >> 4;
 }
 
-find_move :: (moves: [..]Move16, from: u64, to: u64) -> Move16 {
-  fr1 := serialize_bit(from);
-  to1 := serialize_bit(to);
-  for mov: moves {
-    flags, fr2, to2 := decode_move(mov);
-    if fr1 == fr2 && to1 == to2 {
-      return mov;
+find_move :: (moves: [..]Move16, from: u64, to: u64, typ: Move16=Move16.Quiet) -> Move16 {
+  if typ == Move16.Quiet {
+    fr1 := serialize_bit(from);
+    to1 := serialize_bit(to);
+    for mov: moves {
+      flags, fr2, to2 := decode_move(mov);
+      if fr1 == fr2 && to1 == to2 {
+        return mov;
+      }
+    }
+  } else if Move16.Knight_Promotion <= typ && typ <= Move16.Queen_Promotion_Capture {
+    fr1 := serialize_bit(from);
+    to1 := serialize_bit(to);
+    for mov: moves {
+      flags, fr2, to2 := decode_move(mov);
+      if fr1 == fr2 && to1 == to2 && ((flags == typ) || flags == (typ + xx 4)) {
+        return mov;
+      }
     }
   }
   return 0;

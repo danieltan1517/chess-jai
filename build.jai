@@ -111,7 +111,7 @@ notes_about_uci :: () {
   //    -- specification is independent of the operating system.
   //    -- engine is a normal executable file, either console or "real" application
   //    -- all communication is done via standard IO with text commands
-  //    -- engine should boot and wiat for GUI input
+  //    -- engine should boot and wait for GUI input
   //    -- engine should wait for the "isready" or "setoption" command to set up its internal parameters as the boot process should be as quick as possible
   //    -- the engine must always be able to process input from stdin, even while thinking
   //    -- all command strings the engine recieves will end with "\n",
