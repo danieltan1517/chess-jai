@@ -520,7 +520,7 @@ unmake_move :: (using pieces: *Piece_Bitboards, captured: PieceType, move: Move1
 }
 
 
-generate_legal_moves :: (p: *Piece_Bitboards, c_flags: Castling, ep_sq: u64, moves_arr: *[..] Move16, whose_turn: bool) -> bool {
+generate_legal_moves :: (p: *Piece_Bitboards, c_flags: Castling, ep_sq: u64, moves_arr: *[..] Move16, whose_turn: bool) -> u64 {
   w_pieces := get_white_pieces(p);
   b_pieces := get_black_pieces(p);
   occupied := w_pieces | b_pieces;
@@ -540,7 +540,7 @@ generate_legal_moves :: (p: *Piece_Bitboards, c_flags: Castling, ep_sq: u64, mov
 generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, occupied: u64, pieces: u64, opp_pieces: u64, 
                        king: u64,     queen: u64,     rook: u64,     bishop: u64,     knight: u64,     pawn: u64,
                        opp_king: u64, opp_queen: u64, opp_rook: u64, opp_bishop: u64, opp_knight: u64, opp_pawn: u64,
-                       whose_turn: bool) -> bool {
+                       whose_turn: bool) -> u64 {
 
   // NOTE: we do (occupied & ~king) so that if    R - - - K - - -,
   // then the sliding will go through the king to cover other the unsafe squares
@@ -574,7 +574,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     // we only need to generate king moves during a double-check
     king_moves_bb := king_moves(occupied, i, king, pieces) & ~attacks;
     generate_normal_moves_from_bitboard(moves_arr, king, king_moves_bb, opp_pieces);
-    return num_checks > 0;
+    return checks;
   }
 
   while rook_pin {
@@ -775,7 +775,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
   }
   king_moves_bb := king_moves(occupied, i, king, pieces) & ~attacks;
   generate_normal_moves_from_bitboard(moves_arr, king, king_moves_bb, opp_pieces);
-  return num_checks > 0;
+  return checks;
 }
 
 // TODO: should we return the piece attacks separately or together?

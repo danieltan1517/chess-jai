@@ -7,6 +7,9 @@
 #import "String";
 
 main :: () {
+  white_side := true;
+  engine_name := handle_command_line();
+
   if !glfwInit() then return;
   defer glfwTerminate();
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
@@ -30,17 +33,12 @@ main :: () {
     return;
   }
 
-  /*ai_chess_engine_path := join(#filepath, "resources/RubiChess");
-  if !uci_init_uci_chess_engine("RubiChess", ai_chess_engine_path) {
-    print("Error initializing UCI chess interface\n");
-    return;
-  }*/
-
-  ai_chess_engine_path := join(#filepath, "resources/stockfish");
-  if !uci_init_uci_chess_engine("stockfish", ai_chess_engine_path) {
+  ai_chess_engine_path := join(#filepath, "resources/", engine_name);
+  if !uci_init_uci_chess_engine(engine_name, ai_chess_engine_path) {
     print("Error initializing UCI chess interface\n");
     return;
   }
+
   defer {
     // send quit command to the chess engine 
     // before closing the uci chess engine.
@@ -56,8 +54,6 @@ main :: () {
   ep_sq: u64 = 0;
   piece_bitboard := chess_start_pos();
   generate_legal_moves(*piece_bitboard, flags, ep_sq, *moves_arr, true);
-
-  white_side := true;
 
   while !glfwWindowShouldClose(window) {
     read_mouse_input(window);
@@ -85,6 +81,48 @@ main :: () {
 
     reset_temporary_storage();
   }
+}
+
+handle_command_line :: () -> string #expand {
+  // TODO: 
+  // NOTE: this is hard-coded. It does not cover general cases
+  // I'm too lazy to create a pretty UI right now, so commandline will have to do
+  // this is ad-hoc, and this is mainly for slapping together something to
+  // get useful functionality.
+  args := get_command_line_arguments();
+  engine_name : string = "stockfish";
+  for arg : args {
+    if arg == {
+    case "hc";
+      w_is_human = true;
+      b_is_human = false;
+      `white_side = true;
+    case "hh";
+      w_is_human = true;
+      b_is_human = true;
+      `white_side = true;
+    case "cc";
+      w_is_human = false;
+      b_is_human = false;
+      `white_side = true;
+    case "ch";
+      w_is_human = false;
+      b_is_human = true;
+      `white_side = false;
+    case;
+      if begins_with(arg, "ai=") {
+        cpu_string := advance(arg, 3);
+        // This is not good error checking... could crash the program
+        if cpu_string.count != 0 {
+          engine_name = cpu_string;
+          print(engine_name);
+        } else {
+          print("Invalid ai choice\n");
+        }
+      }
+    }
+  }
+  return engine_name;
 }
 
 draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *Texture, highlight_square: u64, possible_moves_bb: u64, last_move_bb: u64, white_side: bool) {
@@ -118,7 +156,8 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
   }
 
   draw_bitboard(last_move_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, YELLOW);
-  draw_bitboard(possible_moves_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, RED);
+  draw_bitboard(check_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, RED);
+  draw_bitboard(possible_moves_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, GREY);
 
   im_set_texture(texture);
 
@@ -134,13 +173,12 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
     draw_promotion_ui(promotion_sq);
   }
 
-  //draw_bitboard(~0, u0=0.0, v0=0.0, u1=1.0, v1=1.0, GREY_SHADE_BOARD);
   // chess.com uses yellow, so we follow their example...
   BLANK    :: Vector4.{1,1,1,1}; 
   GREY     :: Vector4.{.5,.5,.2,.35}; 
   YELLOW   :: Vector4.{.9,.9,0,.35}; 
   LESS     :: Vector4.{1.0, 1.0, 1.0, 0.25};
-  RED      :: Vector4.{1, 0.25, 0.25, 0.5};
+  RED      :: Vector4.{.9, 0.25, 0.25, 0.65};
   GREY_SHADE_BOARD :: Vector4.{0.2, 0.2, 0.2, 0.35};
 
   draw_every_piece :: ($draw_mouse_drag := false) #expand {
@@ -537,9 +575,10 @@ ui_handle_move_made :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_s
   array_add(*move_record, record_move);
   whose_turn = !whose_turn;
   array_reset(moves_arr);
-  check := generate_legal_moves(piece_bitboard, <<flags, <<ep_sq, moves_arr, whose_turn);
+  check_bb = generate_legal_moves(piece_bitboard, <<flags, <<ep_sq, moves_arr, whose_turn);
+  print_bitboard(check_bb);
   if moves_arr.count == 0 {
-    if check {
+    if check_bb != 0 {
       if whose_turn {
         print("Black wins! Checkmate!\n");
       } else {
@@ -561,9 +600,9 @@ promotion_sq : u64 = 0;
 highlight_the_square: u64 = 0;
 piece_select_state: enum { PIECE_IDLE; PIECE_SELECTED; PIECE_PROMOTION; } = .PIECE_IDLE;
 possible_moves_bb: u64 = 0;
-
-w_is_human : bool = false;
-b_is_human : bool = false;
+check_bb : u64 = 0;
+w_is_human : bool = true;
+b_is_human : bool = true;
 
 w_human_turn :: () => (w_is_human && whose_turn);
 b_human_turn :: () => (b_is_human && !whose_turn);
@@ -851,7 +890,6 @@ uci_close_chess_engine :: () {
   close(__read_pipe);
 }
 
-__buffer: [4096] u8;
 __read_pipe:  s32;
 __write_pipe: s32;
 __commands_string_array: [..] string;
