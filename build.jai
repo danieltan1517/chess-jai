@@ -1,8 +1,15 @@
 #import "Basic";
 #import "Compiler";
 
+ui_exe :: "jai-chess";
+ui_file_names :: string.["ui_main.jai", "asm.jai", "bitboard.jai"];
+
+ai_exe :: "jai-chess-ai";
+ai_file_names :: string.["ai_main.jai", "asm.jai", "bitboard.jai"];
+
 #run {
   args_option : enum { debug; release;} = .debug;
+  choice : enum { ai_compile; ui_compile;} = .ai_compile;
   args := compiler_get_command_line_arguments();
   for arg: args {
     if arg == {
@@ -10,25 +17,37 @@
       args_option = .debug;
     case "release";
       args_option = .release;
+    case "ui";
+      choice = .ui_compile;
+    case "ai";
+      choice = .ai_compile;
     case;
       print("Error: Invalid commandline argument: %\n", arg);
       return;
     }
   }
 
+  exe : string;
+  file_names : [] string; 
+  if choice == {
+  case .ui_compile;
+    exe = ui_exe;
+    file_names = ui_file_names;
+  case .ai_compile;
+    exe = ai_exe;
+    file_names = ai_file_names;
+  }
+
   if args_option == {
   case .debug;
-    build_debug();
+    build_debug(exe, file_names, "debug");
   case .release;
-    build_release();
+    build_release(exe, file_names, "release");
   }
 }
 
-executable_name :: "chess-jai";
-file_names :: string.["ui_main.jai", "asm.jai", "bitboard.jai"];
-
-build_debug :: () {
-  w := compiler_create_workspace();
+build_debug :: (executable_name: string, file_names: [] string, workspace_name: string) {
+  w := compiler_create_workspace(workspace_name);
   if !w {
     print("Workspace creation failed.\n");
     return;
@@ -45,7 +64,6 @@ build_debug :: () {
     add_build_file(tprint("%/%", #filepath, it), w);  
   }
 
-
   while true {
     message := compiler_wait_for_message();
     if !message break;
@@ -60,8 +78,8 @@ build_debug :: () {
   set_build_options(build_options);
 }
 
-build_release :: () {
-  w := compiler_create_workspace();
+build_release :: (executable_name: string, file_names: [] string, workspace_name: string) {
+  w := compiler_create_workspace(workspace_name);
   if !w {
     print("Workspace creation failed.\n");
     return;
