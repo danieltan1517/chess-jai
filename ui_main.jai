@@ -6,6 +6,31 @@
 #import "POSIX";
 #import "String";
 
+welcome_message :: #string END
+Welcome to Jai Chess!!!
+--------------------------------
+This program implements UCI (Universal Chess Interface), so
+you can try out this program with chess engines that implement
+UCI, e.g. Stockfish, Lc0, RubiChess, etc.
+
+Command-Line Arguments:
+depth=x -- sets the search depth of the engine to x
+hh      -- white=human vs black=human
+hc      -- white=human vs black=ai
+ch      -- white=ai vs black=human
+cc      -- white=ai vs black=ai
+ai=Lc0  -- sets the ai to that particular ai. Must be in the resources directory.
+
+Here is a sample command-line calling:
+
+./jai-chess hc ai=stockfish depth=7
+
+Here are the keyboard controls:
+<Ctrl+Z> -- undo move.
+<X>      -- flip the board.
+-------------------------------
+END
+
 main :: () {
   white_side := true;
   engine_name := handle_command_line();
@@ -33,19 +58,22 @@ main :: () {
     return;
   }
 
-  ai_chess_engine_path := join(#filepath, "resources/", engine_name);
-  if !uci_init_uci_chess_engine(engine_name, ai_chess_engine_path) {
-    print("Error initializing UCI chess interface\n");
-    return;
+  if w_is_human == false || b_is_human == false {
+    ai_chess_engine_path := join(#filepath, "resources/", engine_name);
+    if !uci_init_uci_chess_engine(engine_name, ai_chess_engine_path) {
+      print("Error initializing UCI chess interface\n");
+      return;
+    }
   }
 
   defer {
     // send quit command to the chess engine 
     // before closing the uci chess engine.
-    uci_write_command("quit\n");
-    uci_close_chess_engine();
+    if w_is_human == false || b_is_human == false {
+      uci_write_command("quit\n");
+      uci_close_chess_engine();
+    }
   }
-
   init_global_bitboards();
   moves_arr: [..] Move16;
   array_reserve(*moves_arr, 70);    // generates all legal moves
@@ -54,7 +82,6 @@ main :: () {
   ep_sq: u64 = 0;
   piece_bitboard := chess_start_pos();
   generate_legal_moves(*piece_bitboard, flags, ep_sq, *moves_arr, true);
-
   while !glfwWindowShouldClose(window) {
     read_mouse_input(window);
     width, height : s32;
@@ -63,8 +90,9 @@ main :: () {
     glClearColor(0.15555, 0.15555, 0.15555, 1.0);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    uci_ai_game_loop (*piece_bitboard, *flags, *ep_sq, *moves_arr);
-
+    if w_is_human == false || b_is_human == false {
+      uci_ai_game_loop (*piece_bitboard, *flags, *ep_sq, *moves_arr);
+    }
     im_draw_setup_gl();
     im_set_viewport_transform(2.0/width, 2.0/height, -1, -1);
     white_side = handle_flip_board(window, white_side);
@@ -703,6 +731,10 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
         uci_state = .UCI_NEWGAME;
       }
     }
+    // TODO: the welcome message would ideally be placed in main, but...
+    // the AI keeps on spewing out debug messages, so I placed the welcome message
+    // here..
+    print(welcome_message);
   case .UCI_NEWGAME;
     uci_write_command("ucinewgame\n");
     uci_state = .UCI_IDLE;
@@ -718,7 +750,6 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
     cmd_string := tprint("go depth %\n", __engine_depth_parameter);
     uci_write_command(cmd_string);
     uci_state = .UCI_GO_TURN;
-
   case .UCI_GO_TURN;
     uci_read_incoming_commands();
     while uci_has_commands() {
@@ -729,8 +760,12 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
         assert(TF);
         uci_state = .UCI_IDLE;
         actual_move := find_move(<<moves_arr, from, to, type);
-        ui_handle_move_made(piece_bitboard, flags, ep_sq, moves_arr, actual_move);
-        last_move_bb = from|to;
+        if actual_move {
+          ui_handle_move_made(piece_bitboard, flags, ep_sq, moves_arr, actual_move);
+          last_move_bb = from|to;
+        } else {
+          print("There is a bug.\n");
+        }
       }
     }
   }
@@ -880,7 +915,7 @@ uci_has_commands :: inline () -> bool {
 
 uci_getline :: inline () -> string {
   ret := pop(*__commands_string_array);
-  print("Engine Debug [%]: %\n", __engine_name, ret);
+  print("Engine [%]: %\n", __engine_name, ret);
   return ret;
 }
 
