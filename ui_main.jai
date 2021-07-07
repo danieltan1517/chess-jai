@@ -119,6 +119,9 @@ handle_command_line :: () -> string #expand {
         } else {
           print("Invalid ai choice\n");
         }
+      } else if begins_with(arg, "depth=") {
+        __engine_depth_parameter = string_to_int(advance(arg, 6));
+
       }
     }
   }
@@ -539,7 +542,7 @@ handle_undo_move :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flag
         }
 
         array_reset(moves_arr);
-        generate_legal_moves(piece_bitboard, <<flags, <<ep_sq, moves_arr, whose_turn);
+        check_bb = generate_legal_moves(piece_bitboard, <<flags, <<ep_sq, moves_arr, whose_turn);
 
         highlight_the_square = 0;
         possible_moves_bb = 0;
@@ -576,7 +579,6 @@ ui_handle_move_made :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_s
   whose_turn = !whose_turn;
   array_reset(moves_arr);
   check_bb = generate_legal_moves(piece_bitboard, <<flags, <<ep_sq, moves_arr, whose_turn);
-  print_bitboard(check_bb);
   if moves_arr.count == 0 {
     if check_bb != 0 {
       if whose_turn {
