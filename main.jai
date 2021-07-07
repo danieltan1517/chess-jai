@@ -30,11 +30,9 @@ main :: () {
     return;
   }
 
-  __commands_string_array.allocator = __temporary_allocator;
 
-  ai_chess_engine_name := join(#filepath, "resources/stockfish");
-  print("AI: %\n", ai_chess_engine_name);
-  if !uci_init_uci_chess_engine(ai_chess_engine_name) {
+  ai_chess_engine_path := join(#filepath, "resources/stockfish");
+  if !uci_init_uci_chess_engine("stockfish", ai_chess_engine_path) {
     print("Error initializing UCI chess interface\n");
     return;
   }
@@ -636,6 +634,7 @@ uci_state : enum {
 } = .UCI_INIT;
 
 uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..]Move16) {
+  //array_reset(*__commands_string_array);: [..] string;
   if uci_state == {
   case .UCI_INIT;
     uci_write_command("uci\n");
@@ -670,16 +669,15 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
     }
 
   case .UCI_POS_CMD;
-    uci_write_command("go depth 5 \n");
+    cmd_string := tprint("go depth %\n", __engine_depth_parameter);
+    uci_write_command(cmd_string);
     uci_state = .UCI_GO_TURN;
 
   case .UCI_GO_TURN;
     uci_read_incoming_commands();
     while uci_has_commands() {
       cmd_string := uci_getline();
-      print("stockfish => %\n", cmd_string);
       if starts_with(cmd_string, "bestmove ") {
-        print("stockfish => %\n", cmd_string);
         TF, from, to, type := parse_best_move(cmd_string);
         // TODO: parse best move could fail, what to do if that happens????
         assert(TF);
@@ -727,10 +725,9 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
 
 // Universal Chess Interface Protocol
 
-uci_init_uci_chess_engine :: (engine_name: string) -> bool {
+uci_init_uci_chess_engine :: (engine_name: string, ai_path: string) -> bool {
   // I wish there was a high-level library for this in Jai,
   // but the #import "Process"; doesn't do what I want... <sigh>
-
   pipe_1: [2] s32;
   pipe_2: [2] s32;
 
@@ -767,7 +764,7 @@ uci_init_uci_chess_engine :: (engine_name: string) -> bool {
     }
 
     args: [2] *u8;
-    args[0] = to_c_string(engine_name);
+    args[0] = to_c_string(ai_path);
     args[1] = null;
     execvp(args[0], args.data);
     exit(-1);
@@ -779,6 +776,8 @@ uci_init_uci_chess_engine :: (engine_name: string) -> bool {
     __write_pipe = pipe_2[1];
     __read_pipe  = pipe_1[0];
     __commands_string_array.allocator = __temporary_allocator; 
+    __engine_name = engine_name;
+    __commands_string_array.allocator = __temporary_allocator;
     return true; 
   }
 }
@@ -795,7 +794,6 @@ uci_read_incoming_commands :: (num_bytes : int = 16384) {
     print("uci_read_incoming_commands error, bytes_read = %.\n", bytes_read);
     return;
   }
-  print("Got: % bytes.\n", bytes_read);
   data: *u8 = __buffer.data;
   start := 0;
   for i: 0 .. bytes_read-1 {
@@ -835,7 +833,7 @@ uci_has_commands :: inline () -> bool {
 
 uci_getline :: inline () -> string {
   ret := pop(*__commands_string_array);
-  print("(Chess Engine Command, str_count=%): %\n", ret.count, ret);
+  print("Engine Debug [%]: %\n", __engine_name, ret);
   return ret;
 }
 
@@ -856,7 +854,8 @@ __edge_case_buffer: [4096] u8;
 __edge_case_count := 0;
 
 
-
+__engine_name : string;  // name of engine. exists for aesthetic purposes
+__engine_depth_parameter : int = 5;
 
 
 
