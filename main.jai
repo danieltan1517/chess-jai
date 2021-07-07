@@ -30,6 +30,11 @@ main :: () {
     return;
   }
 
+  /*ai_chess_engine_path := join(#filepath, "resources/RubiChess");
+  if !uci_init_uci_chess_engine("RubiChess", ai_chess_engine_path) {
+    print("Error initializing UCI chess interface\n");
+    return;
+  }*/
 
   ai_chess_engine_path := join(#filepath, "resources/stockfish");
   if !uci_init_uci_chess_engine("stockfish", ai_chess_engine_path) {
@@ -558,7 +563,7 @@ piece_select_state: enum { PIECE_IDLE; PIECE_SELECTED; PIECE_PROMOTION; } = .PIE
 possible_moves_bb: u64 = 0;
 
 w_is_human : bool = false;
-b_is_human : bool = true;
+b_is_human : bool = false;
 
 w_human_turn :: () => (w_is_human && whose_turn);
 b_human_turn :: () => (b_is_human && !whose_turn);
@@ -634,7 +639,6 @@ uci_state : enum {
 } = .UCI_INIT;
 
 uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..]Move16) {
-  //array_reset(*__commands_string_array);: [..] string;
   if uci_state == {
   case .UCI_INIT;
     uci_write_command("uci\n");
@@ -662,7 +666,8 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
     uci_write_command("ucinewgame\n");
     uci_state = .UCI_IDLE;
   case .UCI_IDLE;
-    if !w_human_turn() && !b_human_turn() {
+    // make sure there are moves that could be made.
+    if moves_arr.count > 0 && !w_human_turn() && !b_human_turn() {
       cmd_str := uci_position_command();
       uci_write_command(cmd_str);
       uci_state = .UCI_POS_CMD;
@@ -684,6 +689,7 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
         uci_state = .UCI_IDLE;
         actual_move := find_move(<<moves_arr, from, to, type);
         ui_handle_move_made(piece_bitboard, flags, ep_sq, moves_arr, actual_move);
+        last_move_bb = from|to;
       }
     }
   }
@@ -855,7 +861,7 @@ __edge_case_count := 0;
 
 
 __engine_name : string;  // name of engine. exists for aesthetic purposes
-__engine_depth_parameter : int = 5;
+__engine_depth_parameter : int = 15; // depth of engine search.
 
 
 
