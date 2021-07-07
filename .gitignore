@@ -6,3 +6,5 @@ chess-jai
 *.a
 .*.swp
 resources
+jai-chess
+jai-chess-ai
