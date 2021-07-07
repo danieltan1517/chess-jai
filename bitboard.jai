@@ -113,6 +113,11 @@ chess_start_pos :: () -> Piece_Bitboards {
   return start_pos;
 }
 
+chess_start_from_fen :: (fen_string: string) -> Piece_Bitboards {
+  pos: Piece_Bitboards;
+  return pos;
+}
+
 get_white_pieces :: inline p => p.w_king | p.w_queen | p.w_rook | p.w_bishop | p.w_knight | p.w_pawn;
 get_black_pieces :: inline p => p.b_king | p.b_queen | p.b_rook | p.b_bishop | p.b_knight | p.b_pawn;
 
