@@ -1,10 +1,10 @@
 chess
 chess-jai
 .build
+resources/
 *.txt
 *.so
 *.a
 .*.swp
-resources
 jai-chess
 jai-chess-ai
