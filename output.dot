@@ -1,9 +1,0 @@
-digraph {
-
-    s17179873673 [label="LAMBDA_BODY #400001189\nai_main.jai:5",shape=ellipse]
-    s12884911561 [label="LAMBDA_BODY #3000025c9\nsearch.jai:56",shape=ellipse]
-    s12884911547 [label="negamax\nDECLARATION #3000025bb\nsearch.jai:54",shape=ellipse]
-
-    s17179873673 -> s12884911547;
-    s12884911561 -> s12884911547;
-}

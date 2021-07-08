@@ -22,7 +22,7 @@ main :: () {
     case "negamax";
       pieces := chess_start_pos();
       depth := 5;
-      mov, eval := negamax(*pieces, Castling.All, 0, depth, whose_turn=true, color=1);
+      mov, eval := negamax(*pieces, Castling.All, 0, depth, whose_turn=true);
       type, x, y := decode_move(mov);
       print("eval=%, search depth=%\n", eval, depth);
       print("bestmove %1%2\n", cast(serialized_bb)x, cast(serialized_bb)y);

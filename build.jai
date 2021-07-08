@@ -4,7 +4,7 @@
 ui_exe :: "jai-chess";
 ui_file_names :: string.["ui_main.jai", "asm.jai", "bitboard.jai"];
 
-ai_exe :: "ai-jai-chess";
+ai_exe :: "ai";
 ai_file_names :: string.["ai_main.jai", "asm.jai", "bitboard.jai", "search.jai"];
 
 #run {

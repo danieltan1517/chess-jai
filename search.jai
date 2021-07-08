@@ -19,6 +19,7 @@ perft :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, de
   defer { array_free(moves_array); }
 
   generate_legal_moves(p, castling, ep, *moves_array, whose_turn);
+  print("legal moves from here: %\n", moves_array.count);
   for move : moves_array {
     c_copy  := castling;
     ep_copy := ep;
@@ -51,7 +52,9 @@ perft_start_pos :: () {
 }
 
 // TODO: eventually, replace this with principled variation search..
-negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, alpha := -FLOAT32_INFINITY, beta := FLOAT32_INFINITY, whose_turn: bool, color: int) -> Move16, float {
+negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, alpha := -FLOAT32_INFINITY, beta := FLOAT32_INFINITY) -> Move16, float {
+
+  color := ifx whose_turn 1 else -1;
   if depth <= 0 then {
     eval := evaluate_position(pieces) * color;
     return Move16.Quiet, eval;
@@ -66,7 +69,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, a
     ep_copy := ep;
     capture := PieceType.None;
     make_move(pieces, *c_copy, *ep_copy, *capture, move, whose_turn);
-    _, negamax_eval := negamax(pieces, c_copy, ep_copy, depth-1, -beta, -alpha, !whose_turn, -color);
+    _, negamax_eval := negamax(pieces, c_copy, ep_copy, depth-1, whose_turn=!whose_turn, alpha=-beta, beta=-alpha);
     negamax_eval = -negamax_eval;
 
     if negamax_eval >= best_eval_value {
