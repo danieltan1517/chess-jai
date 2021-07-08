@@ -59,6 +59,25 @@ serialized_bb :: enum s16 {
   a8; b8; c8; d8; e8; f8; g8; h8;
 }
 
+equal :: (p1: Piece_Bitboards, p2: Piece_Bitboards)->bool {
+  if p1.w_king != p2.w_king return false;
+  if p1.b_king != p2.b_king return false;
+
+  if p1.w_queen != p2.w_queen return false;
+  if p1.b_queen != p2.b_queen return false;
+
+  if p1.w_bishop != p2.w_bishop return false;
+  if p1.b_bishop != p2.b_bishop return false;
+
+  if p1.w_knight != p2.w_knight return false;
+  if p1.b_knight != p2.b_knight return false;
+
+  if p1.w_pawn != p2.w_pawn return false;
+  if p1.b_pawn != p2.b_pawn return false;
+  return true;
+}
+
+
 // from chess programming wiki:
 Move16 :: enum s16 {
   Quiet :: 0;
@@ -138,6 +157,8 @@ make_move :: (using pieces: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, cap
   type, from, to := decode_move(move);
   from_bit := cast(u64) (1 << from);
   to_bit   := cast(u64) (1 << to);
+  << ep_sq = 0;
+
   using Move16;
   if whose_turn {
     if #complete type == {
