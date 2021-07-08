@@ -541,6 +541,8 @@ undo_key_state: enum {UNDO_KEY_IDLE; UNDO_KEY_PRESS; } = .UNDO_KEY_IDLE;
 handle_undo_move :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..] Move16) {
   if w_is_human == false && b_is_human == false then
     return; // disable undo for AI vs AI.
+  if piece_select_state != .PIECE_IDLE then
+    return;
 
   // cannot use undo when in the promote pawn UI.
   if piece_select_state == .PIECE_PROMOTION then
@@ -563,8 +565,6 @@ handle_undo_move :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flag
         
         while move_record && !w_human_turn() && !b_human_turn() {
           board_state := pop(*move_record);
-          // NOTE: need to flip whose_turn BEFORE generate_legal_moves, else we would get the opposite side's moves
-          // by accident. We also need to copy the flags from the board_state BEFORE generate_legal_moves!
           <<ep_sq = board_state.en_paesant_sq;
           <<flags = board_state.flags;
           whose_turn = !whose_turn;
@@ -574,10 +574,6 @@ handle_undo_move :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flag
         array_reset(moves_arr);
         check_bb = generate_legal_moves(piece_bitboard, <<flags, <<ep_sq, moves_arr, whose_turn);
 
-        highlight_the_square = 0;
-        possible_moves_bb = 0;
-        promote_move = cast(Move16) 0;
-        piece_select_state = .PIECE_IDLE;
         highlight_the_square = 0;
         possible_moves_bb = 0;
         promote_move = cast(Move16) 0;
@@ -707,6 +703,7 @@ uci_state : enum {
   UCI_IDLE;
   UCI_POS_CMD;
   UCI_GO_TURN;
+  UCI_BUG;
 } = .UCI_INIT;
 
 uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..]Move16) {
@@ -767,9 +764,13 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
           last_move_bb = from|to;
         } else {
           print("There is a bug.\n");
+          uci_state = .UCI_BUG;
         }
       }
     }
+
+  case .UCI_BUG;
+
   }
 
   parse_best_move :: (best_move_string: string) -> TF: bool, from: u64, to: u64, type: Move16 {
