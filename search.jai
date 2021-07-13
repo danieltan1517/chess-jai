@@ -19,7 +19,6 @@ perft :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, de
   defer { array_free(moves_array); }
 
   generate_legal_moves(p, castling, ep, *moves_array, whose_turn);
-  print("legal moves from here: %\n", moves_array.count);
   for move : moves_array {
     c_copy  := castling;
     ep_copy := ep;
@@ -31,6 +30,33 @@ perft :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, de
   return num_nodes;
 }
 
+perft_begin :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, depth: int) -> int {
+  if depth <= 0 then return 1;
+  num_nodes := 0;
+  moves_array: [..] Move16;
+  array_reserve(*moves_array, 40);
+  defer { array_free(moves_array); }
+
+  generate_legal_moves(p, castling, ep, *moves_array, whose_turn);
+  print("legal moves from here: %\n", moves_array.count);
+  for move : moves_array {
+    c_copy  := castling;
+    ep_copy := ep;
+    capture := PieceType.None;
+    make_move(p, *c_copy, *ep_copy, *capture, move, whose_turn);
+    add := perft(p, c_copy, ep_copy, !whose_turn, depth-1);
+
+    type, from, to := decode_move(move);
+    print("%1%2: %3 nodes\n", cast(serialized_bb)from, cast(serialized_bb)to, add);
+
+    num_nodes = num_nodes + add;
+    unmake_move(p, capture, move, whose_turn);
+  }
+  return num_nodes;
+}
+
+
+
 perft_start_pos :: () {
   pieces := chess_start_pos();
 
@@ -39,7 +65,7 @@ perft_start_pos :: () {
   perft_run(3, 8_902);
   perft_run(4, 197_281);
   perft_run(5, 4_865_609);
-  perft_run(6, 119_060_324);
+  //perft_run(6, 119_060_324);
 
   perft_run :: (depth: int, expected: int) #expand {
     nodes := perft(*pieces, Castling.All, 0, true, depth);

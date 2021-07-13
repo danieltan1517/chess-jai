@@ -639,7 +639,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
 
     // pawn diagonal moves only, if pawn is pinned, there is only one possible move.
     if whose_turn {
-      wp_attacks := white_pawn_captures(pawn);
+      wp_attacks := white_pawn_captures(pinned_piece);
       pawn_move := wp_attacks & opp_pieces & (between_sqs|sq);
       generate_pawn_moves_from_bitboard(moves_arr, pinned_piece, pawn_move, opp_pieces);
       ep_bb : u64 = (ep_sq << 8);
@@ -647,7 +647,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
         array_add(moves_arr, encode_move_bb(pinned_piece, ep_bb, Move16.Ep_Capture));
       }
     } else {
-      bp_attacks := black_pawn_captures(pawn);
+      bp_attacks := black_pawn_captures(pinned_piece);
       pawn_move := bp_attacks & opp_pieces & (between_sqs|sq);
       generate_pawn_moves_from_bitboard(moves_arr, pinned_piece, pawn_move, opp_pieces);
       ep_bb : u64 = (ep_sq >> 8);

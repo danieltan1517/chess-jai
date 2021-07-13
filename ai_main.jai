@@ -30,13 +30,21 @@ main :: () {
     case;
       if begins_with(input, "perft ") {
         pieces := chess_start_pos();
+
+        c_copy  := Castling.All;
+        ep_copy := cast(u64) 0;
+        capture := PieceType.None;
+        make_move(*pieces, *c_copy, *ep_copy, *capture, encode_move_bb(xx e2, xx e4, Move16.Quiet), true);
+        make_move(*pieces, *c_copy, *ep_copy, *capture, encode_move_bb(xx a7, xx a6, Move16.Quiet), false);
+
+
         depth, TF := string_to_int(advance(input, 6));
         if TF == false {
           print("Not a number. [%]\n", advance(input, 6));
           continue;
         }
         t := get_time();
-        nodes := perft(*pieces, Castling.All, 0, true, depth);
+        nodes := perft_begin(*pieces, Castling.All, 0, true, depth);
         t = get_time() - t;
         print("time taken: %\n", t);
         print("number of nodes from startpos = %, depth = %\n", nodes, depth);
