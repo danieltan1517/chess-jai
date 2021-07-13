@@ -637,6 +637,14 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     if num_checks == 1 continue; // ignore pinned pieces when in check
     // no rooks/knights
 
+    // pinned queen/bishop
+    if (queen|bishop) & pinned_piece {
+      // make pinned piece moves.
+      valid_moves := (between_sqs | sq) & ~pinned_piece;
+      generate_normal_moves_from_bitboard(moves_arr, pinned_piece, valid_moves, opp_pieces);
+      continue;
+    }
+
     // pawn diagonal moves only, if pawn is pinned, there is only one possible move.
     if whose_turn {
       wp_attacks := white_pawn_captures(pinned_piece);
@@ -654,12 +662,6 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
       if bp_attacks & ep_bb & between_sqs {
         array_add(moves_arr, encode_move_bb(pinned_piece, ep_bb, Move16.Ep_Capture));
       }
-    }
-
-    if (queen|bishop) & pinned_piece {
-      // make pinned piece moves.
-      valid_moves := (between_sqs | sq) & ~pinned_piece;
-      generate_normal_moves_from_bitboard(moves_arr, pinned_piece, valid_moves, opp_pieces);
     }
   }
   
