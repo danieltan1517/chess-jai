@@ -82,8 +82,11 @@ main :: () {
   array_reserve(*move_record, 200); // records the game down. I use this struct to backtrack and undo moves
   flags: Castling = Castling.All;
   ep_sq: u64 = 0;
-  piece_bitboard := chess_start_pos();
-  generate_legal_moves(*piece_bitboard, flags, ep_sq, *moves_arr, true);
+
+  piece_bitboard, whose_turn, flags, ep_sq = chess_start_pos();
+
+
+  generate_legal_moves(*piece_bitboard, flags, ep_sq, *moves_arr, whose_turn);
   while !glfwWindowShouldClose(window) {
     read_mouse_input(window);
     width, height : s32;
@@ -103,6 +106,7 @@ main :: () {
     if w_human_turn() || b_human_turn() {
       handle_board_click(xx width, xx height, *piece_bitboard, *flags, *ep_sq, *moves_arr, white_side=white_side);
     }
+    ep_sq_GLOBAL = ep_sq;
     draw_chess(xx width, xx height, *piece_bitboard, t, highlight_the_square, possible_moves_bb, last_move_bb, white_side);
     im_flush();
 
@@ -112,6 +116,9 @@ main :: () {
     reset_temporary_storage();
   }
 }
+
+ep_sq_GLOBAL : u64 = 0;
+
 
 handle_command_line :: () -> string #expand {
   // TODO: 
@@ -190,7 +197,8 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
 
   draw_bitboard(last_move_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, YELLOW);
   draw_bitboard(check_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, RED);
-  draw_bitboard(possible_moves_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, GREY);
+  draw_bitboard(possible_moves_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, RED);
+  draw_bitboard(ep_sq_GLOBAL, u0=0.0, v0=0.0, u1=1.0, v1=1.0, RED);
 
   im_set_texture(texture);
 
@@ -334,7 +342,6 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
       value &= (value - 1);
     }
   }
-
 }
 
 mouse_position_x:     float = 0.0;
@@ -479,6 +486,11 @@ handle_board_click :: (width: float, height: float, piece_bitboard: *Piece_Bitbo
           ui_handle_move_made(piece_bitboard, flags, ep_sq, moves_arr, mov);
           piece_select_state = .PIECE_IDLE;
         }
+      } else {
+        // let go of the piece without making a valid move.
+        piece_select_state = .PIECE_IDLE;
+        highlight_the_square = 0;
+        possible_moves_bb = 0;
       }
     }
   case .PIECE_PROMOTION;

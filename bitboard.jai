@@ -1,3 +1,6 @@
+#import "Basic";
+#import "String";
+
 using bboard :: enum_flags u64 {
   a1; b1; c1; d1; e1; f1; g1; h1;
   a2; b2; c2; d2; e2; f2; g2; h2;
@@ -114,7 +117,7 @@ Castling :: enum_flags {
   All :: W_KS|W_QS|B_KS|B_QS;
 }
 
-chess_start_pos :: () -> Piece_Bitboards {
+chess_start_pos :: () -> Piece_Bitboards, whose_turn: bool, Castling, ep: u64 {
   start_pos: Piece_Bitboards;
   start_pos.w_king   = xx e1;
   start_pos.w_queen  = xx d1;
@@ -129,12 +132,145 @@ chess_start_pos :: () -> Piece_Bitboards {
   start_pos.b_bishop = xx c8 | f8;
   start_pos.b_knight = xx b8 | g8;
   start_pos.b_pawn   = xx rank_7;
-  return start_pos;
+  return start_pos, true, Castling.All, 0;
 }
 
-chess_start_from_fen :: (fen_string: string) -> Piece_Bitboards {
+chess_start_from_fen :: (fen_string: string) -> Piece_Bitboards, whose_turn: bool, Castling, ep: u64 {
+  // NOTE: not 100% correct parsing, just do something to get the FEN off the ground and
+  // start using some basic stuff.
   pos: Piece_Bitboards;
-  return pos;
+  whose_turn: bool;
+  castling: Castling = 0;
+  en_paesant: u64 = 0;
+
+  tok: [6] string;
+  board: [8] string;
+
+  start, n := 0;
+  for i: 0.. fen_string.count-1 {
+    if fen_string[i] == #char " " {
+      tok[n] = slice(fen_string, start, i-start);
+      start = i + 1;
+      n += 1;
+    }
+  }
+  tok[n] = slice(fen_string, start, fen_string.count-start);
+  //assert(n == 5); // TODO: do something when n=5, and when n<5
+
+  start, n = 0;
+  for i: 0.. tok[0].count-1 {
+    if tok[0][i] == #char "/" {
+      board[n] = slice(tok[0], start, i-start);
+      start = i + 1;
+      n += 1;
+    }
+  }
+
+  assert(n == 7, "Parse error.\n");
+  board[n] = slice(tok[0], start, tok[0].count-start);
+
+  // put the pieces on the board according to the FEN string
+  parse_board_row(*pos, a8, board[0]);
+  parse_board_row(*pos, a7, board[1]);
+  parse_board_row(*pos, a6, board[2]);
+  parse_board_row(*pos, a5, board[3]);
+  parse_board_row(*pos, a4, board[4]);
+  parse_board_row(*pos, a3, board[5]);
+  parse_board_row(*pos, a2, board[6]);
+  parse_board_row(*pos, a1, board[7]);
+
+  // handle whose turn it is
+  if tok[1] == {
+  case "w";
+    whose_turn = true;
+  case "b";
+    whose_turn = false;
+    print("whose_turn = %\n", whose_turn);
+  case;
+    assert(false, "Parse error.\n");
+  }
+
+  castling = parse_castling_flags(tok[2]);
+  en_paesant = parse_en_paesant(tok[3]);
+
+  return pos, whose_turn, castling, en_paesant;
+
+  parse_en_paesant :: inline (tok: string) -> u64 {
+    assert(tok.count >= 1 && tok.count <= 2);
+    if tok.count == 1 {
+      if tok[0] == #char "-"
+        return 0;
+      assert(false);
+    }
+
+    r := cast(int)(tok[0] - #char "a");
+    c := cast(int)(tok[1] - #char "1");
+    bb : u64 = cast(u64) (1 << (c*8 + r));
+    bb = ifx bb & (xx rank_6) then (bb >> 8) else (bb << 8);
+    return bb;
+  }
+
+  parse_board_row :: inline (using pos: *Piece_Bitboards, b: bboard, tok: string ) {
+    start := cast(u64)b;
+    for i: 0..tok.count-1 {
+      if is_digit(tok[i]) {
+        integer := tok[i] - #char "1";
+        start = start << integer;
+      } else if is_alpha(tok[i]) {
+        if tok[i] == {
+        case #char "P";
+          w_pawn |= start;
+        case #char "N";
+          w_knight |= start;
+        case #char "B";
+          w_bishop |= start;
+        case #char "R";
+          w_rook   |= start;
+        case #char "Q";
+          w_queen |= start;
+        case #char "K";
+          w_king |= start;
+        case #char "p";
+          b_pawn |= start;
+        case #char "n";
+          b_knight |= start;
+        case #char "b";
+          b_bishop |= start;
+        case #char "r";
+          b_rook   |= start;
+        case #char "q";
+          b_queen |= start;
+        case #char "k";
+          b_king |= start;
+        case;
+          assert(false);
+        }
+      }
+      start = start << 1;
+    }
+  }
+
+  parse_castling_flags :: inline (tok: string) -> Castling {
+    using Castling;
+    c: Castling = 0;
+    for i: 0..tok.count-1 {
+      if tok[i] == {
+      case #char "-";
+        c = 0;
+        break;
+      case #char "K";
+        c |= W_KS;
+      case #char "Q";
+        c |= W_QS;
+      case #char "k";
+        c |= B_KS;
+      case #char "q";
+        c |= B_QS;
+      }
+    }
+    return c;
+  }
+
 }
 
 get_white_pieces :: inline p => p.w_king | p.w_queen | p.w_rook | p.w_bishop | p.w_knight | p.w_pawn;
@@ -606,6 +742,13 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     rook_pin = rook_pin & (rook_pin - 1);
     if num_checks == 1 continue; // ignore pinned pieces when in check
 
+    if (queen|rook) & pinned_piece {
+      valid_moves := (between_sqs | sq) & ~pinned_piece;
+      // make pinned piece moves.
+      generate_normal_moves_from_bitboard(moves_arr, pinned_piece, valid_moves, opp_pieces);
+      continue;
+    }
+
     // no knight/bishop
     // pawn vertical only, NO pawn horizontal, since pawns cannot move horizontally
     if (pawn & pinned_piece & k_file) {
@@ -618,12 +761,6 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
         move = move | ((move & xx rank_6) >> 8) & ~occupied;
         generate_pawn_moves_from_bitboard(moves_arr, pinned_piece, move, opp_pieces);
       }
-    }
-
-    if (queen|rook) & pinned_piece {
-      valid_moves := (between_sqs | sq) & ~pinned_piece;
-      // make pinned piece moves.
-      generate_normal_moves_from_bitboard(moves_arr, pinned_piece, valid_moves, opp_pieces);
     }
   }
 
@@ -646,21 +783,23 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     }
 
     // pawn diagonal moves only, if pawn is pinned, there is only one possible move.
-    if whose_turn {
-      wp_attacks := white_pawn_captures(pinned_piece);
-      pawn_move := wp_attacks & opp_pieces & (between_sqs|sq);
-      generate_pawn_moves_from_bitboard(moves_arr, pinned_piece, pawn_move, opp_pieces);
-      ep_bb : u64 = (ep_sq << 8);
-      if wp_attacks & ep_bb & between_sqs {
-        array_add(moves_arr, encode_move_bb(pinned_piece, ep_bb, Move16.Ep_Capture));
-      }
-    } else {
-      bp_attacks := black_pawn_captures(pinned_piece);
-      pawn_move := bp_attacks & opp_pieces & (between_sqs|sq);
-      generate_pawn_moves_from_bitboard(moves_arr, pinned_piece, pawn_move, opp_pieces);
-      ep_bb : u64 = (ep_sq >> 8);
-      if bp_attacks & ep_bb & between_sqs {
-        array_add(moves_arr, encode_move_bb(pinned_piece, ep_bb, Move16.Ep_Capture));
+    if pawn & pinned_piece {
+      if whose_turn {
+        wp_attacks := white_pawn_captures(pinned_piece & pawn);
+        pawn_move := wp_attacks & opp_pieces & (between_sqs|sq);
+        generate_pawn_moves_from_bitboard(moves_arr, pinned_piece, pawn_move, opp_pieces);
+        ep_bb : u64 = (ep_sq << 8);
+        if wp_attacks & ep_bb & between_sqs {
+          array_add(moves_arr, encode_move_bb(pinned_piece, ep_bb, Move16.Ep_Capture));
+        }
+      } else {
+        bp_attacks := black_pawn_captures(pinned_piece & pawn);
+        pawn_move := bp_attacks & opp_pieces & (between_sqs|sq);
+        generate_pawn_moves_from_bitboard(moves_arr, pinned_piece, pawn_move, opp_pieces);
+        ep_bb : u64 = (ep_sq >> 8);
+        if bp_attacks & ep_bb & between_sqs {
+          array_add(moves_arr, encode_move_bb(pinned_piece, ep_bb, Move16.Ep_Capture));
+        }
       }
     }
   }
@@ -954,7 +1093,6 @@ adiag_of :: inline (i: int)->u64 {
 serialize_bit :: trailing_zeros;
 
 print_bitboard :: (b: u64) {
-  #import "Basic";
   loop(xx a8, "8 ");
   loop(xx a7, "7 ");
   loop(xx a6, "6 ");

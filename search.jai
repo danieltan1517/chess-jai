@@ -55,26 +55,66 @@ perft_begin :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bo
   return num_nodes;
 }
 
-
-
 perft_start_pos :: () {
-  pieces := chess_start_pos();
+  pieces: Piece_Bitboards;
+  whose_turn: bool;
+  castling: Castling;
+  ep: u64;
 
-  perft_run(1, 20);
-  perft_run(2, 400); 
-  perft_run(3, 8_902);
-  perft_run(4, 197_281);
-  perft_run(5, 4_865_609);
-  //perft_run(6, 119_060_324);
+  setup_perft_run("startpos", 
+                  20, 
+                  400, 
+                  8_902, 
+                  197_281, 
+                  4_865_609);
+  // position 1: initial position
+  setup_perft_run(fen="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+                  20, 
+                  400, 
+                  8_902, 
+                  197_281, 
+                  4_865_609);
+
+  // position 2: kiwipete by peter mckenzie
+  setup_perft_run(fen="r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -",
+                  48,
+                  2_039,
+                  97_862);
+
+  // position 3: en paesant bugs
+  setup_perft_run(fen="8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - -",
+                  14,
+                  191,
+                  2_812,
+                  43_238);
+
+  setup_perft_run :: ($fen: string, expected: ..int) #expand {
+    print("Testing FEN=[%]\n", fen);
+    if equal(fen, "startpos") {
+      pieces, whose_turn, castling, ep = chess_start_pos();
+    } else {
+      pieces, whose_turn, castling, ep = chess_start_from_fen(fen_string=fen);
+    }
+
+    for exp, depth: expected {
+      perft_run(depth+1, exp);
+    }
+    print("------------------------------------\n\n", fen);
+  }
 
   perft_run :: (depth: int, expected: int) #expand {
-    nodes := perft(*pieces, Castling.All, 0, true, depth);
+    nodes := perft(*pieces, castling, ep, whose_turn, depth);
     if nodes == expected {
       print("perft successful at the depth of: %, % nodes found.\n", depth, nodes);
     } else {
       print("FAILED at the depth of: %, expected: %, actual: %\n", depth, expected, nodes);
     }
   }
+
+  //fen_string :: "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1";
+  //fen_string :: "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8";
+  //fen_string :: "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10 ";
+  //piece_bitboard, whose_turn, flags, ep_sq = chess_start_from_fen(fen_string=fen_string);
 }
 
 // TODO: eventually, replace this with principled variation search..

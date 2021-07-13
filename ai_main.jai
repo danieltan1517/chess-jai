@@ -34,8 +34,8 @@ main :: () {
         c_copy  := Castling.All;
         ep_copy := cast(u64) 0;
         capture := PieceType.None;
-        make_move(*pieces, *c_copy, *ep_copy, *capture, encode_move_bb(xx e2, xx e4, Move16.Quiet), true);
-        make_move(*pieces, *c_copy, *ep_copy, *capture, encode_move_bb(xx a7, xx a6, Move16.Quiet), false);
+        make_move(*pieces, *c_copy, *ep_copy, *capture, encode_move_bb(xx d2, xx d4, Move16.Quiet), true);
+        make_move(*pieces, *c_copy, *ep_copy, *capture, encode_move_bb(xx e7, xx e6, Move16.Quiet), false);
 
 
         depth, TF := string_to_int(advance(input, 6));
@@ -44,7 +44,7 @@ main :: () {
           continue;
         }
         t := get_time();
-        nodes := perft_begin(*pieces, Castling.All, 0, true, depth);
+        nodes := perft_begin(*pieces, c_copy, ep_copy, true, depth);
         t = get_time() - t;
         print("time taken: %\n", t);
         print("number of nodes from startpos = %, depth = %\n", nodes, depth);
@@ -71,7 +71,5 @@ getline :: () -> string {
 }
 
 __buffer: [4096] u8;
-
-
 
 
