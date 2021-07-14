@@ -1,7 +1,7 @@
 #import "Math";
 
 // performance test
-// walks the move generation tree of strictly legal moves to count all the leaf nodes
+// walks the move generation tree of strictly legal moves to count the leaf nodes
 perft :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, depth: int) -> int {
   if depth <= 0 then return 1;
   num_nodes := 0;
@@ -49,18 +49,19 @@ divide :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, d
 // perft results are found here: https://www.chessprogramming.org/Perft_Results
 // more perft results: http://www.rocechess.ch/perft.html
 
-perft_start_pos :: () {
+perft_all :: () {
   pieces: Piece_Bitboards;
   whose_turn: bool;
   castling: Castling;
   ep: u64;
-
+/*
   setup_perft_run("startpos", 
                   20, 
                   400, 
                   8_902, 
                   197_281, 
-                  4_865_609);
+                  4_865_609,
+                  119_060_324);
   // position 1: initial position
   setup_perft_run(fen="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
                   20, 
@@ -73,7 +74,9 @@ perft_start_pos :: () {
   setup_perft_run(fen="r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -",
                   48,
                   2_039,
-                  97_862);
+                  97_862,
+                  4_085_603,
+                  193_690_690);
 
   // position 3: en paesant bugs
   setup_perft_run(fen="8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - -",
@@ -84,6 +87,46 @@ perft_start_pos :: () {
                   674_624,
                   11_030_083,
                   178_633_661);
+                  //8_031_647_685);  // <-- this takes way too long...
+
+  // position 4: castling
+  setup_perft_run("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1",
+                  6,
+                  264,
+                  9_467,
+                  422_333,
+                  15_833_292);
+
+  // position 4: castling (mirrored)
+  setup_perft_run("r2q1rk1/pP1p2pp/Q4n2/bbp1p3/Np6/1B3NBn/pPPP1PPP/R3K2R b KQ - 0 1",
+                  6,
+                  264,
+                  9_467,
+                  422_333,
+                  15_833_292);
+    
+  // position 5: TalkChess discussed. rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8  
+  setup_perft_run("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8",
+                  44,
+                  1_486,
+                  62_379,
+                  2_103_487,
+                  89_941_194);
+  // position 6: Steven Edwards weirdness
+  setup_perft_run("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10",
+                  46,
+                  2_079,
+                  89_890,
+                  3_894_594); */
+  // position 7: promotion bugs
+  setup_perft_run("n1n5/PPPk4/8/8/8/8/4Kppp/5N1N b - - 0 1",
+                  24,
+                  496,
+                  9_483,
+                  182_838,
+                  3_605_103);
+
+
   print("All perft tests complete!\n");
 
   setup_perft_run :: ($fen: string, expected: ..int) #expand {
@@ -101,7 +144,7 @@ perft_start_pos :: () {
   }
 
   perft_run :: (depth: int, expected: int) #expand {
-    if expected >= 5_000_000 {
+    if expected >= 250_000_000 {
       print("Skipping depth: %, too many nodes: %\n", depth, expected);
       return;
     }
@@ -114,11 +157,6 @@ perft_start_pos :: () {
       print("FAILED at the depth of: %, expected: %, nodes found: %, time taken: %\n", depth, expected, nodes, time_taken);
     }
   }
-
-  //fen_string :: "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1";
-  //fen_string :: "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8";
-  //fen_string :: "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10 ";
-  //piece_bitboard, whose_turn, flags, ep_sq = chess_start_from_fen(fen_string=fen_string);
 }
 
 // TODO: eventually, replace this with principled variation search..

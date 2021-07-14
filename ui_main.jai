@@ -85,9 +85,8 @@ main :: () {
   flags: Castling = Castling.All;
   ep_sq: u64 = 0;
    
-  piece_bitboard, whose_turn, flags, ep_sq = chess_start_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -"); 
-
-  //piece_bitboard, whose_turn, flags, ep_sq = chess_start_pos();
+  //piece_bitboard, whose_turn, flags, ep_sq = chess_start_from_fen("8/PPPk4/8/8/8/8/4Kppp/8 b - - 0 1");
+  piece_bitboard, whose_turn, flags, ep_sq = chess_start_pos();
 
   generate_legal_moves(*piece_bitboard, flags, ep_sq, *moves_arr, whose_turn);
   while !glfwWindowShouldClose(window) {

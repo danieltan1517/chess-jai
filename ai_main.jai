@@ -17,7 +17,7 @@ main :: () {
       print("readyok");
     case "ucinewgame";
     case "perft";
-      perft_start_pos();
+      perft_all();
 
     case "negamax";
       pieces := chess_start_pos();
@@ -29,13 +29,14 @@ main :: () {
 
     case;
       if begins_with(input, "perft ") {
-        pieces, whose_turn, castling, ep := chess_start_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -");
-        captured : PieceType;
+        pieces, whose_turn, castling, ep := chess_start_from_fen("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8");
+
+        /*captured : PieceType;
         make_move(*pieces, *castling, *ep, *captured, encode_move_bb(xx e1, xx d1, Move16.Quiet), whose_turn); 
         whose_turn = !whose_turn;
 
         make_move(*pieces, *castling, *ep, *captured, encode_move_bb(xx e8, xx c8, Move16.Queen_Castle), whose_turn); 
-        whose_turn = !whose_turn;
+        whose_turn = !whose_turn;*/
 
         depth, TF := string_to_int(advance(input, 6));
         if TF == false {
