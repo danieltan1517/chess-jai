@@ -2,15 +2,6 @@
 
 // performance test
 // walks the move generation tree of strictly legal moves to count all the leaf nodes
-
-// TODO: perft from startpos =
-// perft startpos 1 => 20
-// perft startpos 2 => 400
-// perft startpos 3 => 8_902
-// perft startpos 4 => 197_281
-// perft startpos 5 => 4_865_609
-// perft startpos 6 => 119_060_324
-
 perft :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, depth: int) -> int {
   if depth <= 0 then return 1;
   num_nodes := 0;
@@ -79,10 +70,10 @@ perft_start_pos :: () {
                   4_865_609);
 
   // position 2: kiwipete by peter mckenzie
-  setup_perft_run(fen="r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -",
+  /*setup_perft_run(fen="r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -",
                   48,
                   2_039,
-                  97_862);
+                  97_862);*/
 
   // position 3: en paesant bugs
   setup_perft_run(fen="8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - -",
@@ -112,7 +103,7 @@ perft_start_pos :: () {
     if nodes == expected {
       print("perft successful at the depth of: %, % nodes found, time taken: %.\n", depth, nodes, time_taken);
     } else {
-      print("FAILED at the depth of: %, expected: %, actual: %\n", depth, expected, nodes);
+      print("FAILED at the depth of: %, expected: %, nodes found: %, time taken: %\n", depth, expected, nodes, time_taken);
     }
   }
 

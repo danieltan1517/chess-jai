@@ -29,22 +29,14 @@ main :: () {
 
     case;
       if begins_with(input, "perft ") {
-        pieces := chess_start_pos();
-
-        c_copy  := Castling.All;
-        ep_copy := cast(u64) 0;
-        capture := PieceType.None;
-        make_move(*pieces, *c_copy, *ep_copy, *capture, encode_move_bb(xx d2, xx d4, Move16.Quiet), true);
-        make_move(*pieces, *c_copy, *ep_copy, *capture, encode_move_bb(xx e7, xx e6, Move16.Quiet), false);
-
-
+        pieces, whose_turn, castling, ep := chess_start_from_fen("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - -");
         depth, TF := string_to_int(advance(input, 6));
         if TF == false {
           print("Not a number. [%]\n", advance(input, 6));
           continue;
         }
         t := get_time();
-        nodes := divide(*pieces, c_copy, ep_copy, true, depth);
+        nodes := divide(*pieces, castling, ep, whose_turn, depth);
         t = get_time() - t;
         print("time taken: %\n", t);
         print("number of nodes from startpos = %, depth = %\n", nodes, depth);

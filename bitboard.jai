@@ -712,7 +712,11 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
   k_diag := diag_of(i);
   k_adia := adiag_of(i);
   // pawn checks
-  checks = checks | (white_pawn_captures(king) & opp_pawn);
+  if whose_turn {
+    checks = checks | (white_pawn_captures(king) & opp_pawn);
+  } else {
+    checks = checks | (black_pawn_captures(king) & opp_pawn);
+  }
 
   // knight checks
   checks = checks | (knight_moves(0, 0, king) & opp_knight);
