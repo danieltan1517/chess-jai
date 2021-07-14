@@ -101,10 +101,10 @@ perft_start_pos :: () {
   }
 
   perft_run :: (depth: int, expected: int) #expand {
-    /*if expected >= 5_000_000 {
+    if expected >= 5_000_000 {
       print("Skipping depth: %, too many nodes: %\n", depth, expected);
       return;
-    }*/
+    }
     time_taken := get_time();
     nodes := perft(*pieces, castling, ep, whose_turn, depth);
     time_taken = get_time() - time_taken;

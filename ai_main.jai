@@ -31,10 +31,10 @@ main :: () {
       if begins_with(input, "perft ") {
         pieces, whose_turn, castling, ep := chess_start_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -");
         captured : PieceType;
-        make_move(*pieces, *castling, *ep, *captured, encode_move_bb(xx e1, xx f1, Move16.Quiet), whose_turn); 
+        make_move(*pieces, *castling, *ep, *captured, encode_move_bb(xx e1, xx d1, Move16.Quiet), whose_turn); 
         whose_turn = !whose_turn;
 
-        make_move(*pieces, *castling, *ep, *captured, encode_move_bb(xx e8, xx d8, Move16.Quiet), whose_turn); 
+        make_move(*pieces, *castling, *ep, *captured, encode_move_bb(xx e8, xx c8, Move16.Queen_Castle), whose_turn); 
         whose_turn = !whose_turn;
 
         depth, TF := string_to_int(advance(input, 6));

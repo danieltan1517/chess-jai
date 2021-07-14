@@ -342,13 +342,6 @@ make_move :: (using pieces: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, cap
       w_pawn = w_pawn & ~from_bit;
       w_queen = w_queen | to_bit;
     }
-    if !(w_rook & cast(u64)a1) {
-      <<flags &= ~Castling.W_QS;
-    }
-
-    if !(w_rook & cast(u64)h1) {
-      <<flags &= ~Castling.W_KS;
-    }
   } else {
     if #complete type == {
     case Quiet;
@@ -396,18 +389,27 @@ make_move :: (using pieces: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, cap
       b_pawn = b_pawn & ~from_bit;
       b_queen = b_queen | to_bit;
     }
-    if !(b_rook & cast(u64)a8) {
-      <<flags &= ~Castling.B_QS;
-    }
+  }
+  if !(w_rook & cast(u64)a1) {
+    <<flags &= ~Castling.W_QS;
+  }
 
-    if !(b_rook & cast(u64)h8) {
-      <<flags &= ~Castling.B_KS;
-    }
+  if !(w_rook & cast(u64)h1) {
+    <<flags &= ~Castling.W_KS;
+  }
+
+  if !(b_rook & cast(u64)a8) {
+    <<flags &= ~Castling.B_QS;
+  }
+
+  if !(b_rook & cast(u64)h8) {
+    <<flags &= ~Castling.B_KS;
   }
 
   white_piece_move :: () #expand {
     if w_king & from_bit {
       w_king = (w_king & ~from_bit) | to_bit;
+      <<flags &= ~(Castling.W_KS | Castling.W_QS);
       return;
     }
     if w_queen & from_bit {
@@ -436,6 +438,7 @@ make_move :: (using pieces: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, cap
   black_piece_move :: () #expand {
     if b_king & from_bit {
       b_king = (b_king & ~from_bit) | to_bit;
+      <<flags &= ~(Castling.B_KS | Castling.B_QS);
       return;
     }
     if b_queen & from_bit {
