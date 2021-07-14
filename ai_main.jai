@@ -42,7 +42,6 @@ main :: () {
  
       // TODO: fen parsing may not work correctly against malicious inputs
       fen_string := ifx found then slice(input, 0, index) else input;
-      print("Debug: FEN=[%]\n", fen_string);
       pieces, whose_turn, castling, ep = chess_start_from_fen(fen_string);
 
       if found {

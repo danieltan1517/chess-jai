@@ -150,7 +150,7 @@ handle_command_line :: () -> string #expand {
         // This is not good error checking... could crash the program
         if cpu_string.count != 0 {
           engine_name = cpu_string;
-          print(engine_name);
+          print("Engine Name: %\n", engine_name);
         } else {
           print("Invalid ai choice\n");
         }
@@ -948,7 +948,7 @@ __edge_case_count := 0;
 
 
 __engine_name : string;  // name of engine. exists for aesthetic purposes
-__engine_depth_parameter : int = 15; // depth of engine search.
+__engine_depth_parameter : int = 3; // depth of engine search.
 
 
 
