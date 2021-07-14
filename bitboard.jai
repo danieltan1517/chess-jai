@@ -152,6 +152,8 @@ chess_start_from_fen :: (fen_string: string) -> Piece_Bitboards, whose_turn: boo
       tok[n] = slice(fen_string, start, i-start);
       start = i + 1;
       n += 1;
+      if n == 5 then
+        break;
     }
   }
   tok[n] = slice(fen_string, start, fen_string.count-start);

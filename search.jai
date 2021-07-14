@@ -54,7 +54,6 @@ perft_all :: () {
   whose_turn: bool;
   castling: Castling;
   ep: u64;
-/*
   setup_perft_run("startpos", 
                   20, 
                   400, 
@@ -112,12 +111,14 @@ perft_all :: () {
                   62_379,
                   2_103_487,
                   89_941_194);
+
   // position 6: Steven Edwards weirdness
   setup_perft_run("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10",
                   46,
                   2_079,
                   89_890,
-                  3_894_594); */
+                  3_894_594);
+
   // position 7: promotion bugs
   setup_perft_run("n1n5/PPPk4/8/8/8/8/4Kppp/5N1N b - - 0 1",
                   24,

@@ -108,7 +108,6 @@ main :: () {
     if w_human_turn() || b_human_turn() {
       handle_board_click(xx width, xx height, *piece_bitboard, *flags, *ep_sq, *moves_arr, white_side=white_side);
     }
-    ep_sq_GLOBAL = ep_sq;
     draw_chess(xx width, xx height, *piece_bitboard, t, highlight_the_square, possible_moves_bb, last_move_bb, white_side);
     im_flush();
 
@@ -118,9 +117,6 @@ main :: () {
     reset_temporary_storage();
   }
 }
-
-ep_sq_GLOBAL : u64 = 0;
-
 
 handle_command_line :: () -> string #expand {
   // TODO: 
@@ -199,8 +195,7 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
 
   draw_bitboard(last_move_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, YELLOW);
   draw_bitboard(check_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, RED);
-  draw_bitboard(possible_moves_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, RED);
-  draw_bitboard(ep_sq_GLOBAL, u0=0.0, v0=0.0, u1=1.0, v1=1.0, RED);
+  draw_bitboard(possible_moves_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, GREY);
 
   im_set_texture(texture);
 
