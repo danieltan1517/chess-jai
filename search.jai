@@ -30,7 +30,7 @@ perft :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, de
   return num_nodes;
 }
 
-perft_begin :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, depth: int) -> int {
+divide :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, depth: int) -> int {
   if depth <= 0 then return 1;
   num_nodes := 0;
   moves_array: [..] Move16;
@@ -54,6 +54,9 @@ perft_begin :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bo
   }
   return num_nodes;
 }
+
+// perft results are found here: https://www.chessprogramming.org/Perft_Results
+// more perft results: http://www.rocechess.ch/perft.html
 
 perft_start_pos :: () {
   pieces: Piece_Bitboards;
@@ -103,9 +106,11 @@ perft_start_pos :: () {
   }
 
   perft_run :: (depth: int, expected: int) #expand {
+    time_taken := get_time();
     nodes := perft(*pieces, castling, ep, whose_turn, depth);
+    time_taken = get_time() - time_taken;
     if nodes == expected {
-      print("perft successful at the depth of: %, % nodes found.\n", depth, nodes);
+      print("perft successful at the depth of: %, % nodes found, time taken: %.\n", depth, nodes, time_taken);
     } else {
       print("FAILED at the depth of: %, expected: %, actual: %\n", depth, expected, nodes);
     }

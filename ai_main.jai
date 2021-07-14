@@ -44,7 +44,7 @@ main :: () {
           continue;
         }
         t := get_time();
-        nodes := perft_begin(*pieces, c_copy, ep_copy, true, depth);
+        nodes := divide(*pieces, c_copy, ep_copy, true, depth);
         t = get_time() - t;
         print("time taken: %\n", t);
         print("number of nodes from startpos = %, depth = %\n", nodes, depth);
