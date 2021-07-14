@@ -1,6 +1,4 @@
 // for NNUE resources: https://hxim.github.io/Stockfish-Evaluation-Guide/
-#load "asm.jai";
-#load "bitboard.jai";
 
 nnue_init :: () {
   __nnue_init(eval_file=eval_file);
