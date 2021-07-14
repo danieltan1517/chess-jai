@@ -185,7 +185,6 @@ chess_start_from_fen :: (fen_string: string) -> Piece_Bitboards, whose_turn: boo
     whose_turn = true;
   case "b";
     whose_turn = false;
-    print("whose_turn = %\n", whose_turn);
   case;
     assert(false, "Parse error.\n");
   }
@@ -885,7 +884,10 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     if whose_turn {
       ep_bb : u64 = ep_sq << 8;
       white_caps : u64 = white_pawn_captures(from_bb);
-      en_paesant_bb = white_caps & ep_bb & check_sqs;
+
+      if check_sqs & ep_sq {
+        en_paesant_bb = white_caps & ep_bb;
+      }
       opp_qr := (opp_queen | opp_rook) & (xx rank_5);
       if en_paesant_bb {
         // handle ugly corner case for en paesant pin...
@@ -912,7 +914,9 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     } else {
       ep_bb : u64 = ep_sq >> 8;
       black_caps : u64 = black_pawn_captures(from_bb);
-      en_paesant_bb = black_caps & ep_bb & check_sqs;
+      if check_sqs & ep_sq {
+        en_paesant_bb = black_caps & ep_bb;
+      }
       opp_qr := (opp_queen | opp_rook) & (xx rank_4);
       if en_paesant_bb {
         // handle ugly corner case for en paesant pin...

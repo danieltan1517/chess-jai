@@ -30,6 +30,18 @@ main :: () {
     case;
       if begins_with(input, "perft ") {
         pieces, whose_turn, castling, ep := chess_start_from_fen("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - -");
+        captured : PieceType;
+
+        make_move(*pieces, *castling, *ep, *captured, encode_move_bb(xx b4, xx b1, Move16.Quiet), whose_turn); 
+        whose_turn = !whose_turn;
+
+
+        make_move(*pieces, *castling, *ep, *captured, encode_move_bb(xx f4, xx f3, Move16.Quiet), whose_turn); 
+        whose_turn = !whose_turn;
+
+        make_move(*pieces, *castling, *ep, *captured, encode_move_bb(xx a5, xx b4, Move16.Quiet), whose_turn); 
+        whose_turn = !whose_turn;
+
         depth, TF := string_to_int(advance(input, 6));
         if TF == false {
           print("Not a number. [%]\n", advance(input, 6));

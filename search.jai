@@ -70,17 +70,18 @@ perft_start_pos :: () {
                   4_865_609);
 
   // position 2: kiwipete by peter mckenzie
-  /*setup_perft_run(fen="r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -",
+  setup_perft_run(fen="r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -",
                   48,
                   2_039,
-                  97_862);*/
+                  97_862);
 
   // position 3: en paesant bugs
   setup_perft_run(fen="8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - -",
                   14,
                   191,
                   2_812,
-                  43_238);
+                  43_238,
+                  674_624);
 
   setup_perft_run :: ($fen: string, expected: ..int) #expand {
     print("Testing FEN=[%]\n", fen);
