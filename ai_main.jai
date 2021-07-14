@@ -25,7 +25,7 @@ main :: () {
       setup_position(input);
 
     } else if begins_with(input, "go ") {
-
+      go_command(input);
     }
   }
 
@@ -77,11 +77,38 @@ main :: () {
       x2 := cast(int)(token[1] - #char "1");
       y1 := cast(int)(token[2] - #char "a");
       y2 := cast(int)(token[3] - #char "1");
-      move := Move16.Quiet;
       from : u64 = cast(u64) (1 << (x2*8 + x1));
       to   : u64 = cast(u64) (1 << (y2*8 + y1));
 
-      print("%1%2\n", cast(bboard)from, cast(bboard)to);
+      promote := ifx token.count == 5 then token[4] else 0;
+      move_type := get_move_type(pieces, ep, from, to, promote, whose_turn);
+      move := encode_move_bb(from, to, move_type);
+      captured: PieceType;
+      make_move(*pieces, *castling, *ep, *captured, move, whose_turn);
+      whose_turn = !whose_turn;
+    }
+  }
+
+  go_command :: (input: string) #expand {
+    input = advance(input, 3);
+    stuff := parse_token(*input);
+    if equal(stuff, "depth") {
+      depth := parse_int(*input);
+      mov, eval := negamax(*pieces, castling, ep, depth, whose_turn);
+      flags, from, to := decode_move(mov);
+
+      // hopefully promote the piece functions correctly...
+      if flags == Move16.Knight_Promotion || flags == Move16.Knight_Promotion_Capture {
+        print("bestmove %1%2n\n", cast(serialized_bb) from, cast(serialized_bb) to);
+      } else if flags == Move16.Bishop_Promotion || flags == Move16.Bishop_Promotion_Capture {
+        print("bestmove %1%2b\n", cast(serialized_bb) from, cast(serialized_bb) to);
+      } else if flags == Move16.Rook_Promotion || flags == Move16.Rook_Promotion_Capture {
+        print("bestmove %1%2r\n", cast(serialized_bb) from, cast(serialized_bb) to);
+      } else if flags == Move16.Queen_Promotion || flags == Move16.Queen_Promotion_Capture {
+        print("bestmove %1%2q\n", cast(serialized_bb) from, cast(serialized_bb) to);
+      } else {
+        print("bestmove %1%2\n", cast(serialized_bb) from, cast(serialized_bb) to);
+      }
     }
   }
 }
@@ -94,9 +121,6 @@ id name Ai-Chess
 id author Daniel Tan
 DONE;
 
-
-
-
 // TODO: does this actually do getline, or can
 // it return "aaaa\nbbbb"?
 getline :: () -> string {
@@ -106,4 +130,138 @@ getline :: () -> string {
 }
 
 __buffer: [16384] u8;
+
+// TODO: this assumes the moves are valid
+get_move_type :: (using pieces: Piece_Bitboards, en_paesant: u64, from: u64, to: u64, promote: int, whose_turn: bool)->Move16 {
+  w_pieces := get_white_pieces(pieces);
+  b_pieces := get_black_pieces(pieces);
+  if whose_turn {
+
+    // pawn move
+    if from & w_pawn {
+      if promote != 0 {
+        // promotion.
+        if to & b_pieces {
+          if promote == {
+          case #char "q";
+            return Move16.Queen_Promotion_Capture;
+          case #char "r";
+            return Move16.Rook_Promotion_Capture;
+          case #char "b";
+            return Move16.Bishop_Promotion_Capture;
+          case #char "n";
+            return Move16.Knight_Promotion_Capture;
+          case;
+            assert(false);
+          }
+        } else {
+          if promote == {
+          case #char "q";
+            return Move16.Queen_Promotion;
+          case #char "r";
+            return Move16.Rook_Promotion;
+          case #char "b";
+            return Move16.Bishop_Promotion;
+          case #char "n";
+            return Move16.Knight_Promotion;
+          case;
+            assert(false);
+          }
+        }
+      } else {
+        if to & b_pieces {
+          return Move16.Capture;
+        } else if to & (en_paesant << 8) {
+          return Move16.Ep_Capture;
+        } else if (from & xx rank_2) && (to & xx rank_4) {
+          return Move16.Double_Pawn_Push;
+        } else {
+          return Move16.Quiet;
+        }
+      }
+    } else if w_king & from {
+      if (from & cast(u64)e1) && (to & cast(u64)g1) {
+        return Move16.King_Castle;
+      } else if (from & cast(u64)e1) && (to & cast(u64)c1) {
+        return Move16.Queen_Castle;
+      } else if b_pieces & to {
+        return Move16.Capture;
+      } else {
+        return Move16.Quiet;
+      }
+    } else if b_pieces & to {
+      return Move16.Capture;
+    } else {
+      return Move16.Quiet;
+    }
+
+
+  } else {
+
+    // pawn move
+    if from & b_pawn {
+      if promote != 0 {
+        // promotion.
+        if to & w_pieces {
+          if promote == {
+          case #char "q";
+            return Move16.Queen_Promotion_Capture;
+          case #char "r";
+            return Move16.Rook_Promotion_Capture;
+          case #char "b";
+            return Move16.Bishop_Promotion_Capture;
+          case #char "n";
+            return Move16.Knight_Promotion_Capture;
+          case;
+            assert(false);
+          }
+        } else {
+          if promote == {
+          case #char "q";
+            return Move16.Queen_Promotion;
+          case #char "r";
+            return Move16.Rook_Promotion;
+          case #char "b";
+            return Move16.Bishop_Promotion;
+          case #char "n";
+            return Move16.Knight_Promotion;
+          case;
+            assert(false);
+          }
+        }
+      } else {
+        if to & w_pieces {
+          return Move16.Capture;
+        } else if to & (en_paesant >> 8) {
+          return Move16.Ep_Capture;
+        } else if (from & xx rank_7) && (to & xx rank_5) {
+          return Move16.Double_Pawn_Push;
+        } else {
+          return Move16.Quiet;
+        }
+      }
+    } else if b_king & from {
+      if (from & cast(u64)e8) && (to & cast(u64)g8) {
+        return Move16.King_Castle;
+      } else if (from & cast(u64)e8) && (to & cast(u64)c8) {
+        return Move16.Queen_Castle;
+      } else if w_pieces & to {
+        return Move16.Capture;
+      } else {
+        return Move16.Quiet;
+      }
+    } else if w_pieces & to {
+      return Move16.Capture;
+    } else {
+      return Move16.Quiet;
+    }
+  }
+
+  return Move16.Quiet;
+}
+
+
+
+
+
 
