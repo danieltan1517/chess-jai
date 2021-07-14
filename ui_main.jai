@@ -84,12 +84,10 @@ main :: () {
   array_reserve(*move_record, 200); // records the game down. I use this struct to backtrack and undo moves
   flags: Castling = Castling.All;
   ep_sq: u64 = 0;
-                                                                  
-  //piece_bitboard, whose_turn, flags, ep_sq = chess_start_from_fen(  "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - -");
+   
+  piece_bitboard, whose_turn, flags, ep_sq = chess_start_from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -"); 
 
-  //piece_bitboard, whose_turn, flags, ep_sq = chess_start_from_fen(  "2r3k1/1q1nbppp/r3p3/3pP3/pPpP4/P1Q2N2/2RN1PPP/2R4K b - b3 0 23");
-
-  piece_bitboard, whose_turn, flags, ep_sq = chess_start_pos();
+  //piece_bitboard, whose_turn, flags, ep_sq = chess_start_pos();
 
   generate_legal_moves(*piece_bitboard, flags, ep_sq, *moves_arr, whose_turn);
   while !glfwWindowShouldClose(window) {

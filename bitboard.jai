@@ -821,16 +821,16 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     safe_sqs := ~attacks;
     not_occu := ~occupied;
     if whose_turn {
-      handle_castling(Castling.W_KS, cast(u64) (f1|g1), cast(u64)e1, cast(u64)g1, Move16.King_Castle);
-      handle_castling(Castling.W_QS, cast(u64) (c1|d1), cast(u64)e1, cast(u64)c1, Move16.Queen_Castle);
+      handle_castling(Castling.W_KS, cast(u64) (f1|g1), cast(u64)(f1|g1), 2, cast(u64)e1, cast(u64)g1, Move16.King_Castle);
+      handle_castling(Castling.W_QS, cast(u64) (c1|d1), cast(u64)(b1|c1|d1), 3, cast(u64)e1, cast(u64)c1, Move16.Queen_Castle);
     } else {
-      handle_castling(Castling.B_KS, cast(u64) (f8|g8), cast(u64)e8, cast(u64)g8, Move16.King_Castle);
-      handle_castling(Castling.B_QS, cast(u64) (c8|d8), cast(u64)e8, cast(u64)c8, Move16.Queen_Castle);
+      handle_castling(Castling.B_KS, cast(u64) (f8|g8), cast(u64)(f8|g8), 2, cast(u64)e8, cast(u64)g8, Move16.King_Castle);
+      handle_castling(Castling.B_QS, cast(u64) (c8|d8), cast(u64)(b8|c8|d8), 3, cast(u64)e8, cast(u64)c8, Move16.Queen_Castle);
     }
 
-    handle_castling :: ($F: Castling, $castle_sqs: u64, $from: u64, $to: u64, $flags: Move16) #expand {
+    handle_castling :: ($F: Castling, $castle_sqs: u64, $check_occ: u64, $occ_num: int, $from: u64, $to: u64, $flags: Move16) #expand {
       if c_flags & F {
-        if popcount(safe_sqs & not_occu & castle_sqs) == 2 {
+        if popcount(safe_sqs & castle_sqs) == 2 && popcount(not_occu & check_occ) == occ_num {
           array_add(moves_arr, encode_move_bb(from, to, flags));
         }
       }

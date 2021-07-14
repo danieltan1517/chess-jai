@@ -81,7 +81,10 @@ perft_start_pos :: () {
                   191,
                   2_812,
                   43_238,
-                  674_624);
+                  674_624,
+                  11_030_083,
+                  178_633_661);
+  print("All perft tests complete!\n");
 
   setup_perft_run :: ($fen: string, expected: ..int) #expand {
     print("Testing FEN=[%]\n", fen);
@@ -98,6 +101,10 @@ perft_start_pos :: () {
   }
 
   perft_run :: (depth: int, expected: int) #expand {
+    /*if expected >= 5_000_000 {
+      print("Skipping depth: %, too many nodes: %\n", depth, expected);
+      return;
+    }*/
     time_taken := get_time();
     nodes := perft(*pieces, castling, ep, whose_turn, depth);
     time_taken = get_time() - time_taken;
