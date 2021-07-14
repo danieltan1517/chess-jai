@@ -13,3 +13,4 @@ ai-jai-chess
 ai
 *.nnue
 nnue-probe/
+eval
