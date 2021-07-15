@@ -5,11 +5,11 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, wh
   array_reserve(*move_array, 40);
   defer array_free(move_array);
   check := generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
-  if check == 0 && move_array.count == 0 then {   // stalemate
-    return Move16.Quiet, 0.0;
+  if move_array.count == 0 then {   // stalemate
+    return Move16.Quiet, ifx check != 0 then FLOAT32_INFINITY else 0.0;
   }
 
-  color := ifx whose_turn 1.0 else -1.0;
+  color := ifx whose_turn then 1.0 else -1.0;
   best_move, best_eval_value := Move16.Quiet, -FLOAT32_INFINITY;
   for move: move_array {
     c_copy  := castling;
@@ -28,6 +28,8 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, wh
 }
 
 // TODO: eventually, replace this with principled variation search..
+// WTF???? the ai keeps purposefully walking into checkmate...
+// this somehow plugs up all the bugs, but ... I dunno...
 negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, alpha := -FLOAT32_INFINITY, beta := FLOAT32_INFINITY) -> float {
   if depth == 0 then {
     color := ifx whose_turn 1.0 else -1.0;
@@ -38,8 +40,8 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   array_reserve(*move_array, 40);
   defer array_free(move_array);
   check := generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
-  if check == 0 && move_array.count == 0 then {// stalemate
-    return 0.0;
+  if move_array.count == 0 then {// stalemate
+    return ifx check != 0 then FLOAT32_INFINITY else 0.0;
   }
 
   best_eval := -FLOAT32_INFINITY;
@@ -86,9 +88,9 @@ quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn:
     score := -quiescene(pieces, c_copy, ep_copy, !whose_turn, -beta, -alpha);
     unmake_move(pieces, capture, cap_move, whose_turn);
 
-    if score >= beta
+    if score >= beta then
       return beta;
-    if score > alpha
+    if score > alpha then
       alpha = score;
   }
 
