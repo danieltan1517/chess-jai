@@ -1,5 +1,44 @@
 #import "Math";
 
+// TODO: eventually, replace this with principled variation search..
+negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, alpha := -FLOAT32_INFINITY, beta := FLOAT32_INFINITY) -> Move16, float {
+
+  if depth <= 0 then {
+    color := ifx whose_turn 1.0 else -1.0;
+    eval := nnue_evaluate(pieces, whose_turn) * color;
+    return Move16.Quiet, eval;
+  }
+
+  move_array: [..] Move16;
+  generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
+
+  best_move, best_eval_value := Move16.Quiet, -FLOAT32_INFINITY;
+  for move : move_array {
+    c_copy  := castling;
+    ep_copy := ep;
+    capture := PieceType.None;
+    make_move(pieces, *c_copy, *ep_copy, *capture, move, whose_turn);
+    _, negamax_eval := negamax(pieces, c_copy, ep_copy, depth-1, whose_turn=!whose_turn, alpha=-beta, beta=-alpha);
+    negamax_eval = -negamax_eval;
+
+    if negamax_eval >= best_eval_value {
+      best_move  = move;
+      best_eval_value = negamax_eval;
+    }
+    unmake_move(pieces, capture, move, whose_turn);
+
+    alpha = max(alpha, best_eval_value);
+    if alpha >= beta then {
+      break; 
+    }
+  }
+
+  return best_move, best_eval_value;
+}
+
+
+
+
 // performance test
 // walks the move generation tree of strictly legal moves to count the leaf nodes
 perft :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, depth: int) -> int {
@@ -160,39 +199,4 @@ perft_all :: () {
   }
 }
 
-// TODO: eventually, replace this with principled variation search..
-negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, alpha := -FLOAT32_INFINITY, beta := FLOAT32_INFINITY) -> Move16, float {
-
-  if depth <= 0 then {
-    color := ifx whose_turn 1.0 else -1.0;
-    eval := nnue_evaluate(pieces, whose_turn) * color;
-    return Move16.Quiet, eval;
-  }
-
-  move_array: [..] Move16;
-  generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
-
-  best_move, best_eval_value := Move16.Quiet, -FLOAT32_INFINITY;
-  for move : move_array {
-    c_copy  := castling;
-    ep_copy := ep;
-    capture := PieceType.None;
-    make_move(pieces, *c_copy, *ep_copy, *capture, move, whose_turn);
-    _, negamax_eval := negamax(pieces, c_copy, ep_copy, depth-1, whose_turn=!whose_turn, alpha=-beta, beta=-alpha);
-    negamax_eval = -negamax_eval;
-
-    if negamax_eval >= best_eval_value {
-      best_move  = move;
-      best_eval_value = negamax_eval;
-    }
-    unmake_move(pieces, capture, move, whose_turn);
-
-    alpha = max(alpha, best_eval_value);
-    if alpha >= beta then {
-      break; 
-    }
-  }
-
-  return best_move, best_eval_value;
-}
 

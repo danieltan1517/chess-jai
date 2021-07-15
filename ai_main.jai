@@ -25,6 +25,8 @@ main :: () {
       setup_position(input);
 
     } else if begins_with(input, "go ") {
+      eval := nnue_evaluate(*pieces, whose_turn);
+      print("NNUE eval pos = %\n", eval);
       go_command(input);
     }
   }

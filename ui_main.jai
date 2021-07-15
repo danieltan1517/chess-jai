@@ -780,7 +780,6 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
         assert(TF);
         uci_state = .UCI_IDLE;
         actual_move := find_move(<<moves_arr, from, to, type);
-        print("%, %, %\n", cast(serialized_bb)from , cast(serialized_bb)to , type);
         if actual_move {
           ui_handle_move_made(piece_bitboard, flags, ep_sq, moves_arr, actual_move);
           last_move_bb = from|to;

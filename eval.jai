@@ -44,7 +44,7 @@ nnue_evaluate :: (using p: *Piece_Bitboards, whose_turn: bool) -> float {
     eval = __nnue_evaluate(player=1, pieces.data, squares.data);
   }
 
-  return cast(float)(eval) * 0.01;
+  return xx eval;
 
   translate_bitboard :: (bb: u64, piece_type: s32) #expand {
     while bb {
