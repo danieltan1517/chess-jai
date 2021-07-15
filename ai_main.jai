@@ -91,9 +91,11 @@ main :: () {
 
   go_command :: (input: string) #expand {
     input = advance(input, 3);
-    stuff := parse_token(*input);
-    if equal(stuff, "depth") {
-      depth := parse_int(*input);
+    token := parse_token(*input);
+    if token == {
+    case "depth";
+      depth, TF := parse_int(*input);
+      if !TF return;
       mov, eval := search(*pieces, castling, ep, depth, whose_turn);
 
       flags, from, to := decode_move(mov);
@@ -110,6 +112,11 @@ main :: () {
       } else {
         print("bestmove %1%2\n", cast(serialized_bb) from, cast(serialized_bb) to);
       }
+
+    case "perft";
+      depth, TF := parse_int(*input);
+      if !TF return;
+      perft_divide(*pieces, castling, ep, whose_turn, depth);
     }
   }
 }

@@ -168,6 +168,31 @@ perft_all :: () {
   }
 }
 
+perft_divide :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, depth: int) -> int {
+  if depth <= 0 then return 1;
+  num_nodes := 0;
+  moves_array: [..] Move16;
+  array_reserve(*moves_array, 40);
+  defer { array_free(moves_array); }
+
+  generate_legal_moves(p, castling, ep, *moves_array, whose_turn);
+  print("legal moves from here: %\n", moves_array.count);
+  for move : moves_array {
+    c_copy  := castling;
+    ep_copy := ep;
+    capture := PieceType.None;
+    make_move(p, *c_copy, *ep_copy, *capture, move, whose_turn);
+    add := perft(p, c_copy, ep_copy, !whose_turn, depth-1);
+
+    type, from, to := decode_move(move);
+    print("%1%2: %3 nodes\n", cast(serialized_bb)from, cast(serialized_bb)to, add);
+
+    num_nodes = num_nodes + add;
+    unmake_move(p, capture, move, whose_turn);
+  }
+  return num_nodes;
+}
+
 #scope_file
 // see: https://www.chessprogramming.org/Quiescence_Search
 quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, alpha: float, beta: float) -> float {
@@ -183,6 +208,7 @@ quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn:
   defer array_free(move_array);
   generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
   filter_captures(move_array);
+  move_ordering(pieces, move_array, whose_turn);
 
   // search captures only
   for cap_move: move_array {
@@ -236,31 +262,6 @@ perft :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, de
   return num_nodes;
 }
 
-divide :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, depth: int) -> int {
-  if depth <= 0 then return 1;
-  num_nodes := 0;
-  moves_array: [..] Move16;
-  array_reserve(*moves_array, 40);
-  defer { array_free(moves_array); }
-
-  generate_legal_moves(p, castling, ep, *moves_array, whose_turn);
-  print("legal moves from here: %\n", moves_array.count);
-  for move : moves_array {
-    c_copy  := castling;
-    ep_copy := ep;
-    capture := PieceType.None;
-    make_move(p, *c_copy, *ep_copy, *capture, move, whose_turn);
-    add := perft(p, c_copy, ep_copy, !whose_turn, depth-1);
-
-    type, from, to := decode_move(move);
-    print("%1%2: %3 nodes\n", cast(serialized_bb)from, cast(serialized_bb)to, add);
-
-    num_nodes = num_nodes + add;
-    unmake_move(p, capture, move, whose_turn);
-  }
-  return num_nodes;
-}
-
 move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn: bool) {
   // TODO: I don't know if some other function wants to use temporary storage.
   count := move_array.count;
@@ -268,16 +269,32 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
   defer reset_temporary_storage();
 
   for i: 0..count-1 {
-    flags, from, to := decode_move(move_array[i]);
-    using Move16;
-    if flags == Capture || flags == Ep_Capture {
-      order[i] = 1000.0;
-    }
-    if Knight_Promotion_Capture <= flags && flags <= Queen_Promotion_Capture {
-      order[i] = 1000.0;
-    }
+    flags, from_index, to_index := decode_move(move_array[i]);
+    from := cast(u64) (1 << from_index);
+    to   := cast(u64) (1 << to_index);
 
-    //nnue_evaluate(pieces, whose_turn);    ///random_get_within_range(-1500.0, 1500.0);
+    piece_to_type := piece_type_at(to, pieces, !whose_turn);
+
+    using Move16;
+    if flags == Capture {
+      piece_from_type := piece_type_at(from, pieces, whose_turn);
+      order[i] = mvv_lva(piece_to_type, piece_from_type);
+
+    } else if flags == Ep_Capture {
+      order[i] = mvv_lva(piece_to_type, PieceType.Pawn);
+
+    } else if flags == Knight_Promotion_Capture {
+      order[i] = mvv_lva(piece_to_type, PieceType.Pawn);
+
+    } else if flags == Bishop_Promotion_Capture {
+      order[i] = mvv_lva(piece_to_type, PieceType.Pawn);
+
+    } else if flags == Rook_Promotion_Capture {
+      order[i] = mvv_lva(piece_to_type, PieceType.Pawn);
+
+    } else if flags == Queen_Promotion_Capture {
+      order[i] = mvv_lva(piece_to_type, PieceType.Pawn);
+    }
   }
 
   // bubble sort the items from highest to lowest.
@@ -295,6 +312,54 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       break;
   }
 
+  // most valuable victim, least valuable attacker.
+  // see: https://www.chessprogramming.org/MVV-LVA
+  mvv_lva :: (victim: PieceType, attacker: PieceType) -> score: float {
+    vs := piece_score(victim);
+    as := piece_score(attacker);
+
+    return vs + 10.0 - (as * 0.015);
+
+    piece_score :: (using p: PieceType) -> score: float {
+      if p == {
+      case King;   return 1050.0;
+      case Queen;  return 900.0;
+      case Rook;   return 500.0;
+      case Bishop; return 350.0;
+      case Knight; return 325.0;
+      case Pawn;   return  90.0;
+      case;        return 0.0;
+      }
+    }
+  }
+
+  piece_type_at :: (bit: u64, using p: *Piece_Bitboards, whose_turn: bool) -> PieceType {
+    if whose_turn {
+      return search_pieces(bit, w_king, w_queen, w_rook, w_bishop, w_knight, w_pawn);
+    } else {
+      return search_pieces(bit, b_king, b_queen, b_rook, b_bishop, b_knight, b_pawn);
+    }
+
+    search_pieces :: (bit: u64, king: u64, queen: u64, rook: u64, bishop: u64, knight: u64, pawn: u64) -> PieceType {
+      using PieceType;
+      if bit & pawn {
+        return Pawn;
+      } else if bit & knight {
+        return Knight;
+      } else if bit & bishop {
+        return Bishop;
+      } else if bit & rook {
+        return Rook;
+      } else if bit & queen {
+        return Queen;
+      } else if bit & king {
+        return King;
+      } else {
+        return None;
+      }
+    }    
+  }
+
   // for sorting
   swap :: (a: Code, b: Code) #expand {
     t := (#insert a);
@@ -304,10 +369,5 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
 }
 
 __nodes_searched := 0;
-
-
-
-
-
 
 
