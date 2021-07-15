@@ -31,6 +31,10 @@ Here are the keyboard controls:
 -------------------------------
 END
 
+fen_string := "startpos";
+//"r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1";
+//"8/PPPk4/8/8/8/8/4Kppp/8 b - - 0 1";
+
 main :: () {
   white_side := true;
   engine_name := handle_command_line();
@@ -84,11 +88,14 @@ main :: () {
   array_reserve(*move_record, 200); // records the game down. I use this struct to backtrack and undo moves
   flags: Castling = Castling.All;
   ep_sq: u64 = 0;
-   
-  //piece_bitboard, whose_turn, flags, ep_sq = chess_start_from_fen("8/PPPk4/8/8/8/8/4Kppp/8 b - - 0 1");
-  piece_bitboard, whose_turn, flags, ep_sq = chess_start_pos();
-
+  
+  if equal(fen_string, "startpos") {
+    piece_bitboard, whose_turn, flags, ep_sq = chess_start_pos();
+  } else {
+    piece_bitboard, whose_turn, flags, ep_sq = chess_start_from_fen(fen_string);
+  }
   generate_legal_moves(*piece_bitboard, flags, ep_sq, *moves_arr, whose_turn);
+
   while !glfwWindowShouldClose(window) {
     read_mouse_input(window);
     width, height : s32;
@@ -150,13 +157,14 @@ handle_command_line :: () -> string #expand {
         // This is not good error checking... could crash the program
         if cpu_string.count != 0 {
           engine_name = cpu_string;
-          print("Engine Name: %\n", engine_name);
         } else {
           print("Invalid ai choice\n");
         }
       } else if begins_with(arg, "depth=") {
         __engine_depth_parameter = string_to_int(advance(arg, 6));
-
+      } else if begins_with(arg, "fen=") {
+        fen := advance(arg, 4);
+        fen_string = fen; // TODO: hacky way of putting fen strings into the ui, figure out a better way.
       }
     }
   }
@@ -666,8 +674,12 @@ Board_States :: struct {
 uci_position_command :: () -> string {
   builder: String_Builder;
   builder.allocator = __temporary_allocator;
+  if equal(fen_string, "startpos") {
+    print_to_builder(*builder, "position % moves ", fen_string);
+  } else {
+    print_to_builder(*builder, "position fen % moves ", fen_string);
+  }
 
-  print_to_builder(*builder, "position startpos moves ");
   for move: move_record {
     type, from, to := decode_move(move.move);
     if move_is_promotion(type) {
@@ -768,6 +780,7 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
         assert(TF);
         uci_state = .UCI_IDLE;
         actual_move := find_move(<<moves_arr, from, to, type);
+        print("%, %, %\n", cast(serialized_bb)from , cast(serialized_bb)to , type);
         if actual_move {
           ui_handle_move_made(piece_bitboard, flags, ep_sq, moves_arr, actual_move);
           last_move_bb = from|to;
@@ -796,9 +809,8 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
     move := Move16.Quiet;
     from : u64 = cast(u64) (1 << (b*8 + a));
     to   : u64 = cast(u64) (1 << (d*8 + c));
-
     // if move is a promotion
-    if move_sq_string.count >= 5 {
+    if move_sq_string.count >= 5 && move_sq_string[4] != #char " " {
       character := to_lower(move_sq_string[4]);
       if character == #char "q" {
         move = Move16.Queen_Promotion;
@@ -810,6 +822,7 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
         move = Move16.Knight_Promotion;
       }
     }
+
     return true, from, to, move;
   }
 }
