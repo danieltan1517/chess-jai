@@ -41,12 +41,6 @@ nnue_evaluate :: (using p: *Piece_Bitboards, whose_turn: bool) -> float {
       bb &= bb - 1;
     }
   }
-
-  swap :: (a: Code, b: Code) #expand {
-    t := (#insert a);
-    (#insert a) = (#insert b);
-    (#insert b) = t;
-  }
 }
 
 #scope_file
