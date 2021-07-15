@@ -1,48 +1,116 @@
 #import "Math";
 
-// TODO: eventually, replace this with principled variation search..
-negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, alpha := -FLOAT32_INFINITY, beta := FLOAT32_INFINITY) -> Move16, float {
-
-  if depth <= 0 then {
-    color := ifx whose_turn 1.0 else -1.0;
-    eval := nnue_evaluate(pieces, whose_turn) * color;
-    return Move16.Quiet, eval;
+search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool) -> Move16, float {
+  move_array: [..] Move16;
+  array_reserve(*move_array, 40);
+  defer array_free(move_array);
+  check := generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
+  if check == 0 && move_array.count == 0 then {   // stalemate
+    return Move16.Quiet, 0.0;
   }
 
-  move_array: [..] Move16;
-  generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
-
+  color := ifx whose_turn 1.0 else -1.0;
   best_move, best_eval_value := Move16.Quiet, -FLOAT32_INFINITY;
-  for move : move_array {
+  for move: move_array {
     c_copy  := castling;
     ep_copy := ep;
     capture := PieceType.None;
     make_move(pieces, *c_copy, *ep_copy, *capture, move, whose_turn);
-    _, negamax_eval := negamax(pieces, c_copy, ep_copy, depth-1, whose_turn=!whose_turn, alpha=-beta, beta=-alpha);
-    negamax_eval = -negamax_eval;
-
-    if negamax_eval >= best_eval_value {
-      best_move  = move;
-      best_eval_value = negamax_eval;
-    }
+    eval := negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn) * color;
     unmake_move(pieces, capture, move, whose_turn);
-
-    alpha = max(alpha, best_eval_value);
-    if alpha >= beta then {
-      break; 
+    if eval >= best_eval_value {
+      best_move = move;
+      best_eval_value = eval;
     }
   }
 
   return best_move, best_eval_value;
 }
 
+// TODO: eventually, replace this with principled variation search..
+negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, alpha := -FLOAT32_INFINITY, beta := FLOAT32_INFINITY) -> float {
+  if depth == 0 then {
+    color := ifx whose_turn 1.0 else -1.0;
+    return quiescene(pieces, castling, ep, whose_turn, alpha, beta) * color;
+  }
 
+  move_array: [..] Move16;
+  array_reserve(*move_array, 40);
+  defer array_free(move_array);
+  check := generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
+  if check == 0 && move_array.count == 0 then {// stalemate
+    return 0.0;
+  }
 
+  best_eval := -FLOAT32_INFINITY;
+  if move_array.count
+
+  for move : move_array {
+    c_copy  := castling;
+    ep_copy := ep;
+    capture := PieceType.None;
+    make_move(pieces, *c_copy, *ep_copy, *capture, move, whose_turn);
+    eval := -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, -beta, -alpha);
+    best_eval = max(eval, best_eval);
+    unmake_move(pieces, capture, move, whose_turn);
+    alpha = max(alpha, best_eval);
+    if alpha >= beta then
+      break; 
+  }
+
+  return best_eval;
+}
+
+// see: https://www.chessprogramming.org/Quiescence_Search
+quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, alpha: float, beta: float) -> float {
+  eval := nnue_evaluate(pieces, whose_turn);
+  if eval >= beta then
+    return beta;
+  if alpha < eval then
+    alpha = eval; 
+
+  //print("quiescene search: (%, %)\n", alpha, beta);
+  move_array: [..] Move16;
+  array_reserve(*move_array, 40);
+  defer array_free(move_array);
+  generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
+  filter_captures(move_array);
+
+  // search captures only
+  for cap_move: move_array {
+    c_copy  := castling;
+    ep_copy := ep;
+    capture := PieceType.None;
+    flags, from, to := decode_move(cap_move);
+    make_move(pieces, *c_copy, *ep_copy, *capture, cap_move, whose_turn);
+    score := -quiescene(pieces, c_copy, ep_copy, !whose_turn, -beta, -alpha);
+    unmake_move(pieces, capture, cap_move, whose_turn);
+
+    if score >= beta
+      return beta;
+    if score > alpha
+      alpha = score;
+  }
+
+  return alpha;
+}
+
+filter_captures :: (move_array: [..] Move16) {
+  for mov, i: move_array {
+    flags := decode_move(mov);
+    using Move16;
+    if flags == Capture || flags == Ep_Capture
+      continue;
+    if Knight_Promotion_Capture <= flags && flags <= Queen_Promotion_Capture
+      continue;
+    remove mov;
+  }
+}
 
 // performance test
 // walks the move generation tree of strictly legal moves to count the leaf nodes
 perft :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, depth: int) -> int {
-  if depth <= 0 then return 1;
+  if depth == 0 then return 1;
   num_nodes := 0;
   moves_array: [..] Move16;
   array_reserve(*moves_array, 40);

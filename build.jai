@@ -119,8 +119,8 @@ install :: () {
 }
 
 todo :: () {
-  //   -- parse FEN strings
-  //   -- chess ai get started..
+  // move ordering.
+  // quiestensce search.
 }
 
 
