@@ -194,6 +194,8 @@ perft_divide :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: b
 }
 
 #scope_file
+
+// search capture moves only, we do this to avoid horizon effect
 // see: https://www.chessprogramming.org/Quiescence_Search
 quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, alpha: float, beta: float) -> float {
   eval := nnue_evaluate(pieces, whose_turn);
@@ -272,9 +274,7 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
     flags, from_index, to_index := decode_move(move_array[i]);
     from := cast(u64) (1 << from_index);
     to   := cast(u64) (1 << to_index);
-
     piece_to_type := piece_type_at(to, pieces, !whose_turn);
-
     using Move16;
     if flags == Capture {
       piece_from_type := piece_type_at(from, pieces, whose_turn);
@@ -283,16 +283,7 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
     } else if flags == Ep_Capture {
       order[i] = mvv_lva(piece_to_type, PieceType.Pawn);
 
-    } else if flags == Knight_Promotion_Capture {
-      order[i] = mvv_lva(piece_to_type, PieceType.Pawn);
-
-    } else if flags == Bishop_Promotion_Capture {
-      order[i] = mvv_lva(piece_to_type, PieceType.Pawn);
-
-    } else if flags == Rook_Promotion_Capture {
-      order[i] = mvv_lva(piece_to_type, PieceType.Pawn);
-
-    } else if flags == Queen_Promotion_Capture {
+    } else if Knight_Promotion_Capture <= flags && flags <= Queen_Promotion_Capture {
       order[i] = mvv_lva(piece_to_type, PieceType.Pawn);
     }
   }
@@ -327,7 +318,7 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       case Rook;   return 500.0;
       case Bishop; return 350.0;
       case Knight; return 325.0;
-      case Pawn;   return  90.0;
+      case Pawn;   return 90.0;
       case;        return 0.0;
       }
     }
@@ -357,7 +348,7 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       } else {
         return None;
       }
-    }    
+    }
   }
 
   // for sorting
