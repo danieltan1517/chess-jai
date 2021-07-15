@@ -24,19 +24,6 @@ nnue_evaluate :: (using p: *Piece_Bitboards, whose_turn: bool) -> float {
   translate_bitboard(b_knight, 11);
   translate_bitboard(b_pawn, 12);
 
-  // sort by piece squares 
-  while true {
-    TF := false;
-    for i: 3..index-1 {
-      if squares[i-1] < squares[i]
-        continue;
-      swap(squares[i-1], squares[i]);
-      swap(pieces[i-1], pieces[i]);
-      TF = true;
-    }
-    if !TF break;
-  }
-
   eval : s32 = 0;
   if whose_turn {
     eval = __nnue_evaluate(player=0, pieces.data, squares.data);

@@ -26,7 +26,6 @@ main :: () {
 
     } else if begins_with(input, "go ") {
       eval := nnue_evaluate(*pieces, whose_turn);
-      print("NNUE eval pos = %\n", eval);
       go_command(input);
     }
   }
@@ -98,7 +97,7 @@ main :: () {
       mov, eval := search(*pieces, castling, ep, depth, whose_turn);
 
       flags, from, to := decode_move(mov);
-      print("eval = %, %\n", eval, eval==FLOAT32_INFINITY);
+      print("NNUE eval = %\n", eval);
       // hopefully promote the piece functions correctly...
       if flags == Move16.Knight_Promotion || flags == Move16.Knight_Promotion_Capture {
         print("bestmove %1%2n\n", cast(serialized_bb) from, cast(serialized_bb) to);
