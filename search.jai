@@ -6,7 +6,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, wh
   defer array_free(move_array);
   generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
 
-  best_move, best_eval_value := Move16.Quiet, -FLOAT32_INFINITY;
+  best_move, best_eval := Move16.Quiet, -FLOAT32_INFINITY;
   for move: move_array {
     c_copy  := castling;
     ep_copy := ep;
@@ -14,18 +14,14 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, wh
     make_move(pieces, *c_copy, *ep_copy, *capture, move, whose_turn);
     eval := -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn);
     unmake_move(pieces, capture, move, whose_turn);
-    if eval >= best_eval_value {
-      best_move = move;
-      best_eval_value = eval;
+    if eval >= best_eval {
+      best_move, best_eval = move, eval;
     }
   }
 
-  return best_move, best_eval_value;
+  return best_move, best_eval;
 }
 
-// TODO: eventually, replace this with principled variation search..
-// WTF???? the ai keeps purposefully walking into checkmate...
-// this somehow plugs up all the bugs, but ... I dunno...
 negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, alpha := -FLOAT32_INFINITY, beta := FLOAT32_INFINITY) -> float {
   if depth == 0 then {
     return quiescene(pieces, castling, ep, whose_turn, alpha, beta);
