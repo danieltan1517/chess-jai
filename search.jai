@@ -1,12 +1,16 @@
 #import "Math";
+#import "Basic";
 
 search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool) -> Move16, float {
+  time_taken := get_time();
   __nodes_searched = 0;
   move_array: [..] Move16;
+  pv_line: PVLine;
+
   array_reserve(*move_array, 40);
   defer array_free(move_array);
   generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
-  move_ordering(pieces, move_array, whose_turn);
+  move_ordering(pieces, move_array, whose_turn, *pv_line);
 
   best_move, best_eval := Move16.Quiet, -INF;
   for move: move_array {
@@ -14,44 +18,81 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, wh
     ep_copy := ep;
     capture := PieceType.None;
     make_move(pieces, *c_copy, *ep_copy, *capture, move, whose_turn);
-    eval := -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn);
+    eval := -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *pv_line);
     unmake_move(pieces, capture, move, whose_turn);
     if eval >= best_eval {
+      // TODO: figure out whether to include pv line in here...
       best_move, best_eval = move, eval;
     }
   }
-  print("Nodes searched: %\n", __nodes_searched);
+
+  time_taken = get_time() - time_taken;
+  print_stats();
   return best_move, best_eval;
+
+  print_stats :: () #expand {
+    Push_Temporary();
+    builder: String_Builder;
+
+    print_to_builder(*builder, "info depth % nodes % time % score cp % nps % pv ", 
+                                                                  depth, 
+                                                       __nodes_searched, 
+                                                      time_taken*1000.0,
+                                                              best_eval, 
+                                 cast(int)(__nodes_searched/time_taken));
+
+    print_move_to_buffer(best_move);
+    for mv: pv_line.argmove {
+      if mv == 0 break;
+      print_move_to_buffer(mv);
+    }
+    str := builder_to_string(*builder, allocator=__temporary_allocator);
+    print("%\ninfo time taken: %\n", str, time_taken);
+    reset_temporary_storage();
+
+    print_move_to_buffer :: (mv: Move16) #expand {
+      _, from, to := decode_move(mv);
+      print_to_builder(*builder, "%1%2 ", cast(serialized_bb)from, cast(serialized_bb)to);
+    }
+  }
 }
 
-negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, alpha := -INF, beta := INF) -> float {
-
+negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, alpha := -INF, beta := INF) -> float {
+  line: PVLine;
   __nodes_searched += 1;
   if depth == 0 then {
-    return quiescene(pieces, castling, ep, whose_turn, alpha, beta);
+    pv_line.cmove = 0;
+    return quiescene(pieces, castling, ep, whose_turn, pv_line, alpha, beta);
   }
 
   move_array: [..] Move16;
   array_reserve(*move_array, 40);
   defer array_free(move_array);
   generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
-  move_ordering(pieces, move_array, whose_turn);
+  move_ordering(pieces, move_array, whose_turn, pv_line);
 
-  best_eval := -INF;
+  eval := -INF;
   for move : move_array {
     c_copy  := castling;
     ep_copy := ep;
     capture := PieceType.None;
     make_move(pieces, *c_copy, *ep_copy, *capture, move, whose_turn);
-    eval := -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, -beta, -alpha);
-    best_eval = max(eval, best_eval);
+    eval := max(eval, -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, -beta, -alpha));
     unmake_move(pieces, capture, move, whose_turn);
-    alpha = max(alpha, best_eval);
+    alpha = max(alpha, eval);
+
+    if eval >= alpha {
+      alpha = eval;
+      pv_line.argmove[0] = move;
+      memcpy(*pv_line.argmove[1], *line.argmove[0], line.cmove * size_of(Move16));
+      pv_line.cmove = line.cmove + 1;
+    }
+
     if alpha >= beta then
       break; 
   }
 
-  return best_eval;
+  return eval;
 }
 
 // perft results are found here: https://www.chessprogramming.org/Perft_Results
@@ -199,7 +240,8 @@ INF :: FLOAT32_INFINITY; // Alias
 
 // search capture moves only, we do this to avoid horizon effect
 // see: https://www.chessprogramming.org/Quiescence_Search
-quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, alpha: float, beta: float) -> float {
+quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, pv_line: *PVLine, alpha: float, beta: float) -> float {
+  line: PVLine;
   eval := nnue_evaluate(pieces, whose_turn);
   if eval >= beta then
     return beta;
@@ -212,7 +254,7 @@ quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn:
   defer array_free(move_array);
   generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
   filter_captures(move_array);
-  move_ordering(pieces, move_array, whose_turn);
+  move_ordering(pieces, move_array, whose_turn, pv_line);
 
   // search captures only
   for cap_move: move_array {
@@ -221,13 +263,17 @@ quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn:
     capture := PieceType.None;
     flags, from, to := decode_move(cap_move);
     make_move(pieces, *c_copy, *ep_copy, *capture, cap_move, whose_turn);
-    score := -quiescene(pieces, c_copy, ep_copy, !whose_turn, -beta, -alpha);
+    score := -quiescene(pieces, c_copy, ep_copy, !whose_turn, *line, -beta, -alpha);
     unmake_move(pieces, capture, cap_move, whose_turn);
 
     if score >= beta then
       return beta;
-    if score > alpha then
+    if score > alpha then {
       alpha = score;
+      pv_line.argmove[0] = cap_move;
+      memcpy(*pv_line.argmove[1], *line.argmove[0], line.cmove * size_of(Move16));
+      pv_line.cmove = line.cmove + 1;
+    }
   }
 
   return alpha;
@@ -243,6 +289,11 @@ filter_captures :: (move_array: [..] Move16) {
       continue;
     remove mov;
   }
+}
+
+PVLine :: struct {
+  cmove: int;
+  argmove: [32] Move16;
 }
 
 // performance test
@@ -278,7 +329,7 @@ perft :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, de
 //
 // -- killer moves
 
-move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn: bool) {
+move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn: bool, pv_line: *PVLine) {
   // TODO: I don't know if some other function wants to use temporary storage.
   count := move_array.count;
   order := NewArray(count, float, allocator=__temporary_allocator);
@@ -288,7 +339,14 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
   p_attacks := ifx whose_turn then black_pawn_captures(pieces.b_pawn) else white_pawn_captures(pieces.w_pawn);
 
   for i: 0..count-1 {
+    if move_array[i] == pv_line.argmove[0] {
+      // principle variation move. give highest priority, INF
+      order[i] = INF; 
+      continue;
+    }
+
     flags, from_index, to_index := decode_move(move_array[i]);
+
     from := cast(u64) (1 << from_index);
     to   := cast(u64) (1 << to_index);
     using Move16;
@@ -298,8 +356,7 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       order[i] = mvv_lva(piece_to_type, piece_from_type);
 
     } else if flags == Ep_Capture {
-      piece_to_type := piece_type_at(to, pieces, !whose_turn);
-      order[i] = mvv_lva(piece_to_type, PieceType.Pawn);
+      order[i] = mvv_lva(PieceType.Pawn, PieceType.Pawn);
 
     } else if Knight_Promotion <= flags && flags <= Queen_Promotion_Capture {
       order[i] = 1000.0;
@@ -308,11 +365,11 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       order[i] = mvv_lva(piece_to_type, PieceType.Pawn);
 
     } else if flags == King_Castle || flags == Queen_Castle {
-      order[i] = 100.0;
+      order[i] = 75.0;
+
     } else {
-      // quiet moves. don't step into attack range of a pawn
-      // when you are not a pawn.
-      if (from & ~pawns) && to & p_attacks { 
+      // quiet moves. don't step into attack range of enemy pawn
+      if (from & ~pawns) && (to & p_attacks) { 
         order[i] = -250.0;
       } else {
         order[i] = 0.0;
