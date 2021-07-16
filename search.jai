@@ -5,6 +5,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, wh
   time_taken := get_time();
   memset(__history_moves.data, 0, size_of(float)*2*64*64);
   memset(__killer_moves.data,  0, size_of(Move16)*2*64);
+  clear_hash_table();
   __nodes_searched = 0;
   move_array: [..] Move16;
   pv_line: PVLine;
@@ -20,7 +21,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, wh
     ep_copy := ep;
     capture := PieceType.None;
     make_move(pieces, *c_copy, *ep_copy, *capture, move, whose_turn);
-    eval := -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *pv_line);
+    eval := - negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *pv_line);
     unmake_move(pieces, capture, move, whose_turn);
     if eval >= best_eval {
       // TODO: figure out whether to include pv line in here...
@@ -36,13 +37,10 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, wh
     Push_Temporary();
     builder: String_Builder;
 
-    print_to_builder(*builder, "info depth % nodes % time % score cp % nps % pv ", 
-                                                                  depth, 
-                                                       __nodes_searched, 
-                                           cast(int)(time_taken*1000.0), // convert secs to ms
-                                                              best_eval, 
-                                 cast(int)(__nodes_searched/time_taken));
-
+    t_ms := cast(int)(time_taken*1000.0); // convert secs to ms
+    nps  := cast(int)(__nodes_searched/time_taken);
+    print_to_builder(*builder, "info depth % ", depth);
+    print_to_builder(*builder, "nodes % time % score cp % nps % pv ", __nodes_searched, t_ms, best_eval, nps);
     print_move_to_buffer(best_move);
     for mv: pv_line.argmove {
       if mv == 0 break;
@@ -62,12 +60,21 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, wh
 negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, alpha := -INF, beta := INF) -> float {
   line: PVLine;
   __nodes_searched += 1;
+  {
+    found, score := read_hash_entry(pieces, castling, ep, whose_turn, alpha, beta, depth);
+    if found then {
+      print("Score = %\n", score);
+      return score;
+    }
+  }
 
   if depth == 0 then {
     pv_line.cmove = 0;
-    return quiescene(pieces, castling, ep, whose_turn, pv_line, alpha, beta);
+    score := quiescene(pieces, castling, ep, whose_turn, pv_line, alpha, beta);
+    return score;  
   }
 
+  //thash_flag := TFLAGS.ALPHA;
   move_array: [..] Move16;
   array_reserve(*move_array, 40);
   defer array_free(move_array);
@@ -82,30 +89,31 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     make_move(pieces, *c_copy, *ep_copy, *capture, move, whose_turn);
     eval = max(eval, -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, -beta, -alpha));
     unmake_move(pieces, capture, move, whose_turn);
-    alpha = max(alpha, eval);
-
     if eval >= alpha {
+      //thash_flag = TFLAGS.EXACT;
       alpha = eval;
       pv_line.argmove[0] = move;
       memcpy(*pv_line.argmove[1], *line.argmove[0], line.cmove * size_of(Move16));
       pv_line.cmove = line.cmove + 1;
-    }
-
-    if alpha >= beta then {
       flags, from, to := decode_move(move);
       if !is_capture(flags) {
         __history_moves[cast(int)whose_turn][from][to] += depth*depth;
+      }
+    }
 
+    if alpha >= beta then {
+      write_hash_entry(pieces, castling, ep, whose_turn, score=beta, depth=depth, TFLAGS.BETA);
+      flags, from, to := decode_move(move);
+      if !is_capture(flags) {
         __killer_moves[1][depth] = __killer_moves[0][depth];
         __killer_moves[0][depth] = move;
-
-
       }
-      break; 
+      return beta;
     }
   }
 
-  return eval;
+  write_hash_entry(pieces, castling, ep, whose_turn, score=alpha, depth=depth, TFLAGS.EXACT);
+  return alpha;
 }
 
 // perft results are found here: https://www.chessprogramming.org/Perft_Results
@@ -248,10 +256,12 @@ perft_divide :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: b
 }
 
 initialize_ai_globals :: () {
-  //zobrist_init_globals();
+  zobrist_init_globals();
 }
 
 #scope_file
+
+#import "Random";
 
 INF :: FLOAT32_INFINITY; // Alias
 
@@ -367,33 +377,22 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       piece_from_type := piece_type_at(from, pieces, whose_turn);
       piece_to_type := piece_type_at(to, pieces, !whose_turn);
       order[i] = mvv_lva(piece_to_type, piece_from_type);
-
     } else if flags == Ep_Capture {
       order[i] = mvv_lva(PieceType.Pawn, PieceType.Pawn);
-
     } else if Knight_Promotion <= flags && flags <= Queen_Promotion_Capture {
       order[i] = 1000.0;
     } else if Knight_Promotion_Capture <= flags && flags <= Queen_Promotion_Capture {
       piece_to_type := piece_type_at(to, pieces, !whose_turn);
       order[i] = mvv_lva(piece_to_type, PieceType.Pawn);
-
     } else if flags == King_Castle || flags == Queen_Castle {
-      order[i] = 35.0;
-
+      order[i] = 150.0;
     } else {
-      if __killer_moves[1][depth] == move_array[i] {
-        order[i] = 45.0;
-
-      } else if __killer_moves[0][depth] == move_array[i] {
-        order[i] = 55.0;
-
-      } else if (from & ~pawns) && (to & p_attacks) { 
-        // quiet moves. don't step into attack range of enemy pawn
-        order[i] = -250.0;
-
+      if __killer_moves[0][depth] == move_array[i] {
+        order[i] = 1500.0;
+      } else if __killer_moves[1][depth] == move_array[i] {
+        order[i] = 1250.0;
       } else {
         order[i] += __history_moves[cast(int)whose_turn][from_index][to_index];
-
       }
     }
   }
@@ -419,17 +418,17 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
     vs := piece_score(victim);
     as := piece_score(attacker);
 
-    return vs + 10.0 - (as * 0.015);
+    return vs + 10000.0 - (as * 0.015);
 
     piece_score :: (using p: PieceType) -> score: float {
       if p == {
-      case King;   return 1000.0;
-      case Queen;  return  900.0;
-      case Rook;   return  500.0;
-      case Bishop; return  350.0;
-      case Knight; return  325.0;
-      case Pawn;   return  100.0;
-      case;        return    0.0;
+      case King;   return 100000.0;
+      case Queen;  return  90000.0;
+      case Rook;   return  50000.0;
+      case Bishop; return  35000.0;
+      case Knight; return  32500.0;
+      case Pawn;   return  10000.0;
+      case;        return      0.0;
       }
     }
   }
@@ -475,7 +474,7 @@ __history_moves: [2][64][64] float;
 __killer_moves: [2][64] Move16;
 
 // zobrist hashing
-/*__zhash_wk: [64] u64;
+__zhash_wk: [64] u64;
 __zhash_wq: [64] u64;
 __zhash_wr: [64] u64;
 __zhash_wb: [64] u64;
@@ -560,34 +559,66 @@ zobrist_init_globals :: () {
   }
 }
 
+// modified from BBC chess engine.
+// get something off the ground.
+TSIZE :: 0x40_0000;
 
-//__zobrist_hash :: (using p: *Piece_Bitboards, c: Castling, ep: u64, whose_turn: bool) -> u64 {
+ttable : struct {
 
-#run {
-  zobrist_init_globals();
+  hash : [TSIZE] u64;
+  flag : [TSIZE] TFLAGS;
+  depth: [TSIZE] int;
+  score: [TSIZE] float;
 
-  p, whose_turn, c, ep := chess_start_pos();
-  hash1 := __zobrist_hash(*p, c, ep, whose_turn);
-  hash2 := __zobrist_hash(*p, c, ep, whose_turn);
-  print("%, %, %\n", hash1, hash2, hash1==hash2);
+}
 
-  p, whose_turn, c, ep = chess_start_from_fen("r1b1k2r/ppppnppp/2n2q2/2b5/3NP3/2P1B3/PP3PPP/RN1QKB1R w KQkq - 0 1 ");
-  hash2 = __zobrist_hash(*p, c, ep, whose_turn);
-  print("%, %, %\n", hash1, hash2, hash1!=hash2);
-
-  p, whose_turn, c, ep = chess_start_from_fen("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1  ");
-  hash2 = __zobrist_hash(*p, c, ep, whose_turn);
-  print("%, %, %\n", hash1, hash2, hash1!=hash2);
-
-  p, whose_turn, c, ep = chess_start_from_fen("rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2");
-  hash2 = __zobrist_hash(*p, c, ep, whose_turn);
-  print("%, %, %\n", hash1, hash2, hash1!=hash2);
-}*/
+TFLAGS :: enum u8 {EXACT; ALPHA; BETA; }
 
 
+clear_hash_table :: () {
+  memset(*ttable.hash[0],  0, TSIZE*size_of(u64));
+  memset(*ttable.flag[0],  0, TSIZE*size_of(TFLAGS));
+  memset(*ttable.depth[0], 0, TSIZE*size_of(int));
+  memset(*ttable.score[0], 0, TSIZE*size_of(float));
+}
 
+read_hash_entry :: (pieces: *Piece_Bitboards, c: Castling, ep: u64, whose_turn: bool, alpha: float, beta: float, depth: int) -> found: bool, score: float {
+  
+  hash := __zobrist_hash(pieces, c, ep, whose_turn);
+  key := hash % TSIZE;
+  if ttable.hash[key] == hash {
+    if ttable.depth[key] >= depth {
+      print("key depth: %, depth: %\n", ttable.depth[key], depth);     
+      using TFLAGS;
+      if ttable.flag[key] == {
+      case .EXACT;
+        return true, ttable.score[key];
+     
+      case .ALPHA;
+        if ttable.score[key] <= alpha then {
+          return true, alpha;
+        }
+     
+      case .BETA;
+        if ttable.score[key] >= beta then {
+          return true, beta;
+        }
+     
+      }
+    }
+  }
+ 
+  return false, 0;
+}
 
-
+write_hash_entry :: (pieces: *Piece_Bitboards, c: Castling, ep: u64, whose_turn: bool, score: float, depth: int, hash_flag: TFLAGS) {
+  hash := __zobrist_hash(pieces, c, ep, whose_turn);
+  key := hash % TSIZE;
+  ttable. hash[key] = hash;
+  ttable.score[key] = score;
+  ttable.depth[key] = depth;
+  ttable. flag[key] = hash_flag;
+}
 
 
 
