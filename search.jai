@@ -9,7 +9,6 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, wh
   __nodes_searched = 0;
   move_array: [..] Move16;
   pv_line: PVLine;
-
   array_reserve(*move_array, 40);
   defer array_free(move_array);
   generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
@@ -17,14 +16,11 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, wh
 
   best_move, best_eval := Move16.Quiet, -INF;
   for move: move_array {
-    c_copy  := castling;
-    ep_copy := ep;
-    capture := PieceType.None;
+    c_copy, ep_copy, capture  := castling, ep, PieceType.None;
     make_move(pieces, *c_copy, *ep_copy, *capture, move, whose_turn);
     eval := -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *pv_line);
     unmake_move(pieces, capture, move, whose_turn);
     if eval >= best_eval {
-      // TODO: figure out whether to include pv line in here...
       best_move, best_eval = move, eval;
     }
   }
@@ -60,21 +56,16 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, wh
 negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, alpha := -INF, beta := INF) -> float {
   line: PVLine;
   __nodes_searched += 1;
-  {
-    found, score := read_hash_entry(pieces, castling, ep, whose_turn, alpha=alpha, beta=beta, depth=depth);
-    if found then {
-      return score;
-    }
-  }
+
+  alpha_orig := alpha;
+
+  transposition_table_lookup ();
 
   if depth == 0 then {
     pv_line.cmove = 0;
-    score := quiescene(pieces, castling, ep, whose_turn, pv_line, alpha, beta);
-    write_hash_entry(pieces, castling, ep, whose_turn, score=score, depth=depth, hash_flag=TFLAGS.EXACT);
-    return score;  
+    return nnue_evaluate(pieces, whose_turn);//quiescene(pieces, castling, ep, whose_turn, pv_line, alpha, beta);
   }
 
-  //thash_flag := TFLAGS.ALPHA;
   move_array: [..] Move16;
   array_reserve(*move_array, 40);
   defer array_free(move_array);
@@ -82,7 +73,6 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   move_ordering(pieces, move_array, whose_turn, pv_line, depth);
 
   eval := -INF;
-  thash_flag := TFLAGS.ALPHA;
   for move : move_array {
     c_copy  := castling;
     ep_copy := ep;
@@ -90,19 +80,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     make_move(pieces, *c_copy, *ep_copy, *capture, move, whose_turn);
     eval = max(eval, -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, -beta, -alpha));
     unmake_move(pieces, capture, move, whose_turn);
-
-    if alpha >= beta then {
-      flags, from, to := decode_move(move);
-      write_hash_entry(pieces, castling, ep, whose_turn, score=beta, depth=depth, hash_flag=TFLAGS.BETA);
-      if !is_capture(flags) {
-        __killer_moves[1][depth] = __killer_moves[0][depth];
-        __killer_moves[0][depth] = move;
-      }
-      return beta;
-    }
-
     if eval > alpha {
-      thash_flag = TFLAGS.EXACT;
       alpha = eval;
       pv_line.argmove[0] = move;
       memcpy(*pv_line.argmove[1], *line.argmove[0], line.cmove * size_of(Move16));
@@ -112,15 +90,60 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
         __history_moves[cast(int)whose_turn][from][to] += depth*depth;
       }
     }
+
+    if alpha >= beta then {
+      m_flags := decode_move(move);
+      if !is_capture(m_flags) {
+        __killer_moves[1][depth] = __killer_moves[0][depth];
+        __killer_moves[0][depth] = move;
+      }
+      break;
+    }
   }
 
-  write_hash_entry(pieces, castling, ep, whose_turn, score=eval, depth=depth, hash_flag=thash_flag);
+  transposition_table_store(eval);
   return eval;
+
+  transposition_table_lookup :: () #expand {
+    hash := __zobrist_hash(pieces, castling, ep, whose_turn);
+    key  := hash % TSIZE;
+    if ttable.hash[key] == hash && ttable.depth[key] >= depth then {
+      if ttable.flag[key] == TFLAGS.EXACT then {
+        `return ttable.score[key];
+      }
+ 
+      else if ttable.flag[key] == TFLAGS.LOWER then {
+        alpha = max(alpha, ttable.score[key]);
+      } 
+ 
+      else if ttable.flag[key] == TFLAGS.UPPER then {
+        beta  = min(beta,  ttable.score[key]);
+      }
+ 
+      if alpha >= beta then {
+        `return ttable.score[key];
+      }
+    }
+  }
+
+  transposition_table_store :: (value: float) #expand {
+    hash := __zobrist_hash(pieces, castling, ep, whose_turn);
+    key  := hash % TSIZE;
+    ttable.hash[key] = hash;
+    ttable.depth[key] = depth;
+    ttable.score[key] = eval;
+    if value <= alpha_orig then {
+      ttable.flag[key] = TFLAGS.UPPER;
+    } else if value >= beta then {
+      ttable.flag[key] = TFLAGS.LOWER;
+    } else {
+      ttable.flag[key] = TFLAGS.EXACT;
+    }
+  }
 }
 
 // perft results are found here: https://www.chessprogramming.org/Perft_Results
 // more perft results: http://www.rocechess.ch/perft.html
-
 perft_all :: () {
   pieces: Piece_Bitboards;
   whose_turn: bool;
@@ -311,12 +334,8 @@ quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn:
 filter_captures :: (move_array: [..] Move16) {
   for mov, i: move_array {
     flags := decode_move(mov);
-    using Move16;
-    if flags == Capture || flags == Ep_Capture
-      continue;
-    if Knight_Promotion_Capture <= flags && flags <= Queen_Promotion_Capture
-      continue;
-    remove mov;
+    if !is_capture(flags)
+      remove mov;
   }
 }
 
@@ -562,19 +581,16 @@ zobrist_init_globals :: () {
 
 // modified from BBC chess engine.
 // get something off the ground.
-TSIZE :: 0x40_0000;
+TSIZE :: 0x40_8000;
 
 ttable : struct {
-
   hash : [TSIZE] u64;
   flag : [TSIZE] TFLAGS;
   depth: [TSIZE] int;
   score: [TSIZE] float;
-
 }
 
-TFLAGS :: enum u8 {EXACT; ALPHA; BETA; }
-
+TFLAGS :: enum u8 {EXACT; LOWER; UPPER; }
 
 clear_hash_table :: () {
   memset(*ttable.hash[0],  0, TSIZE*size_of(u64));
@@ -583,42 +599,7 @@ clear_hash_table :: () {
   memset(*ttable.score[0], 0, TSIZE*size_of(float));
 }
 
-read_hash_entry :: (pieces: *Piece_Bitboards, c: Castling, ep: u64, whose_turn: bool, alpha: float, beta: float, depth: int) -> found: bool, score: float {
-  
-  hash := __zobrist_hash(pieces, c, ep, whose_turn);
-  key := hash % TSIZE;
-  if ttable.hash[key] == hash {
-    if ttable.depth[key] >= depth {
-      using TFLAGS;
-      if ttable.flag[key] == {
-      case .EXACT;
-        return true, ttable.score[key];
-     
-      case .ALPHA;
-        if ttable.score[key] <= alpha then {
-          return true, alpha;
-        }
-     
-      case .BETA;
-        if ttable.score[key] >= beta then {
-          return true, beta;
-        }
-     
-      }
-    }
-  }
- 
-  return false, 0;
-}
 
-write_hash_entry :: (pieces: *Piece_Bitboards, c: Castling, ep: u64, whose_turn: bool, score: float, depth: int, hash_flag: TFLAGS) {
-  hash := __zobrist_hash(pieces, c, ep, whose_turn);
-  key := hash % TSIZE;
-  ttable. hash[key] = hash;
-  ttable.score[key] = score;
-  ttable.depth[key] = depth;
-  ttable. flag[key] = hash_flag;
-}
 
 
 

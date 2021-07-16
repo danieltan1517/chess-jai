@@ -141,6 +141,7 @@ getline :: () -> string {
 __buffer: [16384] u8;
 
 // TODO: this assumes the moves are valid
+// TODO: this is a long function...
 get_move_type :: (using pieces: Piece_Bitboards, en_paesant: u64, from: u64, to: u64, promote: int, whose_turn: bool)->Move16 {
   w_pieces := get_white_pieces(pieces);
   b_pieces := get_black_pieces(pieces);
