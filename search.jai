@@ -8,7 +8,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, wh
   generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
   move_ordering(pieces, move_array, whose_turn);
 
-  best_move, best_eval := Move16.Quiet, -FLOAT32_INFINITY;
+  best_move, best_eval := Move16.Quiet, -INF;
   for move: move_array {
     c_copy  := castling;
     ep_copy := ep;
@@ -24,7 +24,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, wh
   return best_move, best_eval;
 }
 
-negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, alpha := -FLOAT32_INFINITY, beta := FLOAT32_INFINITY) -> float {
+negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, alpha := -INF, beta := INF) -> float {
 
   __nodes_searched += 1;
   if depth == 0 then {
@@ -37,7 +37,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
   move_ordering(pieces, move_array, whose_turn);
 
-  best_eval := -FLOAT32_INFINITY;
+  best_eval := -INF;
   for move : move_array {
     c_copy  := castling;
     ep_copy := ep;
@@ -195,6 +195,8 @@ perft_divide :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: b
 
 #scope_file
 
+INF :: FLOAT32_INFINITY; // Alias
+
 // search capture moves only, we do this to avoid horizon effect
 // see: https://www.chessprogramming.org/Quiescence_Search
 quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, alpha: float, beta: float) -> float {
@@ -264,27 +266,57 @@ perft :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, de
   return num_nodes;
 }
 
+// Move Ordering consists of:
+// MVV-LVA implementation  -- done
+//
+// TODO:
+// -- principal variation search:
+//    https://www.chessprogramming.org/Principal_Variation
+// 
+// -- history heuristic moves
+//    https://www.chessprogramming.org/History_Heuristic
+//
+// -- killer moves
+
 move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn: bool) {
   // TODO: I don't know if some other function wants to use temporary storage.
   count := move_array.count;
   order := NewArray(count, float, allocator=__temporary_allocator);
   defer reset_temporary_storage();
 
+  pawns := ifx whose_turn pieces.w_pawn else pieces.b_pawn;
+  p_attacks := ifx whose_turn then black_pawn_captures(pieces.b_pawn) else white_pawn_captures(pieces.w_pawn);
+
   for i: 0..count-1 {
     flags, from_index, to_index := decode_move(move_array[i]);
     from := cast(u64) (1 << from_index);
     to   := cast(u64) (1 << to_index);
-    piece_to_type := piece_type_at(to, pieces, !whose_turn);
     using Move16;
     if flags == Capture {
       piece_from_type := piece_type_at(from, pieces, whose_turn);
+      piece_to_type := piece_type_at(to, pieces, !whose_turn);
       order[i] = mvv_lva(piece_to_type, piece_from_type);
 
     } else if flags == Ep_Capture {
+      piece_to_type := piece_type_at(to, pieces, !whose_turn);
       order[i] = mvv_lva(piece_to_type, PieceType.Pawn);
 
+    } else if Knight_Promotion <= flags && flags <= Queen_Promotion_Capture {
+      order[i] = 1000.0;
     } else if Knight_Promotion_Capture <= flags && flags <= Queen_Promotion_Capture {
+      piece_to_type := piece_type_at(to, pieces, !whose_turn);
       order[i] = mvv_lva(piece_to_type, PieceType.Pawn);
+
+    } else if flags == King_Castle || flags == Queen_Castle {
+      order[i] = 100.0;
+    } else {
+      // quiet moves. don't step into attack range of a pawn
+      // when you are not a pawn.
+      if (from & ~pawns) && to & p_attacks { 
+        order[i] = -250.0;
+      } else {
+        order[i] = 0.0;
+      }
     }
   }
 
@@ -313,13 +345,13 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
 
     piece_score :: (using p: PieceType) -> score: float {
       if p == {
-      case King;   return 1050.0;
-      case Queen;  return 900.0;
-      case Rook;   return 500.0;
-      case Bishop; return 350.0;
-      case Knight; return 325.0;
-      case Pawn;   return 90.0;
-      case;        return 0.0;
+      case King;   return 1000.0;
+      case Queen;  return  900.0;
+      case Rook;   return  500.0;
+      case Bishop; return  350.0;
+      case Knight; return  325.0;
+      case Pawn;   return  100.0;
+      case;        return    0.0;
       }
     }
   }

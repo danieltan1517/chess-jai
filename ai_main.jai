@@ -96,10 +96,13 @@ main :: () {
     case "depth";
       depth, TF := parse_int(*input);
       if !TF return;
+
+      time_taken := get_time();
       mov, eval := search(*pieces, castling, ep, depth, whose_turn);
+      time_taken = get_time() - time_taken;
 
       flags, from, to := decode_move(mov);
-      print("NNUE eval = %\n", eval);
+      print("NNUE eval = %, time taken to find move: %\n", eval, time_taken);
       // hopefully promote the piece functions correctly...
       if flags == Move16.Knight_Promotion || flags == Move16.Knight_Promotion_Capture {
         print("bestmove %1%2n\n", cast(serialized_bb) from, cast(serialized_bb) to);
