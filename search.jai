@@ -339,7 +339,7 @@ perft :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, de
 // MVV-LVA implementation
 // Principle Variation Moves
 // History Moves.
-// Killer moves. (Or at least what I think is the easiest implementation of killer moves)
+// Killer moves. (Or at least what I think is the simplest implementation of killer moves)
 move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn: bool, pv_line: *PVLine, depth := 0) {
   // TODO: I don't know if some other function wants to use temporary storage.
   count := move_array.count;
@@ -390,8 +390,10 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       } else if (from & ~pawns) && (to & p_attacks) { 
         // quiet moves. don't step into attack range of enemy pawn
         order[i] = -250.0;
+
       } else {
         order[i] += __history_moves[cast(int)whose_turn][from_index][to_index];
+
       }
     }
   }

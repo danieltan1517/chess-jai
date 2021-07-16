@@ -119,7 +119,7 @@ install :: () {
 }
 
 todo :: () {
-  // move ordering. killer moves, PV moves.
+  // Transposition Table. Should cut down on the moves
 }
 
 
