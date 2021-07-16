@@ -80,7 +80,8 @@ equal :: (p1: Piece_Bitboards, p2: Piece_Bitboards)->bool {
   return true;
 }
 
-
+// TODO: should I change this such
+// that "captures" is a flag????
 // from chess programming wiki:
 Move16 :: enum s16 {
   Quiet :: 0;
@@ -97,6 +98,10 @@ Move16 :: enum s16 {
   Bishop_Promotion_Capture;
   Rook_Promotion_Capture;
   Queen_Promotion_Capture;
+}
+
+is_capture :: inline (using m: Move16) -> bool {
+  return m == Capture || m == Ep_Capture || (Knight_Promotion_Capture <= m && m <= Queen_Promotion_Capture);
 }
 
 PieceType :: enum u8 {

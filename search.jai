@@ -3,6 +3,8 @@
 
 search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool) -> Move16, float {
   time_taken := get_time();
+  memset(__history_moves.data, 0, size_of(float)*2*64*64);
+  memset(__killer_moves.data,  0, size_of(Move16)*2*64);
   __nodes_searched = 0;
   move_array: [..] Move16;
   pv_line: PVLine;
@@ -10,7 +12,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, wh
   array_reserve(*move_array, 40);
   defer array_free(move_array);
   generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
-  move_ordering(pieces, move_array, whose_turn, *pv_line);
+  move_ordering(pieces, move_array, whose_turn, *pv_line, depth);
 
   best_move, best_eval := Move16.Quiet, -INF;
   for move: move_array {
@@ -37,7 +39,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, wh
     print_to_builder(*builder, "info depth % nodes % time % score cp % nps % pv ", 
                                                                   depth, 
                                                        __nodes_searched, 
-                                                      time_taken*1000.0,
+                                           cast(int)(time_taken*1000.0), // convert secs to ms
                                                               best_eval, 
                                  cast(int)(__nodes_searched/time_taken));
 
@@ -47,7 +49,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, wh
       print_move_to_buffer(mv);
     }
     str := builder_to_string(*builder, allocator=__temporary_allocator);
-    print("%\ninfo time taken: %\n", str, time_taken);
+    print("%\n", str);
     reset_temporary_storage();
 
     print_move_to_buffer :: (mv: Move16) #expand {
@@ -60,6 +62,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, wh
 negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, alpha := -INF, beta := INF) -> float {
   line: PVLine;
   __nodes_searched += 1;
+
   if depth == 0 then {
     pv_line.cmove = 0;
     return quiescene(pieces, castling, ep, whose_turn, pv_line, alpha, beta);
@@ -69,7 +72,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   array_reserve(*move_array, 40);
   defer array_free(move_array);
   generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
-  move_ordering(pieces, move_array, whose_turn, pv_line);
+  move_ordering(pieces, move_array, whose_turn, pv_line, depth);
 
   eval := -INF;
   for move : move_array {
@@ -77,7 +80,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     ep_copy := ep;
     capture := PieceType.None;
     make_move(pieces, *c_copy, *ep_copy, *capture, move, whose_turn);
-    eval := max(eval, -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, -beta, -alpha));
+    eval = max(eval, -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, -beta, -alpha));
     unmake_move(pieces, capture, move, whose_turn);
     alpha = max(alpha, eval);
 
@@ -88,8 +91,18 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       pv_line.cmove = line.cmove + 1;
     }
 
-    if alpha >= beta then
+    if alpha >= beta then {
+      flags, from, to := decode_move(move);
+      if !is_capture(flags) {
+        __history_moves[cast(int)whose_turn][from][to] += depth*depth;
+
+        __killer_moves[1][depth] = __killer_moves[0][depth];
+        __killer_moves[0][depth] = move;
+
+
+      }
       break; 
+    }
   }
 
   return eval;
@@ -234,6 +247,10 @@ perft_divide :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: b
   return num_nodes;
 }
 
+initialize_ai_globals :: () {
+  //zobrist_init_globals();
+}
+
 #scope_file
 
 INF :: FLOAT32_INFINITY; // Alias
@@ -241,6 +258,7 @@ INF :: FLOAT32_INFINITY; // Alias
 // search capture moves only, we do this to avoid horizon effect
 // see: https://www.chessprogramming.org/Quiescence_Search
 quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, pv_line: *PVLine, alpha: float, beta: float) -> float {
+
   line: PVLine;
   eval := nnue_evaluate(pieces, whose_turn);
   if eval >= beta then
@@ -317,19 +335,12 @@ perft :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, de
   return num_nodes;
 }
 
-// Move Ordering consists of:
-// MVV-LVA implementation  -- done
-//
-// TODO:
-// -- principal variation search:
-//    https://www.chessprogramming.org/Principal_Variation
-// 
-// -- history heuristic moves
-//    https://www.chessprogramming.org/History_Heuristic
-//
-// -- killer moves
-
-move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn: bool, pv_line: *PVLine) {
+// Move Ordering currently consists of:
+// MVV-LVA implementation
+// Principle Variation Moves
+// History Moves.
+// Killer moves. (Or at least what I think is the easiest implementation of killer moves)
+move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn: bool, pv_line: *PVLine, depth := 0) {
   // TODO: I don't know if some other function wants to use temporary storage.
   count := move_array.count;
   order := NewArray(count, float, allocator=__temporary_allocator);
@@ -341,6 +352,8 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
   for i: 0..count-1 {
     if move_array[i] == pv_line.argmove[0] {
       // principle variation move. give highest priority, INF
+      // I don't know whether this is correct, given I don't see the 
+      // speed up...
       order[i] = INF; 
       continue;
     }
@@ -365,14 +378,20 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       order[i] = mvv_lva(piece_to_type, PieceType.Pawn);
 
     } else if flags == King_Castle || flags == Queen_Castle {
-      order[i] = 75.0;
+      order[i] = 35.0;
 
     } else {
-      // quiet moves. don't step into attack range of enemy pawn
-      if (from & ~pawns) && (to & p_attacks) { 
+      if __killer_moves[1][depth] == move_array[i] {
+        order[i] = 45.0;
+
+      } else if __killer_moves[0][depth] == move_array[i] {
+        order[i] = 55.0;
+
+      } else if (from & ~pawns) && (to & p_attacks) { 
+        // quiet moves. don't step into attack range of enemy pawn
         order[i] = -250.0;
       } else {
-        order[i] = 0.0;
+        order[i] += __history_moves[cast(int)whose_turn][from_index][to_index];
       }
     }
   }
@@ -449,5 +468,124 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
 }
 
 __nodes_searched := 0;
+__history_moves: [2][64][64] float;
+
+__killer_moves: [2][64] Move16;
+
+// zobrist hashing
+/*__zhash_wk: [64] u64;
+__zhash_wq: [64] u64;
+__zhash_wr: [64] u64;
+__zhash_wb: [64] u64;
+__zhash_wn: [64] u64;
+__zhash_wp: [64] u64;
+
+__zhash_bk: [64] u64;
+__zhash_bq: [64] u64;
+__zhash_br: [64] u64;
+__zhash_bb: [64] u64;
+__zhash_bn: [64] u64;
+__zhash_bp: [64] u64;
+
+__zhash_EP: [64] u64;
+
+__zhash_turn: [2] u64;
+
+__zhash_castling: [16]  u64;
+
+__zobrist_hash :: (using p: *Piece_Bitboards, c: Castling, ep: u64, whose_turn: bool) -> u64 {
+  // calc zobrist hash
+  hash : u64 = 0;
+  hash ^= hash_pieces(w_king,   __zhash_wk);
+  hash ^= hash_pieces(w_queen,  __zhash_wq);
+  hash ^= hash_pieces(w_rook,   __zhash_wr);
+  hash ^= hash_pieces(w_bishop, __zhash_wb);
+  hash ^= hash_pieces(w_knight, __zhash_wn);
+  hash ^= hash_pieces(w_pawn,   __zhash_wp);
+
+  hash ^= hash_pieces(b_king,   __zhash_bk);
+  hash ^= hash_pieces(b_queen,  __zhash_bq);
+  hash ^= hash_pieces(b_rook,   __zhash_br);
+  hash ^= hash_pieces(b_bishop, __zhash_bb);
+  hash ^= hash_pieces(b_knight, __zhash_bn);
+  hash ^= hash_pieces(b_pawn,   __zhash_bp);
+  hash ^= hash_pieces(ep,       __zhash_EP);
+  hash ^= __zhash_turn[cast(int)whose_turn];
+
+  hash ^= __zhash_castling[cast(int)c];
+  return hash;
+
+  hash_pieces :: (p: u64, __zhash_values: [64] u64) -> u64 {
+    ret : u64 = 0;
+    while p {
+      idx := cast(int)serialize_bit(p);
+      ret = ret ^ __zhash_values[idx];
+      p &= p-1;
+    }
+    return ret;
+  }
+}
+
+zobrist_init_globals :: () {
+  // TODO: random generation?
+  random_seed(861097715);
+  for i: 0..63 {
+    __zhash_wk[i] = rand64();
+    __zhash_wq[i] = rand64();
+    __zhash_wr[i] = rand64();
+    __zhash_wb[i] = rand64();
+    __zhash_wn[i] = rand64();
+    __zhash_wr[i] = rand64();
+ 
+    __zhash_bk[i] = rand64();
+    __zhash_bq[i] = rand64();
+    __zhash_br[i] = rand64();
+    __zhash_bb[i] = rand64();
+    __zhash_bn[i] = rand64();
+    __zhash_br[i] = rand64();
+    __zhash_EP[i] = rand64();
+  }
+
+  __zhash_turn[0] = rand64();
+  __zhash_turn[1] = rand64();
+
+  for i: 0..__zhash_castling.count-1 {
+    __zhash_castling[i] = rand64();
+  }
+
+  rand64 :: () -> u64 {
+    return (random_get() << 32) | random_get();
+  }
+}
+
+
+//__zobrist_hash :: (using p: *Piece_Bitboards, c: Castling, ep: u64, whose_turn: bool) -> u64 {
+
+#run {
+  zobrist_init_globals();
+
+  p, whose_turn, c, ep := chess_start_pos();
+  hash1 := __zobrist_hash(*p, c, ep, whose_turn);
+  hash2 := __zobrist_hash(*p, c, ep, whose_turn);
+  print("%, %, %\n", hash1, hash2, hash1==hash2);
+
+  p, whose_turn, c, ep = chess_start_from_fen("r1b1k2r/ppppnppp/2n2q2/2b5/3NP3/2P1B3/PP3PPP/RN1QKB1R w KQkq - 0 1 ");
+  hash2 = __zobrist_hash(*p, c, ep, whose_turn);
+  print("%, %, %\n", hash1, hash2, hash1!=hash2);
+
+  p, whose_turn, c, ep = chess_start_from_fen("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1  ");
+  hash2 = __zobrist_hash(*p, c, ep, whose_turn);
+  print("%, %, %\n", hash1, hash2, hash1!=hash2);
+
+  p, whose_turn, c, ep = chess_start_from_fen("rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2");
+  hash2 = __zobrist_hash(*p, c, ep, whose_turn);
+  print("%, %, %\n", hash1, hash2, hash1!=hash2);
+}*/
+
+
+
+
+
+
 
 
