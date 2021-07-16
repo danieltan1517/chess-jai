@@ -21,7 +21,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, wh
     ep_copy := ep;
     capture := PieceType.None;
     make_move(pieces, *c_copy, *ep_copy, *capture, move, whose_turn);
-    eval := - negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *pv_line);
+    eval := -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *pv_line);
     unmake_move(pieces, capture, move, whose_turn);
     if eval >= best_eval {
       // TODO: figure out whether to include pv line in here...
@@ -61,9 +61,8 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   line: PVLine;
   __nodes_searched += 1;
   {
-    found, score := read_hash_entry(pieces, castling, ep, whose_turn, alpha, beta, depth);
+    found, score := read_hash_entry(pieces, castling, ep, whose_turn, alpha=alpha, beta=beta, depth=depth);
     if found then {
-      print("Score = %\n", score);
       return score;
     }
   }
@@ -71,6 +70,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   if depth == 0 then {
     pv_line.cmove = 0;
     score := quiescene(pieces, castling, ep, whose_turn, pv_line, alpha, beta);
+    write_hash_entry(pieces, castling, ep, whose_turn, score=score, depth=depth, hash_flag=TFLAGS.EXACT);
     return score;  
   }
 
@@ -82,6 +82,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   move_ordering(pieces, move_array, whose_turn, pv_line, depth);
 
   eval := -INF;
+  thash_flag := TFLAGS.ALPHA;
   for move : move_array {
     c_copy  := castling;
     ep_copy := ep;
@@ -89,8 +90,19 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     make_move(pieces, *c_copy, *ep_copy, *capture, move, whose_turn);
     eval = max(eval, -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, -beta, -alpha));
     unmake_move(pieces, capture, move, whose_turn);
-    if eval >= alpha {
-      //thash_flag = TFLAGS.EXACT;
+
+    if alpha >= beta then {
+      flags, from, to := decode_move(move);
+      write_hash_entry(pieces, castling, ep, whose_turn, score=beta, depth=depth, hash_flag=TFLAGS.BETA);
+      if !is_capture(flags) {
+        __killer_moves[1][depth] = __killer_moves[0][depth];
+        __killer_moves[0][depth] = move;
+      }
+      return beta;
+    }
+
+    if eval > alpha {
+      thash_flag = TFLAGS.EXACT;
       alpha = eval;
       pv_line.argmove[0] = move;
       memcpy(*pv_line.argmove[1], *line.argmove[0], line.cmove * size_of(Move16));
@@ -100,20 +112,10 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
         __history_moves[cast(int)whose_turn][from][to] += depth*depth;
       }
     }
-
-    if alpha >= beta then {
-      write_hash_entry(pieces, castling, ep, whose_turn, score=beta, depth=depth, TFLAGS.BETA);
-      flags, from, to := decode_move(move);
-      if !is_capture(flags) {
-        __killer_moves[1][depth] = __killer_moves[0][depth];
-        __killer_moves[0][depth] = move;
-      }
-      return beta;
-    }
   }
 
-  write_hash_entry(pieces, castling, ep, whose_turn, score=alpha, depth=depth, TFLAGS.EXACT);
-  return alpha;
+  write_hash_entry(pieces, castling, ep, whose_turn, score=eval, depth=depth, hash_flag=thash_flag);
+  return eval;
 }
 
 // perft results are found here: https://www.chessprogramming.org/Perft_Results
@@ -276,7 +278,6 @@ quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn:
   if alpha < eval then
     alpha = eval; 
 
-  //print("quiescene search: (%, %)\n", alpha, beta);
   move_array: [..] Move16;
   array_reserve(*move_array, 40);
   defer array_free(move_array);
@@ -380,7 +381,7 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
     } else if flags == Ep_Capture {
       order[i] = mvv_lva(PieceType.Pawn, PieceType.Pawn);
     } else if Knight_Promotion <= flags && flags <= Queen_Promotion_Capture {
-      order[i] = 1000.0;
+      order[i] = 100000.0;
     } else if Knight_Promotion_Capture <= flags && flags <= Queen_Promotion_Capture {
       piece_to_type := piece_type_at(to, pieces, !whose_turn);
       order[i] = mvv_lva(piece_to_type, PieceType.Pawn);
@@ -388,9 +389,9 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       order[i] = 150.0;
     } else {
       if __killer_moves[0][depth] == move_array[i] {
-        order[i] = 1500.0;
+        order[i] = 2500.0;
       } else if __killer_moves[1][depth] == move_array[i] {
-        order[i] = 1250.0;
+        order[i] = 2250.0;
       } else {
         order[i] += __history_moves[cast(int)whose_turn][from_index][to_index];
       }
@@ -588,7 +589,6 @@ read_hash_entry :: (pieces: *Piece_Bitboards, c: Castling, ep: u64, whose_turn: 
   key := hash % TSIZE;
   if ttable.hash[key] == hash {
     if ttable.depth[key] >= depth {
-      print("key depth: %, depth: %\n", ttable.depth[key], depth);     
       using TFLAGS;
       if ttable.flag[key] == {
       case .EXACT;
