@@ -635,7 +635,6 @@ ui_handle_move_made :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_s
   }
   highlight_the_square = 0;
   possible_moves_bb = 0;
-
   promote_move = cast(Move16) 0;
 }
 

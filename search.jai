@@ -2,31 +2,18 @@
 #import "Basic";
 
 search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool) -> Move16, float {
+  // this is basically a fancy wrapper around negamax, negamax does all the work, this just sets everything up.
   time_taken := get_time();
   memset(__history_moves.data, 0, size_of(float)*2*64*64);
   memset(__killer_moves.data,  0, size_of(Move16)*2*64);
   clear_hash_table();
   __nodes_searched = 0;
-  move_array: [..] Move16;
+
   pv_line: PVLine;
-  array_reserve(*move_array, 40);
-  defer array_free(move_array);
-  generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
-  move_ordering(pieces, move_array, whose_turn, *pv_line, depth);
-
-  best_move, best_eval := Move16.Quiet, -INF;
-  for move: move_array {
-    c_copy, ep_copy, capture  := castling, ep, PieceType.None;
-    make_move(pieces, *c_copy, *ep_copy, *capture, move, whose_turn);
-    eval := -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *pv_line);
-    unmake_move(pieces, capture, move, whose_turn);
-    if eval >= best_eval {
-      best_move, best_eval = move, eval;
-    }
-  }
-
+  best_eval, best_move := negamax(pieces, castling, ep, depth, whose_turn, *pv_line);
   time_taken = get_time() - time_taken;
   print_stats();
+
   return best_move, best_eval;
 
   print_stats :: () #expand {
@@ -53,26 +40,35 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, wh
   }
 }
 
-negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, alpha := -INF, beta := INF) -> float {
+negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, alpha := -INF, beta := INF) -> float, Move16 {
   line: PVLine;
   __nodes_searched += 1;
 
   alpha_orig := alpha;
 
-  transposition_table_lookup ();
+  //transposition_table_lookup();
 
   if depth == 0 then {
     pv_line.cmove = 0;
-    return nnue_evaluate(pieces, whose_turn);//quiescene(pieces, castling, ep, whose_turn, pv_line, alpha, beta);
+    return quiescene(pieces, castling, ep, whose_turn, pv_line, alpha, beta), 0;
   }
 
   move_array: [..] Move16;
   array_reserve(*move_array, 40);
   defer array_free(move_array);
-  generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
+  c := generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
+
+  if !move_array then {
+    if c != 0 then {
+      return -INF, 0;
+    } else {
+      return 0.0, 0;
+    }
+  }
+
   move_ordering(pieces, move_array, whose_turn, pv_line, depth);
 
-  eval := -INF;
+  eval, bmov := -INF, Move16.Quiet;
   for move : move_array {
     c_copy  := castling;
     ep_copy := ep;
@@ -80,8 +76,10 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     make_move(pieces, *c_copy, *ep_copy, *capture, move, whose_turn);
     eval = max(eval, -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, -beta, -alpha));
     unmake_move(pieces, capture, move, whose_turn);
+
     if eval > alpha {
       alpha = eval;
+      bmov = move;
       pv_line.argmove[0] = move;
       memcpy(*pv_line.argmove[1], *line.argmove[0], line.cmove * size_of(Move16));
       pv_line.cmove = line.cmove + 1;
@@ -101,27 +99,27 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     }
   }
 
-  transposition_table_store(eval);
-  return eval;
+  //transposition_table_store(eval);
+  return eval, bmov;
 
   transposition_table_lookup :: () #expand {
     hash := __zobrist_hash(pieces, castling, ep, whose_turn);
     key  := hash % TSIZE;
-    if ttable.hash[key] == hash && ttable.depth[key] >= depth then {
-      if ttable.flag[key] == TFLAGS.EXACT then {
-        `return ttable.score[key];
+    if ttable.arr[key].hash == hash && ttable.arr[key].depth >= depth then {
+      if ttable.arr[key].flag == TFLAGS.EXACT then {
+        `return ttable.arr[key].score, 0;
       }
  
-      else if ttable.flag[key] == TFLAGS.LOWER then {
-        alpha = max(alpha, ttable.score[key]);
+      else if ttable.arr[key].flag == TFLAGS.LOWER then {
+        alpha = max(alpha, ttable.arr[key].score);
       } 
  
-      else if ttable.flag[key] == TFLAGS.UPPER then {
-        beta  = min(beta,  ttable.score[key]);
+      else if ttable.arr[key].flag == TFLAGS.UPPER then {
+        beta  = min(beta,  ttable.arr[key].score);
       }
  
       if alpha >= beta then {
-        `return ttable.score[key];
+        `return ttable.arr[key].score, 0;
       }
     }
   }
@@ -129,16 +127,16 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   transposition_table_store :: (value: float) #expand {
     hash := __zobrist_hash(pieces, castling, ep, whose_turn);
     key  := hash % TSIZE;
-    ttable.hash[key] = hash;
-    ttable.depth[key] = depth;
-    ttable.score[key] = eval;
-    if value <= alpha_orig then {
-      ttable.flag[key] = TFLAGS.UPPER;
+    ttable.arr[key].score = eval;
+    if alpha > alpha_orig then {
+      ttable.arr[key].flag = TFLAGS.UPPER;
     } else if value >= beta then {
-      ttable.flag[key] = TFLAGS.LOWER;
+      ttable.arr[key].flag = TFLAGS.LOWER;
     } else {
-      ttable.flag[key] = TFLAGS.EXACT;
+      ttable.arr[key].flag = TFLAGS.EXACT;
     }
+    ttable.arr[key].depth = xx depth;
+    ttable.arr[key].hash  = hash;
   }
 }
 
@@ -411,8 +409,10 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
         order[i] = 2500.0;
       } else if __killer_moves[1][depth] == move_array[i] {
         order[i] = 2250.0;
+      } else if (from & ~pawns) && (to & p_attacks) {
+        order[i] = -10.0;
       } else {
-        order[i] += __history_moves[cast(int)whose_turn][from_index][to_index];
+        order[i] = __history_moves[cast(int)whose_turn][from_index][to_index];
       }
     }
   }
@@ -442,7 +442,7 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
 
     piece_score :: (using p: PieceType) -> score: float {
       if p == {
-      case King;   return 100000.0;
+      case King;   return 500000.0;
       case Queen;  return  90000.0;
       case Rook;   return  50000.0;
       case Bishop; return  35000.0;
@@ -549,7 +549,8 @@ __zobrist_hash :: (using p: *Piece_Bitboards, c: Castling, ep: u64, whose_turn: 
 
 zobrist_init_globals :: () {
   // TODO: random generation?
-  random_seed(861097715);
+  random_seed(xx get_time());
+
   for i: 0..63 {
     __zhash_wk[i] = rand64();
     __zhash_wq[i] = rand64();
@@ -573,6 +574,7 @@ zobrist_init_globals :: () {
   for i: 0..__zhash_castling.count-1 {
     __zhash_castling[i] = rand64();
   }
+  print("Zobrist global initialization done.\n");
 
   rand64 :: () -> u64 {
     return (random_get() << 32) | random_get();
@@ -581,25 +583,25 @@ zobrist_init_globals :: () {
 
 // modified from BBC chess engine.
 // get something off the ground.
-TSIZE :: 0x40_8000;
+TSIZE :: 0x300_0000;
 
 ttable : struct {
-  hash : [TSIZE] u64;
-  flag : [TSIZE] TFLAGS;
-  depth: [TSIZE] int;
-  score: [TSIZE] float;
+
+  arr: [TSIZE] TTEntry;
+
+  TTEntry :: struct {
+    hash : u64;
+    flag : TFLAGS;
+    depth: s16;
+    score: float;
+  }
 }
 
-TFLAGS :: enum u8 {EXACT; LOWER; UPPER; }
+TFLAGS :: enum s16 {EXACT; LOWER; UPPER; }
 
 clear_hash_table :: () {
-  memset(*ttable.hash[0],  0, TSIZE*size_of(u64));
-  memset(*ttable.flag[0],  0, TSIZE*size_of(TFLAGS));
-  memset(*ttable.depth[0], 0, TSIZE*size_of(int));
-  memset(*ttable.score[0], 0, TSIZE*size_of(float));
+  memset(*ttable.arr[0],  0, TSIZE*size_of(ttable.TTEntry));
 }
-
-
 
 
 
