@@ -119,7 +119,8 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       }
  
       if alpha >= beta then {
-        `return ttable.arr[key].score, 0;
+        //`return ttable.arr[key].score, 0;
+        //`return INF, 0;
       }
     }
   }
