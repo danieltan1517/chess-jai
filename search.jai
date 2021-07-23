@@ -72,7 +72,6 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     }
   }
 
-  //    bh_move = ttable.entries[key].bmove;
   // principle variation search.
   move_ordering(pieces, move_array, whose_turn, pv_line, depth, bh_move);
   eval, bmov := -INF, move_array[0];

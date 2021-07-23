@@ -28,6 +28,7 @@ This Jai-Chess AI is a hobby project I created for fun. Here is a list of the fe
 * Move Ordering
 * Principle Variation Move Ordering
 * MVV-LVA (Most Valuable Victim, Least Valuable Attacker) Implementation
+* Hash Move
 * Killer Moves Move Ordering
 * History Moves Move Ordering
 * Zobrist Hashing
