@@ -3,9 +3,9 @@
 #import "String";
 
 main :: () {
+  nnue_init();
   init_global_bitboards();
   initialize_ai_globals();
-  nnue_init();
   pieces, whose_turn, castling, ep := chess_start_pos();
 
   while true {

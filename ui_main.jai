@@ -959,7 +959,7 @@ __edge_case_count := 0;
 
 
 __engine_name : string;  // name of engine. exists for aesthetic purposes
-__engine_depth_parameter : int = 3; // depth of engine search.
+__engine_depth_parameter : int = 7; // depth of engine search.
 
 
 
