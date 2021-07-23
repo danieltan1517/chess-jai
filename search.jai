@@ -15,8 +15,10 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, wh
   for iter_depth : 1..depth { 
     best_eval, best_move = negamax(pieces, castling, ep, iter_depth, whose_turn, *pv_line);
     time_taken := get_time() - time_begin;
+    max_nodes = max(max_nodes, __nodes_searched);
     print_stats(iter_depth);
   }
+  print("info maxnodes = %\n", max_nodes);
   return best_move, best_eval;
 
   print_stats :: (depth: int) #expand {
@@ -45,6 +47,8 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, wh
     }
   }
 }
+
+max_nodes := 0;
 
 negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, alpha := -INF, beta := INF) -> float, Move16 {
   line: PVLine;
@@ -80,17 +84,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     ep_copy := ep;
     capture := PieceType.None;
     make_move(pieces, *c_copy, *ep_copy, *capture, move, whose_turn);
-    if move_index == 0 {
-      // if the child is the 1st child
-      eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, -beta, -alpha);
-    } else {
-      // other children
-      eval = max(eval, -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, -alpha-1, -alpha));
-      if alpha <= eval && eval <= beta {
-        eval = max(eval, -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, -beta, -alpha));
-      }
-    }
-
+    eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, -beta, -alpha);
     unmake_move(pieces, capture, move, whose_turn);
 
     if eval > alpha {
@@ -116,6 +110,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     }
   }
 
+  // NOTE: do not return alpha, return eval
   transposition_table_store(eval, bh_move);
   return eval, bmov;
 
@@ -559,7 +554,7 @@ __zhash_bp: [64] u64;
 
 __zhash_EP: [64] u64;
 
-__zhash_turn: [2] u64;
+__zhash_turn: u64;
 
 __zhash_castling: [16]  u64;
 
@@ -580,7 +575,9 @@ __zobrist_hash :: (using p: *Piece_Bitboards, c: Castling, ep: u64, whose_turn: 
   hash ^= hash_pieces(b_knight, __zhash_bn);
   hash ^= hash_pieces(b_pawn,   __zhash_bp);
   hash ^= hash_pieces(ep,       __zhash_EP);
-  hash ^= __zhash_turn[cast(int)whose_turn];
+
+  mask := ~(cast(u64)whose_turn) + 1;
+  hash ^= (__zhash_turn) & mask;
 
   hash ^= __zhash_castling[cast(int)c];
   return hash;
@@ -617,8 +614,7 @@ zobrist_init_globals :: () {
     __zhash_EP[i] = rand64();
   }
 
-  __zhash_turn[0] = rand64();
-  __zhash_turn[1] = rand64();
+  __zhash_turn = rand64();
 
   for i: 0..__zhash_castling.count-1 {
     __zhash_castling[i] = rand64();
@@ -649,8 +645,7 @@ ttable : struct {
 TFLAGS :: enum s8 {EXACT; LOWER; UPPER; }
 
 clear_hash_table :: () {
-  memset(*ttable.hash[0], 0, TSIZE*size_of(u64));
-  memset(*ttable.entries[0], 0, TSIZE*size_of(ttable.TTEntry));
+  memset(*ttable, 0, size_of(type_of(ttable)));
 }
 
 
