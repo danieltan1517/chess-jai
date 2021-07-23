@@ -16,6 +16,7 @@ This Jai-Chess AI is a hobby project I created for fun. Here is a list of the fe
 ## AI Chess Engine Features
 * AI Estimated Rating: 1590
 * Parse and load FEN strings
+* Iterative Deepening
 * Implements UCI (Universal Chess Interface) Protocol to communicate with a UI
 * Legal move generation and detection
 * Passes all perft tests
@@ -30,7 +31,7 @@ This Jai-Chess AI is a hobby project I created for fun. Here is a list of the fe
 * Killer Moves Move Ordering
 * History Moves Move Ordering
 * Zobrist Hashing
-* Transposition Table (still needs testing to make it work correctly)
+* Transposition Table 
 
 ## Still needs to be implemented
 * Better optimization for negamax search
