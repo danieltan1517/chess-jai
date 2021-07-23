@@ -38,8 +38,8 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, wh
     print("%\n", str);
     reset_temporary_storage();
     __nodes_searched = 0;
-    memset(__history_moves.data, 0, size_of(float)*2*64*64);
-    //memset(__killer_moves.data,  0, size_of(Move16)*2*64);
+    //memset(__history_moves.data, 0, size_of(float)*2*64*64);
+    memset(__killer_moves.data,  0, size_of(Move16)*2*64);
 
     print_move_to_buffer :: (mv: Move16) #expand {
       _, from, to := decode_move(mv);
