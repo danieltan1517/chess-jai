@@ -828,20 +828,20 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     check_sqs = between_bitboard(checks, king) | checks;
   } else {
     check_sqs = ~0;
-    safe_sqs := ~attacks;
-    not_occu := ~occupied;
+    safe_sqs := cast(bboard) ~attacks;
+    not_occu := cast(bboard) ~occupied;
     if whose_turn {
-      handle_castling(Castling.W_KS, cast(u64) (f1|g1), cast(u64)(f1|g1), 2, cast(u64)e1, cast(u64)g1, Move16.King_Castle);
-      handle_castling(Castling.W_QS, cast(u64) (c1|d1), cast(u64)(b1|c1|d1), 3, cast(u64)e1, cast(u64)c1, Move16.Queen_Castle);
+      handle_castling(Castling.W_KS, f1|g1, f1|g1, e1, g1, Move16.King_Castle);
+      handle_castling(Castling.W_QS, c1|d1, b1|c1|d1, e1, c1, Move16.Queen_Castle);
     } else {
-      handle_castling(Castling.B_KS, cast(u64) (f8|g8), cast(u64)(f8|g8), 2, cast(u64)e8, cast(u64)g8, Move16.King_Castle);
-      handle_castling(Castling.B_QS, cast(u64) (c8|d8), cast(u64)(b8|c8|d8), 3, cast(u64)e8, cast(u64)c8, Move16.Queen_Castle);
+      handle_castling(Castling.B_KS, f8|g8, f8|g8, e8, g8, Move16.King_Castle);
+      handle_castling(Castling.B_QS, c8|d8, b8|c8|d8, e8, c8, Move16.Queen_Castle);
     }
 
-    handle_castling :: ($F: Castling, $castle_sqs: u64, $check_occ: u64, $occ_num: int, $from: u64, $to: u64, $flags: Move16) #expand {
+    handle_castling :: ($F: Castling, $castle_sqs: bboard, $check_occ: bboard, $from: bboard, $to: bboard, $flags: Move16) #expand {
       if c_flags & F {
-        if popcount(safe_sqs & castle_sqs) == 2 && popcount(not_occu & check_occ) == occ_num {
-          array_add(moves_arr, encode_move_bb(from, to, flags));
+        if (safe_sqs & castle_sqs) == castle_sqs && (not_occu & check_occ) == check_occ {
+          array_add(moves_arr, encode_move_bb(xx from, xx to, flags));
         }
       }
     }

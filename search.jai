@@ -72,19 +72,32 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     }
   }
 
-  move_ordering(pieces, move_array, whose_turn, pv_line, depth);
+  //    bh_move = ttable.entries[key].bmove;
+  // principle variation search.
+  move_ordering(pieces, move_array, whose_turn, pv_line, depth, bh_move);
   eval, bmov := -INF, move_array[0];
-  for move : move_array {
+  for move, move_index : move_array {
     c_copy  := castling;
     ep_copy := ep;
     capture := PieceType.None;
     make_move(pieces, *c_copy, *ep_copy, *capture, move, whose_turn);
-    eval = max(eval, -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, -beta, -alpha));
+    if move_index == 0 {
+      // if the child is the 1st child
+      eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, -beta, -alpha);
+    } else {
+      // other children
+      eval = max(eval, -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, -alpha-1, -alpha));
+      if alpha <= eval && eval <= beta {
+        eval = max(eval, -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, -beta, -alpha));
+      }
+    }
+
     unmake_move(pieces, capture, move, whose_turn);
 
     if eval > alpha {
       alpha = eval;
       bmov = move;
+      bh_move = move;
       pv_line.argmove[0] = move;
       memcpy(*pv_line.argmove[1], *line.argmove[0], line.cmove * size_of(Move16));
       pv_line.cmove = line.cmove + 1;
@@ -104,45 +117,51 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     }
   }
 
-  transposition_table_store(eval);
+  transposition_table_store(eval, bh_move);
   return eval, bmov;
 
   transposition_table_lookup :: () #expand {
     hash := __zobrist_hash(pieces, castling, ep, whose_turn);
     key  := hash % TSIZE;
-    if ttable.arr[key].hash == hash && ttable.arr[key].depth >= depth then {
-      value := ttable.arr[key].score;
-      if ttable.arr[key].flag == TFLAGS.EXACT then {
-        `return value, 0;
+    `bh_move : Move16 = 0;
+    if ttable.hash[key] == hash && ttable.entries[key].depth >= depth then {
+      if ttable.entries[key].depth >= depth then {
+        value := ttable.entries[key].score;
+        if ttable.entries[key].flag == TFLAGS.EXACT then {
+          `return value, 0;
+        }
+       
+        else if ttable.entries[key].flag == TFLAGS.LOWER then {
+          alpha = max(alpha, value);
+        } 
+       
+        else if ttable.entries[key].flag == TFLAGS.UPPER then {
+          beta  = min(beta, value);
+        }
+       
+        if alpha >= beta then {
+          `return value, 0;
+        }
       }
- 
-      else if ttable.arr[key].flag == TFLAGS.LOWER then {
-        alpha = max(alpha, value);
-      } 
- 
-      else if ttable.arr[key].flag == TFLAGS.UPPER then {
-        beta  = min(beta, value);
-      }
- 
-      if alpha >= beta then {
-        `return value, 0;
-      }
+
+      bh_move = ttable.entries[key].bmove;
     }
   }
 
-  transposition_table_store :: (value: float) #expand {
+  transposition_table_store :: (value: float, bmove: Move16) #expand {
     hash := __zobrist_hash(pieces, castling, ep, whose_turn);
     key  := hash % TSIZE;
-    ttable.arr[key].score = eval;
+    ttable.entries[key].score = eval;
     if value <= alpha_orig then {
-      ttable.arr[key].flag = TFLAGS.UPPER;
+      ttable.entries[key].flag = TFLAGS.UPPER;
     } else if value >= beta then {
-      ttable.arr[key].flag = TFLAGS.LOWER;
+      ttable.entries[key].flag = TFLAGS.LOWER;
     } else {
-      ttable.arr[key].flag = TFLAGS.EXACT;
+      ttable.entries[key].flag = TFLAGS.EXACT;
     }
-    ttable.arr[key].depth = xx depth;
-    ttable.arr[key].hash  = hash;
+    ttable.entries[key].depth = xx depth;
+    ttable.entries[key].bmove = bmove;
+    ttable.hash[key] = hash;
   }
 }
 
@@ -366,10 +385,11 @@ perft :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, de
 
 // Move Ordering currently consists of:
 // MVV-LVA implementation
+// Hash Move
 // Principle Variation Moves
 // History Moves.
 // Killer moves. (Or at least what I think is the simplest implementation of killer moves)
-move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn: bool, pv_line: *PVLine, depth := 0) {
+move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn: bool, pv_line: *PVLine, depth: int, bh_move: Move16) {
   // TODO: I don't know if some other function wants to use temporary storage.
   count := move_array.count;
   order := NewArray(count, float, allocator=__temporary_allocator);
@@ -381,6 +401,9 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
   for i: 0..count-1 {
     if move_array[i] == pv_line.argmove[0] {
       order[i] = INF;
+      continue;
+    } else if move_array[i] == bh_move {
+      order[i] = 9.99e16;
       continue;
     }
 
@@ -613,21 +636,22 @@ zobrist_init_globals :: () {
 TSIZE :: 0x300_0000;
 
 ttable : struct {
-
-  arr: [TSIZE] TTEntry;
+  hash:     [TSIZE] u64;
+  entries:  [TSIZE] TTEntry;
 
   TTEntry :: struct {
-    hash : u64;
     flag : TFLAGS;
-    depth: s16;
+    depth: s8;
+    bmove: Move16;
     score: float;
   }
 }
 
-TFLAGS :: enum s16 {EXACT; LOWER; UPPER; }
+TFLAGS :: enum s8 {EXACT; LOWER; UPPER; }
 
 clear_hash_table :: () {
-  memset(*ttable.arr[0],  0, TSIZE*size_of(ttable.TTEntry));
+  memset(*ttable.hash[0], 0, TSIZE*size_of(u64));
+  memset(*ttable.entries[0], 0, TSIZE*size_of(ttable.TTEntry));
 }
 
 

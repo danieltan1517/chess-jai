@@ -20,6 +20,7 @@ hc      -- white=human vs black=ai
 ch      -- white=ai vs black=human
 cc      -- white=ai vs black=ai
 ai=Lc0  -- sets the ai to that particular ai. Must be in the resources directory.
+fen="x" -- loads the fen string into the board.
 
 Here is a sample command-line calling:
 
