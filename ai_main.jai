@@ -7,6 +7,8 @@ main :: () {
   init_global_bitboards();
   initialize_ai_globals();
   pieces, whose_turn, castling, ep := chess_start_pos();
+  repetitions: [..] u64;
+  array_reserve(*repetitions, 200);
 
   while true {
     input := getline();
@@ -26,7 +28,6 @@ main :: () {
       setup_position(input);
 
     } else if begins_with(input, "go ") {
-      eval := nnue_evaluate(*pieces, whose_turn);
       go_command(input);
     }
   }
@@ -34,6 +35,7 @@ main :: () {
   setup_position :: (input: string) #expand {
     // TODO: this does not guard against incoherent IO, this is just
     // to get it working... 
+    array_reset(*repetitions);
 
     input = advance(input, 9);
     input = eat_spaces(input);
@@ -84,9 +86,18 @@ main :: () {
       promote := ifx token.count == 5 then token[4] else 0;
       move_type := get_move_type(pieces, ep, from, to, promote, whose_turn);
       move := encode_move_bb(from, to, move_type);
+
+      before_pawn := pieces.w_pawn | pieces.b_pawn;
       captured: PieceType;
       make_move(*pieces, *castling, *ep, *captured, move, whose_turn);
       whose_turn = !whose_turn;
+      after_pawn := pieces.w_pawn | pieces.b_pawn;
+
+      hash : u64 = 0;
+      if move_type == Move16.Quiet && before_pawn == after_pawn {
+        hash = zobrist_hash(*pieces, castling, ep, whose_turn);
+      }
+      array_add(*repetitions, hash);
     }
   }
 
@@ -98,7 +109,7 @@ main :: () {
       depth, TF := parse_int(*input);
       if !TF return;
 
-      mov, eval := search(*pieces, castling, ep, depth, whose_turn);
+      mov, eval := search(*pieces, castling, ep, *repetitions, depth, whose_turn);
 
       flags, from, to := decode_move(mov);
       // hopefully promote the piece functions correctly...

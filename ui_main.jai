@@ -292,7 +292,6 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
     im_draw_rect(posx, posy + scale_up_sq_len, posx + scale_up_sq_len*4, posy, c=BLANK*0.75);
     im_set_texture(texture);
     if whose_turn {
-
       im_draw_rect(posx, posy + scale_up_sq_len, posx + scale_up_sq_len, posy, u0=1.0/6.0, v0=0.0, u1=2.0/6.0, v1=0.5, c=BLANK);
       posx += scale_up_sq_len;
       im_draw_rect(posx, posy + scale_up_sq_len, posx + scale_up_sq_len, posy, u0=4.0/6.0, v0=0.0, u1=5.0/6.0, v1=0.5, c=BLANK);
@@ -998,7 +997,7 @@ __edge_case_count := 0;
 
 
 __engine_name : string;  // name of engine. exists for aesthetic purposes
-__engine_depth_parameter : int = 6; // depth of engine search.
+__engine_depth_parameter : int = 7; // depth of engine search.
 
 
 

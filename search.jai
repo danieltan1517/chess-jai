@@ -1,7 +1,7 @@
 #import "Math";
 #import "Basic";
 
-search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool) -> Move16, float {
+search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *[..] u64, depth: int, whose_turn: bool) -> Move16, float {
   // this is basically a fancy wrapper around negamax, negamax does all the work, this just sets everything up.
   time_begin := get_time();
   memset(__history_moves.data, 0, size_of(float)*2*64*64);
@@ -13,10 +13,11 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, wh
   best_eval : float; best_move : Move16;
  
   for iter_depth : 1..depth { 
-    best_eval, best_move = negamax(pieces, castling, ep, iter_depth, whose_turn, *pv_line);
+    best_eval, best_move = negamax(pieces, castling, ep, iter_depth, whose_turn, repetitions, *pv_line);
     time_taken := get_time() - time_begin;
     max_nodes = max(max_nodes, __nodes_searched);
     print_stats(iter_depth);
+    print("count = %\n", repetitions.count);
   }
   print("info maxnodes = %\n", max_nodes);
   return best_move, best_eval;
@@ -49,7 +50,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, wh
 
 max_nodes := 0;
 
-negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, alpha := -INF, beta := INF) -> float, Move16 {
+negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, repetitions: *[..] u64, pv_line: *PVLine, alpha := -INF, beta := INF) -> float, Move16 {
   line: PVLine;
   __nodes_searched += 1;
 
@@ -59,7 +60,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
   if depth == 0 then {
     pv_line.cmove = 0;
-    return quiescene(pieces, castling, ep, whose_turn, alpha, beta), 0;
+    return quiescene(pieces, castling, ep, whose_turn, alpha, beta, __fifty), 0;
   }
 
   move_array: [..] Move16;
@@ -78,11 +79,24 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   // principle variation search.
   move_ordering(pieces, move_array, whose_turn, pv_line, depth, bh_move);
   eval, bmov := -INF, move_array[0];
-  for move, move_index : move_array {
+  for move : move_array {
     c_copy, ep_copy, capture := castling, ep, PieceType.None;
+
+    before_pawn := pieces.w_pawn | pieces.b_pawn;
     make_move(pieces, *c_copy, *ep_copy, *capture, move, whose_turn);
-    eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, -beta, -alpha);
+    after_pawn := pieces.w_pawn | pieces.b_pawn;
+
+    nm_hash : u64 = 0;
+    mmflag := decode_move(move);
+    if mmflag == Move16.Quiet && before_pawn == after_pawn {
+      nm_hash = zobrist_hash(pieces, c_copy, ep_copy, whose_turn);
+    }
+    array_add(repetitions, nm_hash);
+
+    eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, repetitions, *line, -beta, -alpha);
+
     unmake_move(pieces, capture, move, whose_turn);
+    pop(repetitions);
 
     if eval > alpha {
       alpha = eval;
@@ -112,14 +126,31 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   return eval, bmov;
 
   transposition_table_lookup :: () #expand {
+    // TODO: these can possibly be combined into one function and save some time...
+    // TODO: write a better optimized version of this, this is just copy/paste from UI, and slightly
+    // edited...
+
+    count_rep : int;
+    `__fifty : int;
+
+    if repetitions.count > 0 {
+      last_rep := (<<repetitions)[repetitions.count-1];
+      if last_rep != 0 {
+        count_rep, __fifty = check_for_repetition(<<repetitions, last_rep);
+        if count_rep >= 3 || __fifty >= 100 then {
+          `return 0.0, 0;  // STALEMATE
+        }
+      }
+    }
+
     hash := zobrist_hash(pieces, castling, ep, whose_turn);
     key  := hash % TSIZE;
-    `bh_move : Move16 = 0;
+    `bh_move := ttable.entries[key].bmove;
     if ttable.hash[key] == hash && ttable.entries[key].depth >= depth then {
       if ttable.entries[key].depth >= depth then {
         value := ttable.entries[key].score;
         if ttable.entries[key].flag == TFLAGS.EXACT then {
-          `return value, 0;
+          `return value, bh_move;
         }
        
         else if ttable.entries[key].flag == TFLAGS.LOWER then {
@@ -131,11 +162,10 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
         }
        
         if alpha >= beta then {
-          `return value, 0;
+          `return value, bh_move;
         }
       }
 
-      bh_move = ttable.entries[key].bmove;
     }
   }
 
@@ -154,6 +184,19 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     }
     ttable.entries[key].depth = xx depth;
     ttable.entries[key].bmove = bmove;
+  }
+
+  check_for_repetition :: (hash_record: [] u64, hash: u64) -> int, int #expand {
+    count := 0;
+    fifty := 0;
+    for < hash_record {
+      if it == 0 break;
+      if it == hash {
+        count += 1;
+      }
+      fifty += 1;
+    }
+    return count, fifty;
   }
 
 }
@@ -304,8 +347,8 @@ INF :: FLOAT32_INFINITY; // Alias
 
 // search capture moves only, we do this to avoid horizon effect
 // see: https://www.chessprogramming.org/Quiescence_Search
-quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, alpha: float, beta: float) -> float {
-  eval := nnue_evaluate(pieces, whose_turn);
+quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, alpha: float, beta: float, fifty: int = 0) -> float {
+  eval := nnue_evaluate(pieces, whose_turn, fifty);
   if eval >= beta then
     return beta;
   if alpha < eval then
@@ -318,14 +361,14 @@ quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn:
   filter_captures(move_array);
   capture_order(pieces, move_array, whose_turn);
 
-  // search captures only
+  // search captures only, captures negate the fifty move rule
   for cap_move: move_array {
     c_copy  := castling;
     ep_copy := ep;
     capture := PieceType.None;
     flags, from, to := decode_move(cap_move);
     make_move(pieces, *c_copy, *ep_copy, *capture, cap_move, whose_turn);
-    score := -quiescene(pieces, c_copy, ep_copy, !whose_turn, -beta, -alpha);
+    score := -quiescene(pieces, c_copy, ep_copy, !whose_turn, -beta, -alpha, 0);
     unmake_move(pieces, capture, cap_move, whose_turn);
 
     if score >= beta then
@@ -348,7 +391,7 @@ filter_captures :: (move_array: [..] Move16) {
 
 PVLine :: struct {
   cmove: int;
-  argmove: [32] Move16;
+  argmove: [16] Move16;  // TODO: WTF, THIS is the thing that is taking up SOO much memory?!?!
 }
 
 // performance test

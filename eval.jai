@@ -4,7 +4,7 @@ nnue_init :: () {
   __nnue_init(eval_file=eval_file);
 }
 
-nnue_evaluate :: (using p: *Piece_Bitboards, whose_turn: bool) -> float {
+nnue_evaluate :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) -> float {
   pieces: [65] s32;
   squares: [65] s32;
 
@@ -31,7 +31,7 @@ nnue_evaluate :: (using p: *Piece_Bitboards, whose_turn: bool) -> float {
     eval = __nnue_evaluate(player=1, pieces.data, squares.data);
   }
 
-  return xx eval;
+  return (eval * (100 - fifty)) * 0.01;
 
   translate_bitboard :: (bb: u64, piece_type: s32) #expand {
     while bb {
