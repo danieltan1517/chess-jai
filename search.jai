@@ -18,7 +18,6 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
     max_nodes = max(max_nodes, __nodes_searched);
     print_stats(iter_depth);
   }
-  //print("info maxnodes = %\n", max_nodes);
   return best_move, best_eval;
 
   print_stats :: (depth: int) #expand {
@@ -46,8 +45,6 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
     }
   }
 }
-
-max_nodes := 0;
 
 negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, repetitions: *[..] u64, pv_line: *PVLine, alpha := -INF, beta := INF) -> float, Move16 {
   line: PVLine;
