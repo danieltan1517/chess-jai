@@ -31,16 +31,15 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, wh
     print_to_builder(*builder, "nodes % time % score cp % nps % pv ", __nodes_searched, t_ms, best_eval, nps);
     print_move_to_buffer(best_move);
     for mv: pv_line.argmove {
-      if mv == 0 break;
+      if mv == 0 then
+        break;
       print_move_to_buffer(mv);
     }
     str := builder_to_string(*builder, allocator=__temporary_allocator);
     print("%\n", str);
     reset_temporary_storage();
     __nodes_searched = 0;
-    //memset(__history_moves.data, 0, size_of(float)*2*64*64);
     memset(__killer_moves.data,  0, size_of(Move16)*2*64);
-
     print_move_to_buffer :: (mv: Move16) #expand {
       _, from, to := decode_move(mv);
       print_to_builder(*builder, "%1%2 ", cast(serialized_bb)from, cast(serialized_bb)to);
@@ -80,9 +79,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   move_ordering(pieces, move_array, whose_turn, pv_line, depth, bh_move);
   eval, bmov := -INF, move_array[0];
   for move, move_index : move_array {
-    c_copy  := castling;
-    ep_copy := ep;
-    capture := PieceType.None;
+    c_copy, ep_copy, capture := castling, ep, PieceType.None;
     make_move(pieces, *c_copy, *ep_copy, *capture, move, whose_turn);
     eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, -beta, -alpha);
     unmake_move(pieces, capture, move, whose_turn);
@@ -158,6 +155,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     ttable.entries[key].depth = xx depth;
     ttable.entries[key].bmove = bmove;
   }
+
 }
 
 // perft results are found here: https://www.chessprogramming.org/Perft_Results
@@ -283,9 +281,7 @@ perft_divide :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: b
   generate_legal_moves(p, castling, ep, *moves_array, whose_turn);
   print("legal moves from here: %\n", moves_array.count);
   for move : moves_array {
-    c_copy  := castling;
-    ep_copy := ep;
-    capture := PieceType.None;
+    c_copy, ep_copy, capture := castling, ep, PieceType.None;
     make_move(p, *c_copy, *ep_copy, *capture, move, whose_turn);
     add := perft(p, c_copy, ep_copy, !whose_turn, depth-1);
 
@@ -366,9 +362,7 @@ perft :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, de
 
   generate_legal_moves(p, castling, ep, *moves_array, whose_turn);
   for move : moves_array {
-    c_copy  := castling;
-    ep_copy := ep;
-    capture := PieceType.None;
+    c_copy, ep_copy, capture := castling, ep, PieceType.None;
     make_move(p, *c_copy, *ep_copy, *capture, move, whose_turn);
     num_nodes = num_nodes + perft(p, c_copy, ep_copy, !whose_turn, depth-1);
     unmake_move(p, capture, move, whose_turn);

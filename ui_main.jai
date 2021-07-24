@@ -640,8 +640,6 @@ ui_handle_move_made :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_s
   }
 
   array_add(*hash_record, hash);
-  print("Hash = %, key_len=%, value_len=%\n", hash, hash_record.count, move_record.count);
-
   if moves_arr.count == 0 {
     if check_bb != 0 {
       if whose_turn {
@@ -665,13 +663,15 @@ ui_handle_move_made :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_s
 
   check_for_repetition :: (hash_record: [] u64, hash: u64) -> bool #expand {
     count := 0;
+    fifty := 0;
     for < hash_record {
       if it == 0 break;
       if it == hash {
         count += 1;
       }
+      fifty += 1;
     }
-    return count >= 3;
+    return count >= 3 || fifty >= 100;
   }
 
 }
