@@ -1245,6 +1245,75 @@ move_is_promotion :: inline (using m: Move16) -> bool {
   return Knight_Promotion <= type && type <= Queen_Promotion_Capture;
 }
 
+zobrist_hash :: (using p: *Piece_Bitboards, c: Castling, ep: u64, whose_turn: bool) -> u64 {
+  #import "Random";
+  // calc zobrist hash
+  hash : u64 = 0;
+  hash ^= hash_pieces(w_king,   __zhash_wk);
+  hash ^= hash_pieces(w_queen,  __zhash_wq);
+  hash ^= hash_pieces(w_rook,   __zhash_wr);
+  hash ^= hash_pieces(w_bishop, __zhash_wb);
+  hash ^= hash_pieces(w_knight, __zhash_wn);
+  hash ^= hash_pieces(w_pawn,   __zhash_wp);
+
+  hash ^= hash_pieces(b_king,   __zhash_bk);
+  hash ^= hash_pieces(b_queen,  __zhash_bq);
+  hash ^= hash_pieces(b_rook,   __zhash_br);
+  hash ^= hash_pieces(b_bishop, __zhash_bb);
+  hash ^= hash_pieces(b_knight, __zhash_bn);
+  hash ^= hash_pieces(b_pawn,   __zhash_bp);
+  hash ^= hash_pieces(ep,       __zhash_EP);
+
+  mask := ~(cast(u64)whose_turn) + 1;
+  hash ^= (__zhash_turn) & mask;
+
+  hash ^= __zhash_castling[cast(int)c];
+  return hash;
+
+  hash_pieces :: (p: u64, __zhash_values: [64] u64) -> u64 {
+    ret : u64 = 0;
+    while p {
+      idx := cast(int)serialize_bit(p);
+      ret = ret ^ __zhash_values[idx];
+      p &= p-1;
+    }
+    return ret;
+  }
+}
+
+zobrist_init_globals :: () {
+  // TODO: random generation?
+  random_seed(xx get_time());
+
+  for i: 0..63 {
+    __zhash_wk[i] = rand64();
+    __zhash_wq[i] = rand64();
+    __zhash_wr[i] = rand64();
+    __zhash_wb[i] = rand64();
+    __zhash_wn[i] = rand64();
+    __zhash_wr[i] = rand64();
+ 
+    __zhash_bk[i] = rand64();
+    __zhash_bq[i] = rand64();
+    __zhash_br[i] = rand64();
+    __zhash_bb[i] = rand64();
+    __zhash_bn[i] = rand64();
+    __zhash_br[i] = rand64();
+    __zhash_EP[i] = rand64();
+  }
+
+  __zhash_turn = rand64();
+
+  for i: 0..__zhash_castling.count-1 {
+    __zhash_castling[i] = rand64();
+  }
+  print("info zobrist global initialization done.\n");
+
+  rand64 :: () -> u64 {
+    return (random_get() << 32) | random_get();
+  }
+}
+
 #scope_file
 
 // o = occupied, r = piece, m = mask
@@ -1362,4 +1431,25 @@ generate_pawn_moves_from_bitboard :: (moves_arr: *[..]Move16, from: u64, to: u64
     to = to & (to - 1);
   }
 }
+
+// zobrist hashing
+__zhash_wk: [64] u64;
+__zhash_wq: [64] u64;
+__zhash_wr: [64] u64;
+__zhash_wb: [64] u64;
+__zhash_wn: [64] u64;
+__zhash_wp: [64] u64;
+
+__zhash_bk: [64] u64;
+__zhash_bq: [64] u64;
+__zhash_br: [64] u64;
+__zhash_bb: [64] u64;
+__zhash_bn: [64] u64;
+__zhash_bp: [64] u64;
+
+__zhash_EP: [64] u64;
+
+__zhash_turn: u64;
+
+__zhash_castling: [16]  u64;
 

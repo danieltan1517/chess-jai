@@ -14,3 +14,4 @@ ai
 *.nnue
 nnue-probe/
 eval
+my-chess-ai

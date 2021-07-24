@@ -81,11 +81,13 @@ main :: () {
       uci_close_chess_engine();
     }
   }
+  zobrist_init_globals();
   init_global_bitboards();
 
   piece_bitboard: Piece_Bitboards;
   moves_arr: [..] Move16;
   array_reserve(*moves_arr, 70);    // generates all legal moves
+  array_reserve(*hash_record, 200); // records the game down. I use this struct to backtrack and undo moves
   array_reserve(*move_record, 200); // records the game down. I use this struct to backtrack and undo moves
   flags: Castling = Castling.All;
   ep_sq: u64 = 0;
@@ -133,7 +135,7 @@ handle_command_line :: () -> string #expand {
   // this is ad-hoc, and this is mainly for slapping together something to
   // get useful functionality.
   args := get_command_line_arguments();
-  engine_name : string = "stockfish";
+  engine_name : string = "my-chess-ai";
   for arg : args {
     if arg == {
     case "hc";
@@ -580,6 +582,7 @@ handle_undo_move :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flag
         <<flags = board_state.flags;
         whose_turn = !whose_turn;
         unmake_move(piece_bitboard, board_state.captured, board_state.move, whose_turn);
+        pop(*hash_record);
         
         while move_record && !w_human_turn() && !b_human_turn() {
           board_state := pop(*move_record);
@@ -587,6 +590,7 @@ handle_undo_move :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flag
           <<flags = board_state.flags;
           whose_turn = !whose_turn;
           unmake_move(piece_bitboard, board_state.captured, board_state.move, whose_turn);
+          pop(*hash_record);
         }
 
         array_reset(moves_arr);
@@ -612,6 +616,7 @@ handle_undo_move :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flag
 }
 
 ui_handle_move_made :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..] Move16, mov: Move16) {
+  before_pawn := piece_bitboard.w_pawn | piece_bitboard.b_pawn;
   // record the move down 
   record_move: Board_States;
   record_move.move = mov;
@@ -623,6 +628,20 @@ ui_handle_move_made :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_s
   whose_turn = !whose_turn;
   array_reset(moves_arr);
   check_bb = generate_legal_moves(piece_bitboard, <<flags, <<ep_sq, moves_arr, whose_turn);
+
+  after_pawn := piece_bitboard.w_pawn | piece_bitboard.b_pawn;
+
+  // zero if there has been a capture, or a pawn has moved.
+  // else we hash.
+  hash : u64 = 0;
+  f := decode_move(mov);
+  if f == Move16.Quiet && before_pawn == after_pawn {
+    hash = zobrist_hash(piece_bitboard, <<flags, <<ep_sq, whose_turn);
+  }
+
+  array_add(*hash_record, hash);
+  print("Hash = %, key_len=%, value_len=%\n", hash, hash_record.count, move_record.count);
+
   if moves_arr.count == 0 {
     if check_bb != 0 {
       if whose_turn {
@@ -634,9 +653,27 @@ ui_handle_move_made :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_s
       print("Stalemate\n");
     }
   }
+
+  if hash != 0 && check_for_repetition(hash_record, hash) {
+    print("Stalemate by threefold repetition.\n");
+    array_reset(moves_arr);
+  }
+
   highlight_the_square = 0;
   possible_moves_bb = 0;
   promote_move = cast(Move16) 0;
+
+  check_for_repetition :: (hash_record: [] u64, hash: u64) -> bool #expand {
+    count := 0;
+    for < hash_record {
+      if it == 0 break;
+      if it == hash {
+        count += 1;
+      }
+    }
+    return count >= 3;
+  }
+
 }
 
 last_move_bb: u64 = 0;
@@ -662,6 +699,7 @@ UI_PIECE :: enum {
 promtion_type := UI_PIECE.UI_QUEEN;
 promote_move : Move16;
 
+hash_record: [..] u64;
 move_record: [..] Board_States;
 
 Board_States :: struct {
@@ -960,7 +998,7 @@ __edge_case_count := 0;
 
 
 __engine_name : string;  // name of engine. exists for aesthetic purposes
-__engine_depth_parameter : int = 7; // depth of engine search.
+__engine_depth_parameter : int = 6; // depth of engine search.
 
 
 
