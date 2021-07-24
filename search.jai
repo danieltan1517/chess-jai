@@ -17,9 +17,8 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
     time_taken := get_time() - time_begin;
     max_nodes = max(max_nodes, __nodes_searched);
     print_stats(iter_depth);
-    print("count = %\n", repetitions.count);
   }
-  print("info maxnodes = %\n", max_nodes);
+  //print("info maxnodes = %\n", max_nodes);
   return best_move, best_eval;
 
   print_stats :: (depth: int) #expand {
@@ -334,6 +333,7 @@ perft_divide :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: b
     num_nodes = num_nodes + add;
     unmake_move(p, capture, move, whose_turn);
   }
+  print("Total: % nodes\n", num_nodes);
   return num_nodes;
 }
 
@@ -391,7 +391,7 @@ filter_captures :: (move_array: [..] Move16) {
 
 PVLine :: struct {
   cmove: int;
-  argmove: [16] Move16;  // TODO: WTF, THIS is the thing that is taking up SOO much memory?!?!
+  argmove: [10] Move16;  // TODO: WTF, THIS is the thing that is taking up SOO much time?!?!
 }
 
 // performance test

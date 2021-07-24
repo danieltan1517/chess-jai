@@ -24,13 +24,7 @@ nnue_evaluate :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) -> fl
   translate_bitboard(b_knight, 11);
   translate_bitboard(b_pawn, 12);
 
-  eval : s32 = 0;
-  if whose_turn {
-    eval = __nnue_evaluate(player=0, pieces.data, squares.data);
-  } else {
-    eval = __nnue_evaluate(player=1, pieces.data, squares.data);
-  }
-
+  eval := __nnue_evaluate(player=xx (!whose_turn), pieces.data, squares.data);
   return (eval * (100 - fifty)) * 0.01;
 
   translate_bitboard :: (bb: u64, piece_type: s32) #expand {
