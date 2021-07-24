@@ -33,8 +33,8 @@ This Jai-Chess AI is a hobby project I created for fun. Here is a list of the fe
 * History Moves Move Ordering
 * Zobrist Hashing
 * Transposition Table 
+* 3-fold repetition & fifty-move rule (still some bugs.)
 
 ## Still needs to be implemented
 * Better optimization for negamax search
-* Endgame evaluation
-* 3-fold repetition detection
+* Endgame evaluation (may need some optimization)

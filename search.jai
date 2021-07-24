@@ -150,13 +150,9 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
         value := ttable.entries[key].score;
         if ttable.entries[key].flag == TFLAGS.EXACT then {
           `return value, bh_move;
-        }
-       
-        else if ttable.entries[key].flag == TFLAGS.LOWER then {
+        } else if ttable.entries[key].flag == TFLAGS.LOWER then {
           alpha = max(alpha, value);
-        } 
-       
-        else if ttable.entries[key].flag == TFLAGS.UPPER then {
+        } else if ttable.entries[key].flag == TFLAGS.UPPER then {
           beta  = min(beta, value);
         }
        
