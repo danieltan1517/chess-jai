@@ -225,7 +225,7 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
   // chess.com uses yellow, so we follow their example...
   BLANK    :: Vector4.{1,1,1,1}; 
   GREY     :: Vector4.{.5,.5,.2,.35}; 
-  YELLOW   :: Vector4.{.9,.9,0,.35}; 
+  YELLOW   :: Vector4.{.9,.9,0,.55};
   LESS     :: Vector4.{1.0, 1.0, 1.0, 0.25};
   RED      :: Vector4.{.9, 0.25, 0.25, 0.65};
   GREY_SHADE_BOARD :: Vector4.{0.2, 0.2, 0.2, 0.35};

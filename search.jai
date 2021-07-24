@@ -15,7 +15,6 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   for iter_depth : 1..depth { 
     best_eval, best_move = negamax(pieces, castling, ep, iter_depth, whose_turn, repetitions, *pv_line);
     time_taken := get_time() - time_begin;
-    max_nodes = max(max_nodes, __nodes_searched);
     print_stats(iter_depth);
   }
   return best_move, best_eval;
@@ -133,7 +132,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       last_rep := (<<repetitions)[repetitions.count-1];
       if last_rep != 0 {
         count_rep, __fifty = check_for_repetition(<<repetitions, last_rep);
-        if count_rep >= 3 || __fifty >= 100 then {
+        if count_rep >= 2 || __fifty >= 100 then {
           `return 0.0, 0;  // STALEMATE
         }
       }
