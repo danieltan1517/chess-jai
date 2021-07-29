@@ -132,7 +132,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       last_rep := (<<repetitions)[repetitions.count-1];
       if last_rep != 0 {
         count_rep, __fifty = check_for_repetition(<<repetitions, last_rep);
-        if count_rep >= 2 || __fifty >= 100 then {
+        if count_rep >= 3 || __fifty >= 100 then {
           `return 0.0, 0;  // STALEMATE
         }
       }
