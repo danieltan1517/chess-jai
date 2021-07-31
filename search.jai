@@ -565,7 +565,7 @@ __killer_moves: [2][64] Move16;
 
 // modified from BBC chess engine.
 // get something off the ground.
-TSIZE :: 0x300_0000;
+TSIZE :: 0x100_0000;
 
 ttable : struct {
   hash:     [TSIZE] u64;

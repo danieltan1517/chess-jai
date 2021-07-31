@@ -36,7 +36,6 @@ fen_string := "startpos";
 //"r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1";
 //"8/PPPk4/8/8/8/8/4Kppp/8 b - - 0 1";
 
-font : *Dynamic_Font;
 
 main :: () {
   white_side := true;
@@ -1022,6 +1021,7 @@ __edge_case_buffer: [4096] u8;
 __edge_case_count := 0;
 
 
+font : *Dynamic_Font;
 __engine_name : string;  // name of engine. exists for aesthetic purposes
 __engine_depth_parameter : int = 7; // depth of engine search.
 
