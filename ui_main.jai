@@ -36,6 +36,8 @@ fen_string := "startpos";
 //"r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1";
 //"8/PPPk4/8/8/8/8/4Kppp/8 b - - 0 1";
 
+font : *Dynamic_Font;
+
 main :: () {
   white_side := true;
   engine_name := handle_command_line();
@@ -53,6 +55,8 @@ main :: () {
   glfwMakeContextCurrent(window);
   gl_load(*gl, glfwGetProcAddress);
   im_init_gl();
+  path := tprint("%1%2", #filepath, "resources/");
+  font = load_font(path, "AnonymousPro.ttf", 17); // @@ Search system fonts automatically?
 
   t := New(Texture);
   defer {
@@ -135,7 +139,7 @@ handle_command_line :: () -> string #expand {
   // this is ad-hoc, and this is mainly for slapping together something to
   // get useful functionality.
   args := get_command_line_arguments();
-  engine_name : string = "my-chess-ai";
+  engine_name : string = "mockfish";
   for arg : args {
     if arg == {
     case "hc";
@@ -186,8 +190,22 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
 
   white_sq_color :: Vector4.{238.0/255.0, 238.0/255.0, 210.0/255.0, 1.0};
   black_sq_color :: Vector4.{118.0/255.0, 150.0/255.0,  86.0/255.0, 1.0};
-  im_set_texture(null);
 
+  if font {
+    bottom : string  = ifx w_is_human then "player" else get_engine_name(); // white
+    top    : string  = ifx b_is_human then "player" else get_engine_name();   // black
+    bot_col: Vector4 = ifx  whose_turn then BLANK else GREY;
+    top_col: Vector4 = ifx !whose_turn then BLANK else GREY;
+
+    if !white_side {
+      swap(bottom, top);
+      swap(bot_col, top_col);
+    }
+    im_draw_text(font, x, y - square_len*0.5, bot_col, bottom);
+    im_draw_text(font, x, y + len + square_len*0.5, top_col, top);
+  }
+
+  im_set_texture(null);
   // NOTE: chessboard squares itself is same regardless of flipping board
   TF := false; 
   for i: 0..7 {
@@ -221,6 +239,8 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
   case .PIECE_PROMOTION;
     draw_promotion_ui(promotion_sq);
   }
+
+
 
   // chess.com uses yellow, so we follow their example...
   BLANK    :: Vector4.{1,1,1,1}; 
@@ -980,6 +1000,12 @@ uci_getline :: inline () -> string {
   return ret;
 }
 
+swap :: (a: Code, b: Code) #expand {
+  t := (#insert a);
+  (#insert a) = (#insert b);
+  (#insert b) = t;
+}
+
 uci_close_chess_engine :: () {
   // NOTE: this function does NOT call "uci_write_command("quit")",
   // that needs to be called explicitly
@@ -999,5 +1025,5 @@ __edge_case_count := 0;
 __engine_name : string;  // name of engine. exists for aesthetic purposes
 __engine_depth_parameter : int = 7; // depth of engine search.
 
-
+get_engine_name :: () => __engine_name;
 
