@@ -19,6 +19,7 @@ hh      -- white=human vs black=human
 hc      -- white=human vs black=ai
 ch      -- white=ai vs black=human
 cc      -- white=ai vs black=ai
+r       -- random side, human vs computer
 ai=Lc0  -- sets the ai to that particular ai. Must be in the resources directory.
 fen="x" -- loads the fen string into the board.
 
@@ -47,7 +48,7 @@ main :: () {
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-  window := glfwCreateWindow(640, 480, "Jai Chess", null, null);
+  window := glfwCreateWindow(680, 1080, "Jai Chess", null, null);
   if !window then return;
   defer glfwDestroyWindow(window);
 
@@ -157,6 +158,11 @@ handle_command_line :: () -> string #expand {
       w_is_human = false;
       b_is_human = true;
       `white_side = false;
+    case "r";
+      // TODO: use rand function????
+      w_is_human = xx ((cast(int)(get_time() * 130598103698.923467)) & 1);
+      b_is_human = !w_is_human;
+      `white_side = w_is_human;
     case;
       if begins_with(arg, "ai=") {
         cpu_string := advance(arg, 3);

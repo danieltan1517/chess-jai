@@ -1281,10 +1281,9 @@ zobrist_hash :: (using p: *Piece_Bitboards, c: Castling, ep: u64, whose_turn: bo
   }
 }
 
-zobrist_init_globals :: () {
+zobrist_init_globals :: (s : s32 = 861097715) {
   // TODO: random generation?
-  random_seed(xx get_time());
-
+  random_seed(s);
   for i: 0..63 {
     __zhash_wk[i] = rand64();
     __zhash_wq[i] = rand64();
