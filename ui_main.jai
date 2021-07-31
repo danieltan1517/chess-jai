@@ -138,7 +138,7 @@ handle_command_line :: () -> string #expand {
   // this is ad-hoc, and this is mainly for slapping together something to
   // get useful functionality.
   args := get_command_line_arguments();
-  engine_name : string = "mockfish";
+  engine_name : string = "lion-tulip";
   for arg : args {
     if arg == {
     case "hc";
