@@ -177,6 +177,8 @@ handle_command_line :: () -> string #expand {
   return engine_name;
 }
 
+__game_status_text: string;
+
 draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *Texture, highlight_square: u64, possible_moves_bb: u64, last_move_bb: u64, white_side: bool) {
   cen_x := width * 0.5; 
   cen_y := height * 0.5;
@@ -193,8 +195,8 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
   if font {
     bottom : string  = ifx w_is_human then "player" else get_engine_name(); // white
     top    : string  = ifx b_is_human then "player" else get_engine_name();   // black
-    bot_col: Vector4 = ifx  whose_turn then BLANK else GREY;
-    top_col: Vector4 = ifx !whose_turn then BLANK else GREY;
+    bot_col: Vector4 = ifx  whose_turn then BLANK else L_BLANK;
+    top_col: Vector4 = ifx !whose_turn then BLANK else L_BLANK;
 
     if !white_side {
       swap(bottom, top);
@@ -202,6 +204,9 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
     }
     im_draw_text(font, x, y - square_len*0.5, bot_col, bottom);
     im_draw_text(font, x, y + len + square_len*0.5, top_col, top);
+    if __game_status_text {
+      im_draw_text(font, 4, 4, BLANK, __game_status_text);
+    }
   }
 
   im_set_texture(null);
@@ -240,9 +245,10 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
   }
 
 
-
+  // inner functions used...
   // chess.com uses yellow, so we follow their example...
   BLANK    :: Vector4.{1,1,1,1}; 
+  L_BLANK    :: Vector4.{1,1,1,0.5}; 
   GREY     :: Vector4.{.5,.5,.2,.35}; 
   YELLOW   :: Vector4.{.9,.9,0,.55};
   LESS     :: Vector4.{1.0, 1.0, 1.0, 0.25};
@@ -624,6 +630,7 @@ handle_undo_move :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flag
         } else {
           last_move_bb = 0;
         }
+        __game_status_text = "";
       }
     }
   case .UNDO_KEY_PRESS;
@@ -660,18 +667,14 @@ ui_handle_move_made :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_s
   array_add(*hash_record, hash);
   if moves_arr.count == 0 {
     if check_bb != 0 {
-      if whose_turn {
-        print("Black wins! Checkmate!\n");
-      } else {
-        print("White wins! Checkmate!\n");
-      }
+      __game_status_text = "Checkmate.";
     } else {
-      print("Stalemate\n");
+      __game_status_text = "Stalemate.";
     }
   }
 
   if hash != 0 && check_for_repetition(hash_record, hash) {
-    print("Stalemate by threefold repetition.\n");
+    __game_status_text = "Stalemate by threefold repetition.";
     array_reset(moves_arr);
   }
 
