@@ -137,7 +137,7 @@ main :: () {
 
 uci_response :: #string DONE
 uciok
-id name Ai-Chess
+id name lion-tulip
 id author Daniel Tan
 DONE;
 

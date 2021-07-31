@@ -48,7 +48,7 @@ main :: () {
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-  window := glfwCreateWindow(680, 1080, "Jai Chess", null, null);
+  window := glfwCreateWindow(680, 680, "Jai Chess", null, null);
   if !window then return;
   defer glfwDestroyWindow(window);
 
@@ -198,9 +198,10 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
   white_sq_color :: Vector4.{238.0/255.0, 238.0/255.0, 210.0/255.0, 1.0};
   black_sq_color :: Vector4.{118.0/255.0, 150.0/255.0,  86.0/255.0, 1.0};
 
+  // draw text
   if font {
-    bottom : string  = ifx w_is_human then "player" else get_engine_name(); // white
-    top    : string  = ifx b_is_human then "player" else get_engine_name();   // black
+    bottom : string  = ifx w_is_human then "human" else get_engine_name(); // white
+    top    : string  = ifx b_is_human then "human" else get_engine_name();   // black
     bot_col: Vector4 = ifx  whose_turn then BLANK else L_BLANK;
     top_col: Vector4 = ifx !whose_turn then BLANK else L_BLANK;
 
@@ -235,7 +236,19 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
   draw_bitboard(last_move_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, YELLOW);
   draw_bitboard(check_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, RED);
   draw_bitboard(possible_moves_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, GREY);
-
+  if font {
+    // add board labels.
+    letters : string = ifx white_side "abcdefgh" else "hgfedcba";
+    numbers : string = ifx white_side "12345678" else "87654321";
+    TF := true;
+    col := BLANK;
+    for i: 0..7 {
+      im_draw_text(font, x + square_len*(i+1) - 10, y + 2, col, slice(letters, i, 1));
+      im_draw_text(font, x + 2, y + square_len*(i+1) - 18, col, slice(numbers, i, 1));
+      TF = !TF;
+      col = ifx TF white_sq_color else black_sq_color;
+    }
+  }
   im_set_texture(texture);
 
   using pieces;
@@ -249,7 +262,6 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
   case .PIECE_PROMOTION;
     draw_promotion_ui(promotion_sq);
   }
-
 
   // inner functions used...
   // chess.com uses yellow, so we follow their example...
