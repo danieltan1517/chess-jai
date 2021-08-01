@@ -14,7 +14,7 @@ This Jai-Chess AI is a hobby project I created for fun. Here is a list of the fe
 * Parse and load FEN strings
 
 ## AI Chess Engine Features
-* AI Estimated Rating: 2000 (based on playing chess.com bots)
+* AI Estimated Rating: 2200 (based on playing chess.com bots)
 * Parse and load FEN strings
 * Iterative Deepening
 * Implements UCI (Universal Chess Interface) Protocol to communicate with a UI
