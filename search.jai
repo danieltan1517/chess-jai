@@ -13,7 +13,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   best_eval : float; best_move : Move16;
  
   for iter_depth : 1..depth { 
-    best_eval, best_move = negamax(pieces, castling, ep, iter_depth, whose_turn, repetitions, *pv_line);
+    best_eval, best_move = negamax(pieces, castling, ep, iter_depth, whose_turn, repetitions, *pv_line, 0);
     time_taken := get_time() - time_begin;
     print_stats(iter_depth);
   }
@@ -45,7 +45,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   }
 }
 
-negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, repetitions: *[..] u64, pv_line: *PVLine, alpha := -INF, beta := INF) -> float, Move16 {
+negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, repetitions: *[..] u64, pv_line: *PVLine, ply: int = 0, alpha := -INF, beta := INF) -> float, Move16 {
   line: PVLine;
   __nodes_searched += 1;
 
@@ -61,10 +61,10 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   move_array: [..] Move16;
   array_reserve(*move_array, 40);
   defer array_free(move_array);
-  c := generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
+  check := generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
 
   if !move_array then {
-    if c != 0 then {
+    if check != 0 then {
       return -INF, 0;
     } else {
       return 0.0, 0;
@@ -72,9 +72,9 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   }
 
   // principle variation search.
-  move_ordering(pieces, move_array, whose_turn, pv_line, depth, bh_move);
+  move_ordering(pieces, move_array, whose_turn, pv_line, ply, bh_move);
   eval, bmov := -INF, move_array[0];
-  for move : move_array {
+  for move, moves_searched : move_array {
     c_copy, ep_copy, capture := castling, ep, PieceType.None;
 
     before_pawn := pieces.w_pawn | pieces.b_pawn;
@@ -88,7 +88,15 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     }
     array_add(repetitions, nm_hash);
 
-    eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, repetitions, *line, -beta, -alpha);
+    FULL_DEPTH_MOVES :: 4;
+    REDUCTION_LIMIT  :: 3;
+    if moves_searched >= FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && check == 0 && (mmflag >= Move16.Quiet && mmflag <= Move16.Queen_Castle) {
+      // do late move reduction when not in check and making "quiet moves"
+      eval = -negamax(pieces, c_copy, ep_copy, depth-2, !whose_turn, repetitions, *line, ply + 1, -beta, -alpha);
+    } else {
+      // do normal search.
+      eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, repetitions, *line, ply + 1, -beta, -alpha);
+    }
 
     unmake_move(pieces, capture, move, whose_turn);
     pop(repetitions);
@@ -109,8 +117,8 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     if alpha >= beta then {
       m_flags := decode_move(move);
       if !is_capture(m_flags) {
-        __killer_moves[1][depth] = __killer_moves[0][depth];
-        __killer_moves[0][depth] = move;
+        __killer_moves[1][ply] = __killer_moves[0][ply];
+        __killer_moves[0][ply] = move;
       }
       break;
     }
@@ -411,7 +419,7 @@ perft :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, de
 // Principle Variation Moves
 // History Moves.
 // Killer moves. (Or at least what I think is the simplest implementation of killer moves)
-move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn: bool, pv_line: *PVLine, depth: int, bh_move: Move16) {
+move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn: bool, pv_line: *PVLine, ply: int, bh_move: Move16) {
   // TODO: I don't know if some other function wants to use temporary storage.
   count := move_array.count;
   order := NewArray(count, float, allocator=__temporary_allocator);
@@ -444,9 +452,9 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
     } else if flags == King_Castle || flags == Queen_Castle {
       order[i] = 150.0;
     } else {
-      if __killer_moves[0][depth] == move_array[i] {
+      if __killer_moves[0][ply] == move_array[i] {
         order[i] = 2500.0;
-      } else if __killer_moves[1][depth] == move_array[i] {
+      } else if __killer_moves[1][ply] == move_array[i] {
         order[i] = 2250.0;
       } else if (from & ~pawns) && (to & p_attacks) {
         order[i] = -10.0;
@@ -563,7 +571,6 @@ __history_moves: [2][64][64] float;
 __killer_moves: [2][64] Move16;
 
 
-// modified from BBC chess engine.
 // get something off the ground.
 TSIZE :: 0x100_0000;
 
