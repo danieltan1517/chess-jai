@@ -37,7 +37,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
     print("%\n", str);
     reset_temporary_storage();
     __nodes_searched = 0;
-    memset(__killer_moves.data,  0, size_of(Move16)*2*64);
+    //memset(__killer_moves.data,  0, size_of(Move16)*2*64);
     print_move_to_buffer :: (mv: Move16) #expand {
       _, from, to := decode_move(mv);
       print_to_builder(*builder, "%1%2 ", cast(serialized_bb)from, cast(serialized_bb)to);
@@ -69,10 +69,6 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     } else {
       return 0.0, 0;
     }
-  }
-
-  if check != 0 {
-    depth += 1;  // we are in check. extend depth.
   }
 
   // principle variation search.
