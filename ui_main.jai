@@ -331,8 +331,8 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
     if (white_side && (promote_sq & xx king_side)) || (!white_side && (promote_sq & xx queen_side)) {
       posx = posx - scale_up_sq_len*4;
     }
-
-    im_draw_rect(posx, posy + scale_up_sq_len, posx + scale_up_sq_len*4, posy, c=BLANK*0.75);
+    PROMOTION_BACKGROUND :: Vector4.{1.0, 1.0, 1.0, 0.85};
+    im_draw_rect(posx, posy + scale_up_sq_len, posx + scale_up_sq_len*4, posy, c=PROMOTION_BACKGROUND);
     im_set_texture(texture);
     if whose_turn {
       im_draw_rect(posx, posy + scale_up_sq_len, posx + scale_up_sq_len, posy, u0=1.0/6.0, v0=0.0, u1=2.0/6.0, v1=0.5, c=BLANK);

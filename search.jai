@@ -590,7 +590,7 @@ ttable : struct {
   }
 }
 
-TFLAGS :: enum s8 {EXACT; LOWER; UPPER; }
+TFLAGS :: enum s8 { EXACT; LOWER; UPPER; }
 
 clear_hash_table :: () {
   memset(*ttable, 0, size_of(type_of(ttable)));
