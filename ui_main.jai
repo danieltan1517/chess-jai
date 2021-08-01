@@ -689,11 +689,11 @@ ui_handle_move_made :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_s
     } else {
       __game_status_text = "Stalemate.";
     }
-  }
-
-  if hash != 0 && check_for_repetition(hash_record, hash) {
+  } else if hash != 0 && check_for_repetition(hash_record, hash) {
     __game_status_text = "Stalemate by threefold repetition.";
     array_reset(moves_arr);
+  } else if check_bb != 0 {
+    __game_status_text = "Check.";
   }
 
   highlight_the_square = 0;

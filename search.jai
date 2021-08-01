@@ -135,12 +135,15 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
     count_rep : int;
     `__fifty : int;
+    TF : bool;
 
     if repetitions.count > 0 {
+      // TODO: The threefold repetition does not trigger at all!
       last_rep := (<<repetitions)[repetitions.count-1];
       if last_rep != 0 {
-        count_rep, __fifty = check_for_repetition(<<repetitions, last_rep);
-        if count_rep >= 3 || __fifty >= 100 then {
+        TF, count_rep, __fifty = check_for_repetition(<<repetitions, last_rep);
+        print("info count_rep = %, __fifty = %.\n", count_rep, __fifty);
+        if TF then {
           `return 0.0, 0;  // STALEMATE
         }
       }
@@ -185,7 +188,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     ttable.entries[key].bmove = bmove;
   }
 
-  check_for_repetition :: (hash_record: [] u64, hash: u64) -> int, int #expand {
+  check_for_repetition :: (hash_record: [] u64, hash: u64) -> bool, int, int {
     count := 0;
     fifty := 0;
     for < hash_record {
@@ -195,7 +198,8 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       }
       fifty += 1;
     }
-    return count, fifty;
+
+    return count >= 3 || fifty >= 100, count, fifty;
   }
 
 }
@@ -363,19 +367,15 @@ quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn:
 
   // search captures only, captures negate the fifty move rule
   for cap_move: move_array {
-    c_copy  := castling;
-    ep_copy := ep;
-    capture := PieceType.None;
-    flags, from, to := decode_move(cap_move);
+    c_copy, ep_copy, capture := castling, ep, PieceType.None;
     make_move(pieces, *c_copy, *ep_copy, *capture, cap_move, whose_turn);
     score := -quiescene(pieces, c_copy, ep_copy, !whose_turn, -beta, -alpha, 0);
     unmake_move(pieces, capture, cap_move, whose_turn);
 
     if score >= beta then
       return beta;
-    if score > alpha then {
+    if score > alpha then
       alpha = score;
-    }
   }
 
   return alpha;
