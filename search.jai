@@ -71,6 +71,10 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     }
   }
 
+  if check != 0 {
+    depth += 1;  // we are in check. extend depth.
+  }
+
   // principle variation search.
   move_ordering(pieces, move_array, whose_turn, pv_line, ply, bh_move);
   eval, bmov := -INF, move_array[0];
