@@ -48,6 +48,8 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
 negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, repetitions: *[..] u64, pv_line: *PVLine, ply: int = 0, alpha := -INF, beta := INF) -> float, Move16 {
   line: PVLine;
   __nodes_searched += 1;
+  hash := zobrist_hash(pieces, castling, ep, whose_turn);
+  key  := hash % TSIZE;
 
   alpha_orig := alpha;
 
@@ -55,7 +57,8 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
   if depth == 0 then {
     pv_line.cmove = 0;
-    return quiescene(pieces, castling, ep, whose_turn, alpha, beta, __fifty), 0;
+    _, __, fifty := check_for_repetition(<<repetitions, hash);
+    return quiescene(pieces, castling, ep, whose_turn, alpha, beta, fifty), 0;
   }
 
   move_array: [..] Move16;
@@ -73,7 +76,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
   // principle variation search.
   move_ordering(pieces, move_array, whose_turn, pv_line, ply, bh_move);
-  eval, bmov := -INF, move_array[0];
+  bmov := move_array[0];
   for move, moves_searched : move_array {
     c_copy, ep_copy, capture := castling, ep, PieceType.None;
 
@@ -90,7 +93,10 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
     FULL_DEPTH_MOVES :: 4;
     REDUCTION_LIMIT  :: 3;
-    if moves_searched >= FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && check == 0 && (mmflag >= Move16.Quiet && mmflag <= Move16.Queen_Castle) {
+    eval := 0.0;
+    if check_for_repetition(<<repetitions, nm_hash) {
+      eval = 0;
+    } else if moves_searched >= FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && check == 0 && (mmflag >= Move16.Quiet && mmflag <= Move16.Queen_Castle) {
       // do late move reduction when not in check and making "quiet moves"
       eval = -negamax(pieces, c_copy, ep_copy, depth-2, !whose_turn, repetitions, *line, ply + 1, -beta, -alpha);
     } else {
@@ -115,6 +121,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     }
 
     if alpha >= beta then {
+      alpha = beta;
       m_flags := decode_move(move);
       if !is_capture(m_flags) {
         __killer_moves[1][ply] = __killer_moves[0][ply];
@@ -124,32 +131,13 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     }
   }
 
-  // NOTE: do not return alpha, return eval
-  transposition_table_store(eval, bh_move);
-  return eval, bmov;
+  transposition_table_store(alpha, bh_move);
+  return alpha, bmov;
 
   transposition_table_lookup :: () #expand {
     // TODO: these can possibly be combined into one function and save some time...
     // TODO: write a better optimized version of this, this is just copy/paste from UI, and slightly
     // edited...
-
-    count_rep : int;
-    `__fifty : int;
-    TF : bool;
-
-    if repetitions.count > 0 {
-      // TODO: The threefold repetition does not trigger at all!
-      last_rep := (<<repetitions)[repetitions.count-1];
-      if last_rep != 0 {
-        TF, count_rep, __fifty = check_for_repetition(<<repetitions, last_rep);
-        if TF then {
-          `return 0.0, 0;  // STALEMATE
-        }
-      }
-    }
-
-    hash := zobrist_hash(pieces, castling, ep, whose_turn);
-    key  := hash % TSIZE;
     `bh_move := ttable.entries[key].bmove;
     if ttable.hash[key] == hash && ttable.entries[key].depth >= depth then {
       if ttable.entries[key].depth >= depth then {
@@ -171,11 +159,8 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   }
 
   transposition_table_store :: (value: float, bmove: Move16) #expand {
-    hash := zobrist_hash(pieces, castling, ep, whose_turn);
-    key  := hash % TSIZE;
-
     ttable.hash[key] = hash;
-    ttable.entries[key].score = eval;
+    ttable.entries[key].score = value;
     if value <= alpha_orig then {
       ttable.entries[key].flag = TFLAGS.UPPER;
     } else if value >= beta then {
@@ -200,7 +185,6 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
     return count >= 3 || fifty >= 100, count, fifty;
   }
-
 }
 
 // perft results are found here: https://www.chessprogramming.org/Perft_Results

@@ -647,7 +647,11 @@ handle_undo_move :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flag
         } else {
           last_move_bb = 0;
         }
-        __game_status_text = "";
+        if check_bb != 0 {
+          __game_status_text = "Check.";
+        } else {
+          __game_status_text = "";
+        }
       }
     }
   case .UNDO_KEY_PRESS;
@@ -743,6 +747,8 @@ ui_handle_move_made :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_s
     array_reset(moves_arr);
   } else if check_bb != 0 {
     __game_status_text = "Check.";
+  } else {
+    __game_status_text = "";
   }
 
   highlight_the_square = 0;

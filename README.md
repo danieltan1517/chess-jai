@@ -9,6 +9,7 @@ This Jai-Chess AI is a hobby project I created for fun. Here is a list of the fe
 * Legal move generation and detection
 * Flip the board using the `X` Key
 * Undo move using the `Ctrl+Z`Key
+* New game using the `Ctrl+N` Key
 * Implements UCI (Universal Chess Interface) Protocol to communicate with any UCI compatible chess engine (e.g. Stockfish, RubiChess)
 * Can do Human vs Computer, Computer vs Human, Human vs Human, and Computer vs Computer.
 * Parse and load FEN strings
