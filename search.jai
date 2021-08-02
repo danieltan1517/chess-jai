@@ -142,7 +142,6 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       last_rep := (<<repetitions)[repetitions.count-1];
       if last_rep != 0 {
         TF, count_rep, __fifty = check_for_repetition(<<repetitions, last_rep);
-        print("info count_rep = %, __fifty = %.\n", count_rep, __fifty);
         if TF then {
           `return 0.0, 0;  // STALEMATE
         }
@@ -437,9 +436,6 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       continue;
     }
 
-    flags, from_index, to_index := decode_move(move_array[i]);
-    from := cast(u64) (1 << from_index);
-    to   := cast(u64) (1 << to_index);
     using Move16;
     if flags == Capture {
       piece_from_type := piece_type_at(from, pieces, whose_turn);
@@ -447,8 +443,14 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       order[i] = mvv_lva(piece_to_type, piece_from_type);
     } else if flags == Ep_Capture {
       order[i] = mvv_lva(PieceType.Pawn, PieceType.Pawn);
-    } else if Knight_Promotion <= flags && flags <= Queen_Promotion_Capture {
-      order[i] = 100000.0;
+    } else if flags == Knight_Promotion || flags == Knight_Promotion_Capture {
+      order[i] = 32500.0;
+    } else if flags == Bishop_Promotion || flags == Bishop_Promotion_Capture {
+      order[i] = 35000.0;
+    } else if flags == Rook_Promotion || flags == Rook_Promotion_Capture {
+      order[i] = 50000.0;
+    } else if flags == Queen_Promotion || flags == Queen_Promotion_Capture {
+      order[i] = 90000.0;
     } else if flags == King_Castle || flags == Queen_Castle {
       order[i] = 150.0;
     } else {

@@ -28,6 +28,7 @@ Here is a sample command-line calling:
 ./jai-chess hc ai=stockfish depth=7
 
 Here are the keyboard controls:
+<Ctrl+N> -- new game, reset the board.
 <Ctrl+Z> -- undo move.
 <X>      -- flip the board.
 -------------------------------
@@ -118,6 +119,7 @@ main :: () {
     im_set_viewport_transform(2.0/width, 2.0/height, -1, -1);
     white_side = handle_flip_board(window, white_side);
     handle_undo_move(window, *piece_bitboard, *flags, *ep_sq, *moves_arr);
+    handle_reset(window, *piece_bitboard, *flags, *ep_sq, *moves_arr);
 
     if w_human_turn() || b_human_turn() {
       handle_board_click(xx width, xx height, *piece_bitboard, *flags, *ep_sq, *moves_arr, white_side=white_side);
@@ -606,9 +608,6 @@ handle_undo_move :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flag
   if piece_select_state != .PIECE_IDLE then
     return;
 
-  // cannot use undo when in the promote pawn UI.
-  if piece_select_state == .PIECE_PROMOTION then
-    return;
   z_state    := glfwGetKey(window, GLFW_KEY_Z);
   l_ctrl_key := glfwGetKey(window, GLFW_KEY_LEFT_CONTROL);
   r_ctrl_key := glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL);
@@ -654,6 +653,56 @@ handle_undo_move :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flag
   case .UNDO_KEY_PRESS;
     if z_state == GLFW_RELEASE || (l_ctrl_key == GLFW_RELEASE && r_ctrl_key == GLFW_RELEASE) {
       undo_key_state = .UNDO_KEY_IDLE;
+    }
+  }
+}
+
+reset_key_state: enum { RESET_IDLE; RESET_PRESS; } = .RESET_IDLE;
+
+handle_reset :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..] Move16) {
+  // TODO: handle ai
+  if !w_human_turn() && !b_human_turn() && (w_is_human == true || b_is_human == true) then
+    return; // disable undo for AI vs AI.
+  if w_is_human == false && b_is_human == false && moves_arr.count != 0 then
+    return;
+
+  if piece_select_state != .PIECE_IDLE then
+    return;
+  n_state    := glfwGetKey(window, GLFW_KEY_N);
+  l_ctrl_key := glfwGetKey(window, GLFW_KEY_LEFT_CONTROL);
+  r_ctrl_key := glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL);
+  if reset_key_state == {
+
+  case .RESET_IDLE;
+    if n_state == GLFW_PRESS && (l_ctrl_key == GLFW_PRESS || r_ctrl_key == GLFW_PRESS) {
+      reset_key_state = .RESET_PRESS;
+      while move_record {
+        board_state := pop(*move_record);
+        <<ep_sq = board_state.en_paesant_sq;
+        <<flags = board_state.flags;
+        whose_turn = !whose_turn;
+        unmake_move(piece_bitboard, board_state.captured, board_state.move, whose_turn);
+        pop(*hash_record);
+      }
+
+      array_reset(moves_arr);
+      check_bb = generate_legal_moves(piece_bitboard, <<flags, <<ep_sq, moves_arr, whose_turn);
+
+      highlight_the_square = 0;
+      possible_moves_bb = 0;
+      promote_move = cast(Move16) 0;
+      if move_record {
+        last_board_state := move_record[move_record.count - 1];
+        type, x, y := decode_move(last_board_state.move);
+        last_move_bb = (cast(u64)(1 << x)) | (cast(u64)(1 << y));
+      } else {
+        last_move_bb = 0;
+      }
+      __game_status_text = "";
+    }
+  case .RESET_PRESS;
+    if n_state == GLFW_RELEASE || (l_ctrl_key == GLFW_RELEASE && r_ctrl_key == GLFW_RELEASE) {
+      reset_key_state = .RESET_IDLE;
     }
   }
 }
