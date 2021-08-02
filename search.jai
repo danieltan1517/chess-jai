@@ -435,6 +435,9 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       order[i] = 9.99e16;
       continue;
     }
+    flags, from_index, to_index := decode_move(move_array[i]);
+    from := cast(u64) (1 << from_index);
+    to   := cast(u64) (1 << to_index);
 
     using Move16;
     if flags == Capture {
