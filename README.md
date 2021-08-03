@@ -41,3 +41,5 @@ This Jai-Chess AI is a hobby project I created for fun. Here is a list of the fe
 ## Still needs to be implemented
 * Better optimization for negamax search
 * Endgame evaluation (may need some optimization)
+* Openings
+* Null Move Pruning (maybe)
