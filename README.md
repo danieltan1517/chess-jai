@@ -13,6 +13,7 @@ This Jai-Chess AI is a hobby project I created for fun. Here is a list of the fe
 * Implements UCI (Universal Chess Interface) Protocol to communicate with any UCI compatible chess engine (e.g. Stockfish, RubiChess)
 * Can do Human vs Computer, Computer vs Human, Human vs Human, and Computer vs Computer.
 * Parse and load FEN strings
+* Uses https://github.com/Destaq/chess_graph/blob/master/elo_reading/openings_sheet.csv for opening book
 
 ## AI Chess Engine Features
 * AI Estimated Rating: 2200 (based on playing chess.com bots)
