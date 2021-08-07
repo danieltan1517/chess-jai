@@ -136,11 +136,12 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     if ttable.hash[key] == hash && ttable.entries[key].depth >= depth then {
       if ttable.entries[key].depth >= depth then {
         value := ttable.entries[key].score;
-        if ttable.entries[key].flag == TFLAGS.EXACT then {
+        if ttable.entries[key].flag == {
+        case TFLAGS.EXACT; 
           `return value;
-        } else if ttable.entries[key].flag == TFLAGS.LOWER then {
+        case TFLAGS.LOWER; 
           alpha = max(alpha, value);
-        } else if ttable.entries[key].flag == TFLAGS.UPPER then {
+        case TFLAGS.UPPER; 
           beta  = min(beta, value);
         }
        
@@ -560,7 +561,7 @@ __killer_moves: [2][64] Move16;
 
 
 // get something off the ground.
-TSIZE :: 0x100_0000;
+TSIZE :: 0x100_000;
 
 ttable : struct {
   hash:     [TSIZE] u64;
