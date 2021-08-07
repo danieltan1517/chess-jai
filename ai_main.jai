@@ -109,7 +109,7 @@ main :: () {
       depth, TF := parse_int(*input);
       if !TF return;
 
-      mov, eval := search(*pieces, castling, ep, *repetitions, depth, whose_turn);
+      mov := search(*pieces, castling, ep, *repetitions, depth, whose_turn);
 
       flags, from, to := decode_move(mov);
       // hopefully promote the piece functions correctly...
