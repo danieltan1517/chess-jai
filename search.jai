@@ -55,7 +55,6 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   __nodes_searched += 1;
   hash := zobrist_hash(pieces, castling, ep, whose_turn);
   key  := hash % TSIZE;
-  alpha_orig := alpha;
 
   transposition_table_lookup();
 
@@ -73,6 +72,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
   best_pv := true;
   move_ordering(pieces, move_array, whose_turn, pv_line, ply, bh_move);
+  hash_flag := TFLAGS.UPPER;
   for move, moves_searched : move_array {
     c_copy, ep_copy, capture := castling, ep, PieceType.None;
     mflag, from, to := decode_move(move);
@@ -89,7 +89,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
          && check == 0 && (mflag >= Move16.Quiet && mflag <= Move16.Queen_Castle) { 
          // do late move reduction when not in check and making "quiet moves" 
 
-        eval = -negamax(pieces, c_copy, ep_copy, depth-2, !whose_turn, *line, ply + 1, -alpha-1, -alpha);
+        eval = -negamax(pieces, c_copy, ep_copy, depth-3, !whose_turn, *line, ply + 1, -alpha-1, -alpha);
       } else {
           // do normal search.
         eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, ply + 1, -alpha-1, -alpha);
@@ -103,6 +103,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     unmake_move(pieces, capture, move, whose_turn);
 
     if eval > alpha {
+      hash_flag = TFLAGS.EXACT;
       best_pv = false;
       alpha = eval;
       pv_line.argmove[0], bh_move = move;
@@ -114,6 +115,8 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     }
 
     if alpha >= beta then {
+      hash_flag = TFLAGS.LOWER;
+      alpha = beta;
       if !is_capture(mflag) {
         __killer_moves[1][ply] = __killer_moves[0][ply];
         __killer_moves[0][ply] = move;
@@ -122,7 +125,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     }
   }
 
-  transposition_table_store(alpha, bh_move);
+  transposition_table_store(alpha, hash_flag, bh_move);
   return alpha;
 
   transposition_table_lookup :: () #expand {
@@ -149,16 +152,10 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     }
   }
 
-  transposition_table_store :: (value: int, bmove: Move16) #expand {
+  transposition_table_store :: (value: int, hash_flag: TFLAGS, bmove: Move16) #expand {
     ttable.hash[key] = hash;
     ttable.entries[key].score = xx value;
-    if value <= alpha_orig then {
-      ttable.entries[key].flag = TFLAGS.UPPER;
-    } else if value >= beta then {
-      ttable.entries[key].flag = TFLAGS.LOWER;
-    } else {
-      ttable.entries[key].flag = TFLAGS.EXACT;
-    }
+    ttable.entries[key].flag = hash_flag;
     ttable.entries[key].depth = xx depth;
     ttable.entries[key].bmove = bmove;
   }
@@ -410,10 +407,9 @@ perft :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, de
 
 move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn: bool, pv_line: *PVLine, ply: int, bh_move: Move16) {
   // TODO: I don't know if some other function wants to use temporary storage.
+  auto_release_temp();
   count := move_array.count;
   order := NewArray(count, int, allocator=__temporary_allocator);
-  //defer reset_temporary_storage();
-
   pawns := ifx whose_turn pieces.w_pawn else pieces.b_pawn;
   p_attacks := ifx whose_turn then black_pawn_captures(pieces.b_pawn) else white_pawn_captures(pieces.w_pawn);
 
@@ -463,10 +459,9 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
 
 capture_order :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn: bool) {
   // TODO: I don't know if some other function wants to use temporary storage.
+  auto_release_temp();
   count := move_array.count;
   order := NewArray(count, int, allocator=__temporary_allocator);
-  //defer reset_temporary_storage();
-
   for i: 0..count-1 {
     flags, from_index, to_index := decode_move(move_array[i]);
     from := cast(u64) (1 << from_index);
