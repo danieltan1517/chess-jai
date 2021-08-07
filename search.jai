@@ -9,9 +9,10 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   __nodes_searched = 0;
   clear_hash_table();
 
+  Push_Temporary();
+
   pv_line: PVLine;
   best_eval : int; best_move : Move16;
- 
   for iter_depth : 1..depth { 
     best_eval = negamax(pieces, castling, ep, iter_depth, whose_turn, *pv_line);
     best_move = pv_line.argmove[0];
@@ -47,6 +48,9 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
 }
 
 negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, ply: int = 0, alpha := -INF, beta := INF) -> int {
+  FULL_DEPTH_MOVES :: 4;
+  REDUCTION_LIMIT  :: 3;
+
   line: PVLine;
   __nodes_searched += 1;
   hash := zobrist_hash(pieces, castling, ep, whose_turn);
@@ -64,61 +68,53 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   array_reserve(*move_array, 40);
   defer array_free(move_array);
   check := generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
+  check_for_checkmate_stalemate();
+  null_move_pruning();
 
-  if !move_array then {
-    if check != 0 then {
-      return -INF;
-    } else {
-      return 0;
-    }
-  }
-
-  bsearch_pv := true;
-  // principle variation search.
+  best_pv := true;
   move_ordering(pieces, move_array, whose_turn, pv_line, ply, bh_move);
   for move, moves_searched : move_array {
     c_copy, ep_copy, capture := castling, ep, PieceType.None;
-    mflag := decode_move(move);
+    mflag, from, to := decode_move(move);
     make_move(pieces, *c_copy, *ep_copy, *capture, move, whose_turn);
 
-    FULL_DEPTH_MOVES :: 4;
-    REDUCTION_LIMIT  :: 3;
     eval := 0;
-    if bsearch_pv {
-      eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, ply + 1, -beta, -alpha);
+
+    if best_pv {
+      eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, ply + 1, -beta-1, -alpha);
     } else {
+      // nega-scout
       if moves_searched >= FULL_DEPTH_MOVES 
          && depth >= REDUCTION_LIMIT 
-         && check == 0 && (mflag >= Move16.Quiet && mflag <= Move16.Queen_Castle) { // do late move reduction when not in check and making "quiet moves" eval = -negamax(pieces, c_copy, ep_copy, depth-2, !whose_turn, *line, ply + 1, -alpha-1, -alpha);
+         && check == 0 && (mflag >= Move16.Quiet && mflag <= Move16.Queen_Castle) { 
+         // do late move reduction when not in check and making "quiet moves" 
+
+        eval = -negamax(pieces, c_copy, ep_copy, depth-2, !whose_turn, *line, ply + 1, -alpha-1, -alpha);
       } else {
-        // do normal search.
+          // do normal search.
         eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, ply + 1, -alpha-1, -alpha);
       }
 
+      // re-search the move that has failed to be proved to be bad with normal alpha beta score bounds
       if eval > alpha && eval < beta then {
-        // re-search the move that has failed to be proved to be bad.
         eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, ply + 1, -beta, -alpha);
       }
     }
-
     unmake_move(pieces, capture, move, whose_turn);
 
     if eval > alpha {
-      bsearch_pv = false;
+      best_pv = false;
       alpha = eval;
       pv_line.argmove[0], bh_move = move;
       memcpy(*pv_line.argmove[1], *line.argmove[0], line.cmove * size_of(Move16));
       pv_line.cmove = line.cmove + 1;
-      flags, from, to := decode_move(move);
-      if !is_capture(flags) {
+      if !is_capture(mflag) {
         __history_moves[cast(int)whose_turn][from][to] += depth*depth;
       }
     }
 
     if alpha >= beta then {
-      alpha = beta;
-      m_flags := decode_move(move);
-      if !is_capture(m_flags) {
+      if !is_capture(mflag) {
         __killer_moves[1][ply] = __killer_moves[0][ply];
         __killer_moves[0][ply] = move;
       }
@@ -165,6 +161,36 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     }
     ttable.entries[key].depth = xx depth;
     ttable.entries[key].bmove = bmove;
+  }
+
+  check_for_checkmate_stalemate :: () #expand {
+    if !move_array then {
+      if check != 0 then {
+        `return -INF;
+      } else {
+        `return 0;
+      }
+    }
+  }
+
+  null_move_pruning :: () #expand {
+    NULL_MOVE_MAX :: 4;
+    // check for zugwang before 
+    if depth >= NULL_MOVE_MAX && check == 0 && !has_zugzwang(pieces) {
+      score := -negamax(pieces, castling, 0, depth - 3, !whose_turn, *line, ply + 1, -beta, -beta + 1);
+      if score >= beta then {
+        `return beta;
+      }
+    }
+
+    // zugzwang occurs primarily in King-Pawn only endgames
+    // zugzwang in chess is rare otherwise.
+    has_zugzwang :: (pieces: *Piece_Bitboards) -> bool {
+      using pieces;
+      w := w_queen | w_rook | w_bishop | w_knight;
+      b := b_queen | b_rook | b_bishop | b_knight;
+      return (w|b) == 0;
+    } 
   }
 }
 
@@ -321,6 +347,7 @@ INF :: 0x7FFF_FFFF; // Alias
 // search capture moves only, we do this to avoid horizon effect
 // see: https://www.chessprogramming.org/Quiescence_Search
 quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, alpha: int, beta: int, fifty: int = 0) -> int {
+  auto_release_temp();
   eval := nnue_evaluate(pieces, whose_turn, fifty);
   if eval >= beta then
     return beta;
@@ -329,7 +356,6 @@ quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn:
 
   move_array: [..] Move16;
   array_reserve(*move_array, 40);
-  defer array_free(move_array);
   generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
   filter_captures(move_array);
   capture_order(pieces, move_array, whose_turn);
@@ -366,13 +392,12 @@ PVLine :: struct {
 // performance test
 // walks the move generation tree of strictly legal moves to count the leaf nodes
 perft :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, depth: int) -> int {
-  auto_release_temp();
   if depth == 0 then return 1;
+
+  auto_release_temp();
   num_nodes := 0;
   moves_array: [..] Move16;
   array_reserve(*moves_array, 40);
-  defer { array_free(moves_array); }
-
   generate_legal_moves(p, castling, ep, *moves_array, whose_turn);
   for move : moves_array {
     c_copy, ep_copy, capture := castling, ep, PieceType.None;
@@ -387,7 +412,7 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
   // TODO: I don't know if some other function wants to use temporary storage.
   count := move_array.count;
   order := NewArray(count, int, allocator=__temporary_allocator);
-  defer reset_temporary_storage();
+  //defer reset_temporary_storage();
 
   pawns := ifx whose_turn pieces.w_pawn else pieces.b_pawn;
   p_attacks := ifx whose_turn then black_pawn_captures(pieces.b_pawn) else white_pawn_captures(pieces.w_pawn);
@@ -410,7 +435,8 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       piece_to_type := piece_type_at(to, pieces, !whose_turn);
       order[i] = mvv_lva(piece_to_type, piece_from_type);
     } else if flags == Ep_Capture {
-      order[i] = mvv_lva(PieceType.Pawn, PieceType.Pawn);
+      EP_SCORE :: #run mvv_lva(PieceType.Pawn, PieceType.Pawn);
+      order[i] = EP_SCORE;
     } else if flags == Knight_Promotion || flags == Knight_Promotion_Capture {
       order[i] = 32500;
     } else if flags == Bishop_Promotion || flags == Bishop_Promotion_Capture {
@@ -439,7 +465,7 @@ capture_order :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
   // TODO: I don't know if some other function wants to use temporary storage.
   count := move_array.count;
   order := NewArray(count, int, allocator=__temporary_allocator);
-  defer reset_temporary_storage();
+  //defer reset_temporary_storage();
 
   for i: 0..count-1 {
     flags, from_index, to_index := decode_move(move_array[i]);

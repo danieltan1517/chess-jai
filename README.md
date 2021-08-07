@@ -37,9 +37,9 @@ This Jai-Chess AI is a hobby project I created for fun. Here is a list of the fe
 * Transposition Table 
 * 3-fold repetition & fifty-move rule (still some bugs.)
 * Late Move Reduction
+* Null Move Pruning (still need to work this out.)
 
 ## Still needs to be implemented
-* Better optimization for negamax search
+* Better optimization for movegen 
 * Endgame evaluation (may need some optimization)
 * Openings
-* Null Move Pruning (maybe)
