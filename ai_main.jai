@@ -9,6 +9,7 @@ main :: () {
   pieces, whose_turn, castling, ep := chess_start_pos();
   repetitions: [..] u64;
   array_reserve(*repetitions, 200);
+  fifty := 0;
 
   while true {
     input := getline();
@@ -36,7 +37,7 @@ main :: () {
     // TODO: this does not guard against incoherent IO, this is just
     // to get it working... 
     array_reset(*repetitions);
-
+    fifty = 0;
     input = advance(input, 9);
     input = eat_spaces(input);
     if begins_with(input, "fen ") {
@@ -96,6 +97,9 @@ main :: () {
       hash : u64 = 0;
       if move_type == Move16.Quiet && before_pawn == after_pawn {
         hash = zobrist_hash(*pieces, castling, ep, whose_turn);
+        fifty += 1;
+      } else {
+        fifty = 0;
       }
       array_add(*repetitions, hash);
     }
@@ -108,8 +112,7 @@ main :: () {
     case "depth";
       depth, TF := parse_int(*input);
       if !TF return;
-
-      mov := search(*pieces, castling, ep, *repetitions, depth, whose_turn);
+      mov := search(*pieces, castling, ep, *repetitions, depth, whose_turn, fifty);
 
       flags, from, to := decode_move(mov);
       // hopefully promote the piece functions correctly...
@@ -149,7 +152,7 @@ getline :: () -> string {
   return str;
 }
 
-__buffer: [16384] u8;
+__buffer: [4096] u8;
 
 // TODO: this assumes the moves are valid
 // TODO: this is a long function...

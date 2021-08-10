@@ -56,7 +56,7 @@ build_debug :: (executable_name: string, file_names: [] string, workspace_name: 
   target_options.output_executable_name = executable_name;
   target_options.optimization_level = .DEBUG;
   target_options.backend = .X64;
-  target_options.temporary_storage_size = 32768*2;
+  target_options.temporary_storage_size = 32768;
   set_build_options(target_options, w);
 
   compiler_begin_intercept(w);
@@ -88,8 +88,8 @@ build_release :: (executable_name: string, file_names: [] string, workspace_name
   target_options := get_build_options(w);
   target_options.output_executable_name = executable_name;
   target_options.optimization_level = .RELEASE;
-  target_options.temporary_storage_size = 32768*2;
-  set_optimization_level(*target_options, 3, 0); 
+  target_options.temporary_storage_size = 32768;
+  set_optimization_level(*target_options, 1, 0); 
 
   set_build_options(target_options, w);
 

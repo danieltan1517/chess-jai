@@ -38,7 +38,6 @@ fen_string := "startpos";
 //"r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1";
 //"8/PPPk4/8/8/8/8/4Kppp/8 b - - 0 1";
 
-
 main :: () {
   white_side := true;
   engine_name := handle_command_line();
@@ -88,7 +87,6 @@ main :: () {
   }
   zobrist_init_globals();
   init_global_bitboards();
-
   piece_bitboard: Piece_Bitboards;
   moves_arr: [..] Move16;
   array_reserve(*moves_arr, 70);    // generates all legal moves

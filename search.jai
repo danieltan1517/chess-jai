@@ -1,7 +1,7 @@
 #import "Math";
 #import "Basic";
 
-search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *[..] u64, depth: int, whose_turn: bool) -> Move16 {
+search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *[..] u64, depth: int, whose_turn: bool, fifty: int) -> Move16 {
   // this is basically a fancy wrapper around negamax, negamax does all the work, this just sets everything up.
   time_begin := get_time();
   memset(__history_moves.data, 0, size_of(float)*2*64*64);
@@ -14,7 +14,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   pv_line: PVLine;
   best_eval : int; best_move : Move16;
   for iter_depth : 1..depth { 
-    best_eval = negamax(pieces, castling, ep, iter_depth, whose_turn, *pv_line);
+    best_eval = negamax(pieces, castling, ep, iter_depth, whose_turn, *pv_line, fifty=fifty);
     best_move = pv_line.argmove[0];
     time_taken := get_time() - time_begin;
     print_stats(iter_depth);
@@ -29,7 +29,6 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
     nps  := cast(int)(__nodes_searched/`time_taken);
     print_to_builder(*builder, "info depth % ", depth);
     print_to_builder(*builder, "nodes % time % score cp % nps % pv ", __nodes_searched, t_ms, best_eval, nps);
-    print_move_to_buffer(best_move);
     for mv: pv_line.argmove {
       if mv == 0 then
         break;
@@ -47,7 +46,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   }
 }
 
-negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, ply: int = 0, alpha := -INF, beta := INF) -> int {
+negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, ply: int = 0, alpha := -INF, beta := INF, fifty: int) -> int {
   FULL_DEPTH_MOVES :: 4;
   REDUCTION_LIMIT  :: 3;
 
@@ -60,7 +59,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
   if depth == 0 then {
     pv_line.cmove = 0;
-    return quiescene(pieces, castling, ep, whose_turn, alpha, beta, 0);
+    return quiescene(pieces, castling, ep, whose_turn, alpha, beta, fifty);
   }
 
   move_array: [..] Move16;
@@ -76,12 +75,21 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   for move, moves_searched : move_array {
     c_copy, ep_copy, capture := castling, ep, PieceType.None;
     mflag, from, to := decode_move(move);
+
+
+    before_pawn := pieces.w_pawn | pieces.b_pawn;
     make_move(pieces, *c_copy, *ep_copy, *capture, move, whose_turn);
+    after_pawn := pieces.w_pawn | pieces.b_pawn;
+
+    next_fifty := fifty + 1;
+    if mflag == Move16.Quiet && before_pawn == after_pawn {
+      next_fifty = 0;
+    }
 
     eval := 0;
 
     if best_pv {
-      eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, ply + 1, -beta-1, -alpha);
+      eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, ply + 1, -beta-1, -alpha, next_fifty);
     } else {
       // nega-scout
       if moves_searched >= FULL_DEPTH_MOVES 
@@ -89,15 +97,15 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
          && check == 0 && (mflag >= Move16.Quiet && mflag <= Move16.Queen_Castle) { 
          // do late move reduction when not in check and making "quiet moves" 
 
-        eval = -negamax(pieces, c_copy, ep_copy, depth-3, !whose_turn, *line, ply + 1, -alpha-1, -alpha);
+        eval = -negamax(pieces, c_copy, ep_copy, depth-3, !whose_turn, *line, ply + 1, -alpha-1, -alpha, next_fifty);
       } else {
           // do normal search.
-        eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, ply + 1, -alpha-1, -alpha);
+        eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, ply + 1, -alpha-1, -alpha, next_fifty);
       }
 
       // re-search the move that has failed to be proved to be bad with normal alpha beta score bounds
       if eval > alpha && eval < beta then {
-        eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, ply + 1, -beta, -alpha);
+        eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, ply + 1, -beta, -alpha, next_fifty);
       }
     }
     unmake_move(pieces, capture, move, whose_turn);
@@ -175,7 +183,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     NULL_MOVE_MAX :: 4;
     // check for zugwang before 
     if depth >= NULL_MOVE_MAX && check == 0 && !has_zugzwang(pieces) {
-      score := -negamax(pieces, castling, 0, depth - 3, !whose_turn, *line, ply + 1, -beta, -beta + 1);
+      score := -negamax(pieces, castling, 0, depth - 3, !whose_turn, *line, ply + 1, -beta, -beta + 1, fifty);
       if score >= beta then {
         `return beta;
       }
