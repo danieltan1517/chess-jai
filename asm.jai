@@ -18,4 +18,8 @@ popcount :: (value: u64) -> int #expand {
   return result;
 }
 
+// TODO: Eventually, we want to replace the clang intrinsic.
 bit_reverse64  :: (x: u64)->u64 #c_call #foreign assm;
+
+
+
