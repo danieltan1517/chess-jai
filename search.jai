@@ -64,7 +64,6 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
   move_array: [..] Move16;
   array_reserve(*move_array, 40);
-  defer array_free(move_array);
   check := generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
   check_for_checkmate_stalemate();
   null_move_pruning();
@@ -97,7 +96,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
          && check == 0 && (mflag >= Move16.Quiet && mflag <= Move16.Queen_Castle) { 
          // do late move reduction when not in check and making "quiet moves" 
 
-        eval = -negamax(pieces, c_copy, ep_copy, depth-3, !whose_turn, *line, ply + 1, -alpha-1, -alpha, next_fifty);
+        eval = -negamax(pieces, c_copy, ep_copy, depth-2, !whose_turn, *line, ply + 1, -alpha-1, -alpha, next_fifty);
       } else {
           // do normal search.
         eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, ply + 1, -alpha-1, -alpha, next_fifty);
@@ -321,7 +320,6 @@ perft_divide :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: b
   num_nodes := 0;
   moves_array: [..] Move16;
   array_reserve(*moves_array, 40);
-  defer { array_free(moves_array); }
 
   generate_legal_moves(p, castling, ep, *moves_array, whose_turn);
   print("legal moves from here: %\n", moves_array.count);
