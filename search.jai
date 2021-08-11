@@ -19,12 +19,11 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
     time_taken := get_time() - time_begin;
     print_stats(iter_depth);
   }
+
   return best_move;
 
   print_stats :: (depth: int) #expand {
-    Push_Temporary();
     builder: String_Builder;
-
     t_ms := cast(int)(`time_taken*1000.0); // convert secs to ms
     nps  := cast(int)(__nodes_searched/`time_taken);
     print_to_builder(*builder, "info depth % ", depth);
@@ -80,25 +79,21 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     make_move(pieces, *c_copy, *ep_copy, *capture, move, whose_turn);
     after_pawn := pieces.w_pawn | pieces.b_pawn;
 
-    next_fifty := fifty + 1;
+    next_fifty := 0;
     if mflag == Move16.Quiet && before_pawn == after_pawn {
-      next_fifty = 0;
+      next_fifty = fifty + 1;
     }
 
     eval := 0;
-
     if best_pv {
       eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, -beta-1, -alpha, next_fifty);
     } else {
       // nega-scout
-      if moves_searched >= FULL_DEPTH_MOVES 
-         && depth >= REDUCTION_LIMIT 
-         && check == 0 && (mflag >= Move16.Quiet && mflag <= Move16.Queen_Castle) { 
-         // do late move reduction when not in check and making "quiet moves" 
-
+      if moves_searched >= FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && check == 0 && next_fifty != 0 { 
+        // do late move reduction when not in check and making "quiet moves" 
         eval = -negamax(pieces, c_copy, ep_copy, depth-2, !whose_turn, *line, repetitions, ply + 1, -alpha-1, -alpha, next_fifty);
       } else {
-          // do normal search.
+        // do normal search.
         eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, -alpha-1, -alpha, next_fifty);
       }
 
@@ -117,7 +112,8 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       memcpy(*pv_line.argmove[1], *line.argmove[0], line.cmove * size_of(Move16));
       pv_line.cmove = line.cmove + 1;
       if !is_capture(mflag) {
-        __history_moves[cast(int)whose_turn][from][to] += depth*depth;
+        __killer_moves[1][ply] = __killer_moves[0][ply];
+        __killer_moves[0][ply] = move;
       }
     }
 
@@ -125,8 +121,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       hash_flag = TFLAGS.LOWER;
       alpha = beta;
       if !is_capture(mflag) {
-        __killer_moves[1][ply] = __killer_moves[0][ply];
-        __killer_moves[0][ply] = move;
+        __history_moves[cast(int)whose_turn][from][to] += depth*depth;
       }
       break;
     }
@@ -198,13 +193,13 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     NULL_MOVE_MAX :: 4;
     // check for zugwang before 
     if depth >= NULL_MOVE_MAX && check == 0 && !has_zugzwang(pieces) {
-      score := -negamax(pieces, castling, 0, depth - 3, !whose_turn, *line, repetitions, ply + 1, -beta, -beta + 1, fifty);
+      score := -negamax(pieces, castling, 0, depth - 2, !whose_turn, *line, repetitions, ply + 1, -beta, -beta + 1, fifty);
       if score >= beta then {
         `return beta;
       }
     }
 
-    // zugzwang occurs primarily in King-Pawn only endgames
+    // zugzwang occurs primarily in King-Pawn endgames
     // zugzwang in chess is rare otherwise.
     has_zugzwang :: (pieces: *Piece_Bitboards) -> bool {
       using pieces;
@@ -433,8 +428,6 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
   auto_release_temp();
   count := move_array.count;
   order := NewArray(count, int, allocator=__temporary_allocator);
-  pawns := ifx whose_turn pieces.w_pawn else pieces.b_pawn;
-  p_attacks := ifx whose_turn then black_pawn_captures(pieces.b_pawn) else white_pawn_captures(pieces.w_pawn);
 
   for i: 0..count-1 {
     if move_array[i] == pv_line.argmove[0] {
