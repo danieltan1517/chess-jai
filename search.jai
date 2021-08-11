@@ -14,7 +14,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   pv_line: PVLine;
   best_eval : int; best_move : Move16;
   for iter_depth : 1..depth { 
-    best_eval = negamax(pieces, castling, ep, iter_depth, whose_turn, *pv_line, fifty=fifty);
+    best_eval = negamax(pieces, castling, ep, iter_depth, whose_turn, *pv_line, repetitions, fifty=fifty);
     best_move = pv_line.argmove[0];
     time_taken := get_time() - time_begin;
     print_stats(iter_depth);
@@ -46,7 +46,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   }
 }
 
-negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, ply: int = 0, alpha := -INF, beta := INF, fifty: int) -> int {
+negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, repetitions: *[..]u64, ply: int = 0, alpha := -INF, beta := INF, fifty: int) -> int {
   FULL_DEPTH_MOVES :: 4;
   REDUCTION_LIMIT  :: 3;
 
@@ -88,7 +88,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     eval := 0;
 
     if best_pv {
-      eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, ply + 1, -beta-1, -alpha, next_fifty);
+      eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, -beta-1, -alpha, next_fifty);
     } else {
       // nega-scout
       if moves_searched >= FULL_DEPTH_MOVES 
@@ -96,15 +96,15 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
          && check == 0 && (mflag >= Move16.Quiet && mflag <= Move16.Queen_Castle) { 
          // do late move reduction when not in check and making "quiet moves" 
 
-        eval = -negamax(pieces, c_copy, ep_copy, depth-2, !whose_turn, *line, ply + 1, -alpha-1, -alpha, next_fifty);
+        eval = -negamax(pieces, c_copy, ep_copy, depth-2, !whose_turn, *line, repetitions, ply + 1, -alpha-1, -alpha, next_fifty);
       } else {
           // do normal search.
-        eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, ply + 1, -alpha-1, -alpha, next_fifty);
+        eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, -alpha-1, -alpha, next_fifty);
       }
 
       // re-search the move that has failed to be proved to be bad with normal alpha beta score bounds
       if eval > alpha && eval < beta then {
-        eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, ply + 1, -beta, -alpha, next_fifty);
+        eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, -beta, -alpha, next_fifty);
       }
     }
     unmake_move(pieces, capture, move, whose_turn);
@@ -176,13 +176,29 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
         `return 0;
       }
     }
+
+    // threefold repetition check.
+    count := 0;
+    reps := 0;
+    while count < fifty {
+      if hash == (<<repetitions) [repetitions.count - 1 - count] then {
+        reps += 1;
+        if reps >= 2 then {
+          pv_line.argmove[0] = move_array[0];
+          `return 0;
+        }
+      }
+      count += 1;
+    }
+    array_add(repetitions, hash);
+    `defer pop(repetitions);
   }
 
   null_move_pruning :: () #expand {
     NULL_MOVE_MAX :: 4;
     // check for zugwang before 
     if depth >= NULL_MOVE_MAX && check == 0 && !has_zugzwang(pieces) {
-      score := -negamax(pieces, castling, 0, depth - 3, !whose_turn, *line, ply + 1, -beta, -beta + 1, fifty);
+      score := -negamax(pieces, castling, 0, depth - 3, !whose_turn, *line, repetitions, ply + 1, -beta, -beta + 1, fifty);
       if score >= beta then {
         `return beta;
       }
@@ -194,7 +210,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       using pieces;
       w := w_queen | w_rook | w_bishop | w_knight;
       b := b_queen | b_rook | b_bishop | b_knight;
-      return (w|b) == 0;
+      return w == 0 || b == 0;
     } 
   }
 }
