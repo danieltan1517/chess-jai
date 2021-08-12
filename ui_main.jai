@@ -1168,6 +1168,7 @@ get_opening_name :: (move_record: [..] Board_States, opening_book: *BookNode) ->
   return true, ret;
 }
 
+// TODO: This function leaks memory!
 load_opening_book :: (file_path: string) -> *BookNode {
   text := read_entire_file(file_path);
   lines := split(text, "\n");
