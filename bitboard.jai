@@ -1207,14 +1207,16 @@ init_global_bitboards :: () {
 encode_move_bb :: inline (f: u64, t: u64, flags: Move16) -> Move16 {
   from := serialize_bit(f);
   to   := serialize_bit(t);
-  return xx ((from << 10) | (to << 4) | (xx flags));
+  ret  := (from << 10) | (to << 4) | (xx flags);
+  //print("%, %, %\n", cast(serialized_bb)from, cast(serialized_bb)to, ret);
+  return cast, trunc(Move16) ret;
 }
 
 // Type of move, From, To.
 decode_move :: inline (mov: Move16) -> flags: Move16, from: int, to: int {
   // NOTE: this cast is neccesssary to prevent the release build from doing something stupid...
   cast_mov := cast(int) mov;
-  return  mov & (xx 0xF), (cast_mov & 0xFC00) >> 10, (cast_mov & 0x03F0) >> 4;
+  return  mov & (xx 0xF), xx (cast_mov & 0xFC00) >> 10, xx (cast_mov & 0x03F0) >> 4;
 }
 
 find_move :: (moves: [..]Move16, from: u64, to: u64, typ: Move16=Move16.Quiet) -> Move16 {
