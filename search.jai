@@ -179,7 +179,8 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       if hash == (<<repetitions) [repetitions.count - 1 - count] then {
         reps += 1;
         if reps >= 2 then {
-          pv_line.argmove[0] = move_array[0];
+          r := random_get() % move_array.count;
+          pv_line.argmove[0] = move_array[r];
           `return 0;
         }
       }
