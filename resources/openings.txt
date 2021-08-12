@@ -2663,7 +2663,7 @@ A00,Gambit 59,g3 d5 Bg2 e5 b4
 A00,Regan Variation,g3 d5 Bg2 e5 d4
 A00,Reversed Alekhine,g3 e5 Nf3
 A00,Lasker Simul Special,g3 h5
-A00,Grob; Ahlhausen; Colibri; Fric; Genoa; Spike,g4
+A00,Grob's Attack,g4
 A00,Grob Gambit,g4 d5 Bg2 Bxg4
 A00,"Romford Counter-Gambit, Grob",g4 d5 Bg2 Bxg4 c4 d4
 A00,"Spike, Grob",g4 d5 Bg2 c6 g5

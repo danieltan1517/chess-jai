@@ -906,7 +906,8 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
     // make sure there are moves that could be made.
     if moves_arr.count > 0 && !w_human_turn() && !b_human_turn() {
       // TODO: Optimize this!
-      if random_get() % 4 == 0 {
+      if (random_get() % 100) < 75 {
+        print("Random opening.\n");
         TF, mov := pick_random_move(move_record, opening_book);
         if TF {
           ui_handle_move_made(piece_bitboard, flags, ep_sq, moves_arr, mov);
@@ -1148,7 +1149,6 @@ pick_random_move :: (move_record: [..] Board_States, opening_book: *BookNode) ->
   }
   r : int = (xx (get_time()*102985123.0));
   r %= iter.moves.count;
-  print("% %\n", r, iter.moves.count);
   return true, iter.moves[r];
 }
 
