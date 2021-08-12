@@ -49,6 +49,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   FULL_DEPTH_MOVES :: 4;
   REDUCTION_LIMIT  :: 3;
 
+  auto_release_temp();
   line: PVLine;
   __nodes_searched += 1;
   hash := zobrist_hash(pieces, castling, ep, whose_turn);
