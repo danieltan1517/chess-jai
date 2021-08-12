@@ -652,6 +652,12 @@ handle_undo_move :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flag
           __game_status_text = "Check.";
         } else {
           __game_status_text = "";
+         
+          TF, opening_name := get_opening_name(move_record, opening_book);
+          // TODO: Optimize this. 
+          if TF then {
+            __game_status_text = opening_name;
+          }
         }
       }
     }
@@ -703,7 +709,6 @@ handle_reset :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flags: *
       } else {
         last_move_bb = 0;
       }
-      __game_status_text = "";
     }
   case .RESET_PRESS;
     if n_state == GLFW_RELEASE || (l_ctrl_key == GLFW_RELEASE && r_ctrl_key == GLFW_RELEASE) {
