@@ -14,6 +14,7 @@ This Jai-Chess AI is a hobby project I created for fun. Here is a list of the fe
 * Can do Human vs Computer, Computer vs Human, Human vs Human, and Computer vs Computer.
 * Parse and load FEN strings
 * Uses https://github.com/Destaq/chess_graph/blob/master/elo_reading/openings_sheet.csv for opening book
+* Opening Book (need to clean up memory usage)
 
 ## AI Chess Engine Features
 * AI Estimated Rating: 2200 (based on playing chess.com bots)
@@ -42,4 +43,3 @@ This Jai-Chess AI is a hobby project I created for fun. Here is a list of the fe
 ## Still needs to be implemented
 * Better optimization for movegen 
 * Endgame evaluation (may need some optimization)
-* Openings
