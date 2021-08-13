@@ -113,9 +113,6 @@ main :: () {
     glClearColor(0.15555, 0.15555, 0.15555, 1.0);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    if w_is_human == false || b_is_human == false {
-      uci_ai_game_loop (*piece_bitboard, *flags, *ep_sq, *moves_arr);
-    }
     im_draw_setup_gl();
     im_set_viewport_transform(2.0/width, 2.0/height, -1, -1);
     white_side = handle_flip_board(window, white_side);
@@ -132,6 +129,9 @@ main :: () {
     glfwPollEvents();
 
     reset_temporary_storage();
+    if w_is_human == false || b_is_human == false {
+      uci_ai_game_loop (*piece_bitboard, *flags, *ep_sq, *moves_arr);
+    }
   }
 }
 
@@ -906,7 +906,7 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
     // make sure there are moves that could be made.
     if moves_arr.count > 0 && !w_human_turn() && !b_human_turn() {
       // TODO: Optimize this!
-      if (random_get() % 100) < 90 {
+      if (cast(int)(random_get()) % 100) < 90 {
         TF, mov := pick_random_move(move_record, opening_book);
         if TF {
           print("Random opening.\n");
@@ -1147,8 +1147,11 @@ pick_random_move :: (move_record: [..] Board_States, opening_book: *BookNode) ->
 
     iter = iter.nodes[idx];
   }
-  r : int = (xx (get_time()*102985123.0));
-  r %= iter.moves.count;
+
+  if iter.moves.count == 0 then
+    return false, Move16.Quiet;
+
+  r := cast(int)random_get() % iter.moves.count;
   return true, iter.moves[r];
 }
 

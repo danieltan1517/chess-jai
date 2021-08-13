@@ -180,6 +180,12 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       }
     }
 
+    if fifty >= 100 then {
+      r := random_get() % move_array.count;
+      pv_line.argmove[0] = move_array[r];  // TODO: I don't know picking a random move helps or not...
+      `return 0;
+    }
+
     // threefold repetition check.
     count := 0;
     reps := 0;
@@ -188,9 +194,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
         reps += 1;
         if reps >= 2 then {
           r := random_get() % move_array.count;
-          pv_line.argmove[0] = move_array[r];
-          _, f, t := decode_move(move_array[r]);
-          print("PV_LINE = %-%\n", cast(serialized_bb)f, cast(serialized_bb)t);
+          pv_line.argmove[0] = move_array[r];  // TODO: I don't know picking a random move helps or not...
           `return 0;
         }
       }
@@ -203,11 +207,16 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   null_move_pruning :: () #expand {
     NULL_MOVE_MAX :: 4;
     // check for zugwang before 
-    if depth >= NULL_MOVE_MAX && check == 0 && !has_zugzwang(pieces) {
+    if depth >= NULL_MOVE_MAX && check == 0 && !has_ep(pieces) && !has_zugzwang(pieces) {
       score := -negamax(pieces, castling, 0, depth - 2, !whose_turn, *line, repetitions, ply + 1, -beta, -beta + 1, fifty);
       if score >= beta then {
         `return beta;
       }
+    }
+
+    has_ep :: (using pieces: *Piece_Bitboards) -> bool #expand {
+      pawn := ifx whose_turn w_pawn else b_pawn;
+      return ((((ep << 1) & xx ~file_a) | ((ep >> 1) & xx ~file_h)) & pawn) != 0;
     }
 
     // zugzwang occurs primarily in King-Pawn endgames
@@ -458,7 +467,7 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       piece_to_type := piece_type_at(to, pieces, !whose_turn);
       order[i] = mvv_lva(piece_to_type, piece_from_type);
     } else if flags == Ep_Capture {
-      EP_SCORE :: #run mvv_lva(PieceType.Pawn, PieceType.Pawn);
+      EP_SCORE :: #run mvv_lva(PieceType.Queen, PieceType.Pawn);
       order[i] = EP_SCORE;
     } else if flags == Knight_Promotion || flags == Knight_Promotion_Capture {
       order[i] = 32500;
