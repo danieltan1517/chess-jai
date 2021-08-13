@@ -13,6 +13,13 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
 
   pv_line: PVLine;
   best_eval : int; best_move : Move16;
+  // TODO: WTF am I doing?!?!?!
+  for iter_depth : 1..depth/2 { 
+    best_eval = negamax(pieces, castling, ep, iter_depth, whose_turn, *pv_line, repetitions, fifty=fifty);
+    best_move = pv_line.argmove[0];
+    time_taken := get_time() - time_begin;
+    print_stats(iter_depth);
+  }
   for iter_depth : 1..depth { 
     best_eval = negamax(pieces, castling, ep, iter_depth, whose_turn, *pv_line, repetitions, fifty=fifty);
     best_move = pv_line.argmove[0];
@@ -182,6 +189,8 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
         if reps >= 2 then {
           r := random_get() % move_array.count;
           pv_line.argmove[0] = move_array[r];
+          _, f, t := decode_move(move_array[r]);
+          print("PV_LINE = %-%\n", cast(serialized_bb)f, cast(serialized_bb)t);
           `return 0;
         }
       }
@@ -436,7 +445,7 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       order[i] = INF;
       continue;
     } else if move_array[i] == bh_move {
-      order[i] = 0x7FF_FFFF;
+      order[i] = INF - 100;
       continue;
     }
     flags, from_index, to_index := decode_move(move_array[i]);
@@ -459,8 +468,6 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       order[i] = 50000;
     } else if flags == Queen_Promotion || flags == Queen_Promotion_Capture {
       order[i] = 90000;
-    } else if flags == King_Castle || flags == Queen_Castle {
-      order[i] = 150;
     } else {
       if __killer_moves[0][ply] == move_array[i] {
         order[i] = 2500;

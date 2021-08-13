@@ -906,10 +906,10 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
     // make sure there are moves that could be made.
     if moves_arr.count > 0 && !w_human_turn() && !b_human_turn() {
       // TODO: Optimize this!
-      if (random_get() % 100) < 75 {
-        print("Random opening.\n");
+      if (random_get() % 100) < 90 {
         TF, mov := pick_random_move(move_record, opening_book);
         if TF {
+          print("Random opening.\n");
           ui_handle_move_made(piece_bitboard, flags, ep_sq, moves_arr, mov);
         } else {
           cmd_str := uci_position_command();
