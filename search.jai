@@ -57,7 +57,6 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
   TF, tt_score, bh_move := transposition_table_lookup(alpha, beta, hash, key, depth);
   if TF then {
-    pv_line.argmove[0] = bh_move;
     return tt_score;
   }
 
@@ -197,7 +196,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
   null_move_pruning :: () #expand {
     NULL_MOVE_MAX :: 4;
-    // check for zugwang before 
+    // check for zugwang before null move pruning
     if depth >= NULL_MOVE_MAX && check == 0 && !has_ep(pieces) && !has_zugzwang(pieces) {
       score := -negamax(pieces, castling, 0, depth - 2, !whose_turn, *line, repetitions, ply + 1, -beta, -beta + 1, fifty);
       if score >= beta then {
