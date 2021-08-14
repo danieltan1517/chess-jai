@@ -109,6 +109,15 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     }
     unmake_move(pieces, capture, move, whose_turn);
 
+    if eval >= beta then {
+      hash_flag = TFLAGS.LOWER;
+      alpha = beta;
+      if !is_capture(mflag) {
+        __history_moves[cast(int)whose_turn][from][to] += depth*depth;
+      }
+      break;
+    }
+
     if eval > alpha {
       hash_flag = TFLAGS.EXACT;
       best_pv = false;
@@ -121,17 +130,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
         __killer_moves[0][ply] = move;
       }
     }
-
-    if alpha >= beta then {
-      hash_flag = TFLAGS.LOWER;
-      alpha = beta;
-      if !is_capture(mflag) {
-        __history_moves[cast(int)whose_turn][from][to] += depth*depth;
-      }
-      break;
-    }
   }
-
   transposition_table_store(hash, key, alpha, hash_flag, depth, bh_move);
   return alpha;
 
