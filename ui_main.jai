@@ -60,7 +60,6 @@ main :: () {
   font = load_font(path, "AnonymousPro.ttf", 17); // @@ Search system fonts automatically?
 
   opening_book = load_opening_book("resources/openings.txt");
-
   t := New(Texture);
   defer {
     destroy_texture(t);
@@ -104,6 +103,8 @@ main :: () {
     piece_bitboard, whose_turn, flags, ep_sq = chess_start_from_fen(fen_string);
   }
   generate_legal_moves(*piece_bitboard, flags, ep_sq, *moves_arr, whose_turn);
+  seed := cast(s32)(get_time() * 1.1350e3);
+  random_seed(seed);
 
   while !glfwWindowShouldClose(window) {
     read_mouse_input(window);
@@ -907,7 +908,7 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
     if moves_arr.count > 0 && !w_human_turn() && !b_human_turn() {
       // TODO: Optimize this!
       if (cast(int)(random_get()) % 100) < 90 {
-        TF, mov := pick_random_move(move_record, opening_book);
+        TF, mov := pick_random_opening(move_record, opening_book);
         if TF {
           print("Random opening.\n");
           ui_handle_move_made(piece_bitboard, flags, ep_sq, moves_arr, mov);
@@ -1134,7 +1135,7 @@ BookNode :: struct {
   nodes: [..] *BookNode;
 }
 
-pick_random_move :: (move_record: [..] Board_States, opening_book: *BookNode) -> bool, Move16 {
+pick_random_opening :: (move_record: [..] Board_States, opening_book: *BookNode) -> bool, Move16 {
   iter := opening_book;
 
   for re: move_record {

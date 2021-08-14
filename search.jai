@@ -13,13 +13,6 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
 
   pv_line: PVLine;
   best_eval : int; best_move : Move16;
-  // TODO: WTF am I doing?!?!?!
-  for iter_depth : 1..depth/2 { 
-    best_eval = negamax(pieces, castling, ep, iter_depth, whose_turn, *pv_line, repetitions, fifty=fifty);
-    best_move = pv_line.argmove[0];
-    time_taken := get_time() - time_begin;
-    print_stats(iter_depth);
-  }
   for iter_depth : 1..depth { 
     best_eval = negamax(pieces, castling, ep, iter_depth, whose_turn, *pv_line, repetitions, fifty=fifty);
     best_move = pv_line.argmove[0];

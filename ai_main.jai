@@ -11,6 +11,11 @@ main :: () {
   array_reserve(*repetitions, 200);
   fifty := 0;
 
+  // I don't know whether or not random is being called behind
+  // my back... so do this just in case.
+  seed := cast(s32)(get_time() * 1.1350e3); 
+  random_seed(seed);
+
   while true {
     input := getline();
     if equal(input, "quit") {
