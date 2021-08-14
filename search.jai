@@ -55,7 +55,11 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   hash := zobrist_hash(pieces, castling, ep, whose_turn);
   key  := hash % TSIZE;
 
-  transposition_table_lookup();
+  TF, tt_score, bh_move := transposition_table_lookup(alpha, beta, hash, key, depth);
+  if TF then {
+    pv_line.argmove[0] = bh_move;
+    return tt_score;
+  }
 
   if depth == 0 then {
     pv_line.cmove = 0;
@@ -128,35 +132,30 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     }
   }
 
-  transposition_table_store(alpha, hash_flag, bh_move);
+  transposition_table_store(hash, key, alpha, hash_flag, depth, bh_move);
   return alpha;
 
-  transposition_table_lookup :: () #expand {
-    // TODO: these can possibly be combined into one function and save some time...
-    // TODO: write a better optimized version of this, this is just copy/paste from UI, and slightly
-    // edited...
-    `bh_move := ttable.entries[key].bmove;
-    if ttable.hash[key] == hash && ttable.entries[key].depth >= depth then {
+  transposition_table_lookup :: (alpha: int, beta: int, hash: u64, key: u64, depth: int) -> bool, int, Move16 {
+    bh_move := Move16.Quiet;
+    if ttable.hash[key] == hash {
+      bh_move := Move16.Quiet;
       if ttable.entries[key].depth >= depth then {
         value := ttable.entries[key].score;
-        if ttable.entries[key].flag == {
-        case TFLAGS.EXACT; 
-          `return value;
-        case TFLAGS.LOWER; 
-          alpha = max(alpha, value);
-        case TFLAGS.UPPER; 
-          beta  = min(beta, value);
-        }
-       
-        if alpha >= beta then {
-          `return value;
+        flag  := ttable.entries[key].flag;
+        if flag == TFLAGS.EXACT then {
+          return true, value, 0;
+        } else if flag == TFLAGS.LOWER && value <= alpha then {
+          return true, alpha, 0;
+        } else if flag == TFLAGS.UPPER && value >= beta then {
+          return true, beta, 0;
         }
       }
-
     }
+
+    return false, 0, bh_move;
   }
 
-  transposition_table_store :: (value: int, hash_flag: TFLAGS, bmove: Move16) #expand {
+  transposition_table_store :: (hash: u64, key: u64, value: int, hash_flag: TFLAGS, depth: int, bmove: Move16) {
     ttable.hash[key] = hash;
     ttable.entries[key].score = xx value;
     ttable.entries[key].flag = hash_flag;

@@ -1125,7 +1125,7 @@ __edge_case_count := 0;
 
 font : *Dynamic_Font;
 __engine_name : string;  // name of engine. exists for aesthetic purposes
-__engine_depth_parameter : int = 9; // depth of engine search.
+__engine_depth_parameter : int = 8; // depth of engine search.
 
 get_engine_name :: () => __engine_name;
 
