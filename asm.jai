@@ -22,37 +22,36 @@ popcount :: (value: u64) -> int #expand {
 bit_reverse64  :: (x: u64)->u64 #c_call #foreign assm;
 
 /*bit_reverse64  :: (x: u64) -> u64 {
-  asm {
-    rdi: gpr;
-    rax: gpr;
-    rcx: gpr;
-    rdx: gpr;
+  CONST1 : u64 : -1085102592571150096;
+  CONST2 : u64 : -3689348814741910324;
+  CONST3 : u64 : -6148914691236517206;
 
-   	bswap.q rdi;
-   	mov.q   rax, 0xf0f0f0f0f0f0f0f;
-  
-   	and.q   rdi,rax;
-   	shl.q   0x4,rax;
-   	mov.q   rcx,0xf0f0f0f0f0f0f0f0;
-  
-   	and.q   rdi,rcx;
-   	shr.q   rcx,0x4;
-   	or.q    rax,rcx;
-   	mov.q   rax,0x3333333333333333;
-  
-   	and.q   rcx,rax;
-   	mov.q   rdx,0xcccccccccccccccc;
-  
-   	and.q   rcx,rdx;
-   	shr.q   0x2,rdx;
-   	lea.q   (rdx,rax,4),rax;
-   	mov.q   rcx,0x5555555555555555;
-  
-   	and.q   rax,rcx;
-   	mov.q   rdx,0xaaaaaaaaaaaaaaaa;
-  
-   	and.q   rax,rdx;
-   	shr.q   rdx;
-   	lea.q   (rdx,rcx,2),rax;
+  rdi: u64;
+  rax: u64;
+  rcx: u64;
+  rdx: u64;
+  #asm {
+    bswap.q   rdi;
+    mov.q     rax, 1085102592571150095;
+    and.q     rax, rdi;
+    shl.q     rax, 4;
+    mov.q     rcx, CONST1;
+    and.q     rcx, rdi;
+    shr.q     rcx, 4;
+    or.q      rcx, rax;
+    mov.q     rax, 3689348814741910323;
+    and.q     rax, rcx;
+    mov.q     rdx, CONST2;
+    and.q     rdx, rcx;
+    shr.q     rdx, 2;
+    lea.q     rax, [rdx + rax];
+    mov.q     rcx, 6148914691236517205;
+    and.q     rcx, rax;
+    mov.q     rdx, CONST3;
+    and.q     rdx, rax;
+    shr.q     rdx;
+    lea.q     rax, [rdx + rcx];
   }
+
+  return rax;
 }*/
