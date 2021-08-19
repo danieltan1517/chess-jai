@@ -48,13 +48,13 @@ main :: () {
     if begins_with(input, "fen ") {
       input = advance(input, 4);
       input = eat_spaces(input);
-      index, found :=  index_of_string(input, "moves");
+      index :=  find_index_from_left(input, "moves");
  
       // TODO: fen parsing may not work correctly against malicious inputs
-      fen_string := ifx found then slice(input, 0, index) else input;
+      fen_string := ifx index != -1 then slice(input, 0, index) else input;
       pieces, whose_turn, castling, ep = chess_start_from_fen(fen_string);
 
-      if found {
+      if index != -1 {
         input = advance(input, index);
         input = advance(input, 5);
         input = eat_spaces(input);
@@ -66,8 +66,8 @@ main :: () {
       input = advance(input, 8);
       input = eat_spaces(input);
       pieces, whose_turn, castling, ep = chess_start_pos();
-      index, found := index_of_string(input, "moves");
-      if found {
+      index := find_index_from_left(input, "moves");
+      if index != -1 {
         input = advance(input, index);
         input = advance(input, 5);
         input = eat_spaces(input);

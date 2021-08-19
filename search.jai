@@ -136,7 +136,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   transposition_table_lookup :: (alpha: int, beta: int, hash: u64, key: u64, depth: int) -> bool, int, Move16 {
     bh_move := Move16.Quiet;
     if ttable.hash[key] == hash {
-      bh_move := Move16.Quiet;
+      bh_move = ttable.entries[key].bmove;
       if ttable.entries[key].depth >= depth then {
         value := ttable.entries[key].score;
         flag  := ttable.entries[key].flag;
