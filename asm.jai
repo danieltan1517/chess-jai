@@ -44,13 +44,13 @@ bit_reverse64  :: (x: u64)->u64 #c_call #foreign assm;
     mov.q     rdx, CONST2;
     and.q     rdx, rcx;
     shr.q     rdx, 2;
-    lea.q     rax, [rdx + rax];
+    lea.q     rax, [rdx + 4*rax];
     mov.q     rcx, 6148914691236517205;
     and.q     rcx, rax;
     mov.q     rdx, CONST3;
     and.q     rdx, rax;
     shr.q     rdx;
-    lea.q     rax, [rdx + rcx];
+    lea.q     rax, [rdx + 2*rcx];
   }
 
   return rax;
