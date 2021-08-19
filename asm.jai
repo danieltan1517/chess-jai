@@ -20,13 +20,13 @@ popcount :: (value: u64) -> int #expand {
 
 // TODO: Eventually, we want to replace the clang intrinsic.
 bit_reverse64  :: (x: u64)->u64 #c_call #foreign assm;
-
-/*bit_reverse64  :: (x: u64) -> u64 {
+/*
+bit_reverse64  :: (x: u64) -> u64 {
   CONST1 : u64 : -1085102592571150096;
   CONST2 : u64 : -3689348814741910324;
   CONST3 : u64 : -6148914691236517206;
-
-  rdi: u64;
+  // Modified from clang objdump
+  rdi: u64 = x;
   rax: u64;
   rcx: u64;
   rdx: u64;
