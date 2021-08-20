@@ -2,10 +2,10 @@
 #import "Compiler";
 
 ui_exe :: "jai-chess";
-ui_file_names :: string.["ui_main.jai", "asm.jai", "bitboard.jai"];
+ui_file_names :: string.["ui_main.jai", "bitboard.jai"];
 
 ai_exe :: "lion-tulip";
-ai_file_names :: string.["ai_main.jai", "asm.jai", "bitboard.jai", "search.jai", "eval.jai"];
+ai_file_names :: string.["ai_main.jai", "bitboard.jai", "search.jai", "eval.jai"];
 
 #run {
   args_option : enum { debug; release;} = .debug;

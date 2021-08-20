@@ -1315,6 +1315,57 @@ zobrist_init_globals :: (s : s32 = 861097715) {
   }
 }
 
+trailing_zeros :: (input: u64)->int #expand {
+  result := -1;
+  #asm { bsf.q result, input; }
+  return result;
+}
+
+leading_zeros :: (input: u64) -> int #expand {
+  result := -1;
+  #asm { bsr.q result, input; }
+  return result;
+}
+
+popcount :: (value: u64) -> int #expand {
+  result: int;
+  #asm { popcnt.q  result, value; }
+  return result;
+}
+
+bit_reverse64  :: (x: u64) -> u64 #expand {
+  CONST1 : u64 : #run -> u64 { return xx (~1085102592571150096 + 1); };
+  CONST2 : u64 : #run -> u64 { return xx (~3689348814741910324 + 1); };
+  CONST3 : u64 : #run -> u64 { return xx (~6148914691236517206 + 1); };
+  // Modified from clang objdump
+  rdi: u64 = x;
+  rax, rcx, rdx: u64;
+  #asm {
+    bswap.q   rdi;
+    mov.q     rax, 1085102592571150095;
+    and.q     rax, rdi;
+    shl.q     rax, 4;
+    mov.q     rcx, CONST1;
+    and.q     rcx, rdi;
+    shr.q     rcx, 4;
+    or.q      rcx, rax;
+    mov.q     rax, 3689348814741910323;
+    and.q     rax, rcx;
+    mov.q     rdx, CONST2;
+    and.q     rdx, rcx;
+    shr.q     rdx, 2;
+    lea.q     rax, [rdx + rax*4];
+    mov.q     rcx, 6148914691236517205;
+    and.q     rcx, rax;
+    mov.q     rdx, CONST3;
+    and.q     rdx, rax;
+    shr.q     rdx;
+    lea.q     rax, [rdx + rcx*2];
+  }
+
+  return rax;
+}
+
 #scope_file
 
 // o = occupied, r = piece, m = mask
