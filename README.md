@@ -39,6 +39,8 @@ This Jai-Chess AI is a hobby project I created for fun. Here is a list of the fe
 * 3-fold repetition & fifty-move rule (still some bugs.)
 * Late Move Reduction
 * Null Move Pruning 
+* Reverse Futility Pruning/Static Move Pruning
+* Razoring
 
 ## Still needs to be implemented
 * Better optimization for movegen 

@@ -46,11 +46,13 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
 }
 
 negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, repetitions: *[..]u64, ply: int = 0, alpha := -INF, beta := INF, fifty: int) -> int {
-  FULL_DEPTH_MOVES :: 4;
+  FULL_DEPTH_MOVES :: 6;
   REDUCTION_LIMIT  :: 3;
 
   auto_release_temp();
   line: PVLine;
+  pv_node := (beta-alpha) > 1;
+
   __nodes_searched += 1;
   hash := zobrist_hash(pieces, castling, ep, whose_turn);
   key  := hash % TSIZE;
@@ -69,7 +71,9 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   array_reserve(*move_array, 40);
   check := generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
   check_for_checkmate_stalemate();
+  reverse_futility_pruning();
   null_move_pruning();
+  razoring();
 
   best_pv := true;
   move_ordering(pieces, move_array, whose_turn, pv_line, ply, bh_move);
@@ -95,7 +99,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       // nega-scout
       if moves_searched >= FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && check == 0 && mflag == Move16.Quiet { 
         // do late move reduction when not in check and making "quiet moves" 
-        eval = -negamax(pieces, c_copy, ep_copy, depth-2, !whose_turn, *line, repetitions, ply + 1, -alpha-1, -alpha, next_fifty);
+        eval = -negamax(pieces, c_copy, ep_copy, depth/3, !whose_turn, *line, repetitions, ply + 1, -alpha-1, -alpha, next_fifty);
       } else {
         // do normal search.
         eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, -alpha-1, -alpha, next_fifty);
@@ -217,6 +221,41 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       b := b_queen | b_rook | b_bishop | b_knight;
       return w == 0 || b == 0;
     } 
+  }
+
+  reverse_futility_pruning :: () #expand {
+    // taken from BBC chess engine...
+    `static_eval := nnue_evaluate(pieces, whose_turn, fifty);
+    if depth < 3 && !pv_node && check == 0 && abs(beta-1) > -INF + 100 then {
+      eval_margin := 120 * depth;
+      if static_eval - eval_margin >= beta then {
+        `return static_eval - eval_margin;
+      }
+    }
+  }
+
+  razoring :: () #expand {
+    // taken from BBC chess engine...
+    if !pv_node && check == 0 && depth <= 3 then {
+      score := static_eval + 125;
+      if score < beta && depth == 1 {
+        new_score := quiescene(pieces, castling, ep, whose_turn, alpha, beta, fifty);
+        if new_score > score
+          `return new_score;
+        else
+          `return score;
+      }
+      score += 175;
+      if score < beta && depth <= 2 {
+        new_score := quiescene(pieces, castling, ep, whose_turn, alpha, beta, fifty);
+        if new_score < beta {
+          if new_score > score then
+            `return new_score;
+          else
+            `return score;
+        }
+      }
+    }
   }
 }
 
