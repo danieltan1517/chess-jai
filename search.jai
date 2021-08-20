@@ -93,7 +93,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, -beta-1, -alpha, next_fifty);
     } else {
       // nega-scout
-      if moves_searched >= FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && check == 0 && next_fifty != 0 { 
+      if moves_searched >= FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && check == 0 && mflag == Move16.Quiet { 
         // do late move reduction when not in check and making "quiet moves" 
         eval = -negamax(pieces, c_copy, ep_copy, depth-2, !whose_turn, *line, repetitions, ply + 1, -alpha-1, -alpha, next_fifty);
       } else {
