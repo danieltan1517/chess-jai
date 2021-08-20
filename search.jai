@@ -202,7 +202,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     NULL_MOVE_MAX :: 4;
     // check for zugwang before null move pruning
     if depth >= NULL_MOVE_MAX && check == 0 && !has_ep(pieces) && !has_zugzwang(pieces) {
-      score := -negamax(pieces, castling, 0, depth - 2, !whose_turn, *line, repetitions, ply + 1, -beta, -beta + 1, fifty);
+      score := -negamax(pieces, castling, 0, depth - 3, !whose_turn, *line, repetitions, ply + 1, -beta, -beta + 1, fifty);
       if score >= beta then {
         `return beta;
       }
