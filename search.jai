@@ -45,8 +45,8 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   }
 }
 
-negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, repetitions: *[..]u64, ply: int = 0, alpha := -INF, beta := INF, fifty: int) -> int {
-  FULL_DEPTH_MOVES :: 6;
+negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, repetitions: *[..]u64, ply: int = 0, $null_flag := true, alpha := -INF, beta := INF, fifty: int) -> int {
+  FULL_DEPTH_MOVES :: 4;
   REDUCTION_LIMIT  :: 3;
 
   auto_release_temp();
@@ -59,10 +59,11 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
   TF, tt_score, bh_move := transposition_table_lookup(alpha, beta, hash, key, depth);
   if TF then {
+    pv_line.cmove = 0;
     return tt_score;
   }
 
-  if depth == 0 then {
+  if depth <= 0 then {
     pv_line.cmove = 0;
     return quiescene(pieces, castling, ep, whose_turn, alpha, beta, fifty);
   }
@@ -94,20 +95,20 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
     eval := 0;
     if best_pv {
-      eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, -beta-1, -alpha, next_fifty);
+      eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -beta-1, -alpha, next_fifty);
     } else {
       // nega-scout
       if moves_searched >= FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && check == 0 && mflag == Move16.Quiet { 
         // do late move reduction when not in check and making "quiet moves" 
-        eval = -negamax(pieces, c_copy, ep_copy, depth/3, !whose_turn, *line, repetitions, ply + 1, -alpha-1, -alpha, next_fifty);
+        eval = -negamax(pieces, c_copy, ep_copy, depth-2, !whose_turn, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty);
       } else {
         // do normal search.
-        eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, -alpha-1, -alpha, next_fifty);
+        eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty);
       }
 
       // re-search the move that has failed to be proved to be bad with normal alpha beta score bounds
       if eval > alpha && eval < beta then {
-        eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, -beta, -alpha, next_fifty);
+        eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -beta, -alpha, next_fifty);
       }
     }
     unmake_move(pieces, capture, move, whose_turn);
@@ -168,7 +169,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   check_for_checkmate_stalemate :: () #expand {
     if !move_array then {
       if check != 0 then {
-        `return -INF;
+        `return -INF + ply;
       } else {
         `return 0;
       }
@@ -201,8 +202,11 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   null_move_pruning :: () #expand {
     NULL_MOVE_MAX :: 4;
     // check for zugwang before null move pruning
-    if depth >= NULL_MOVE_MAX && check == 0 && !has_ep(pieces) && !has_zugzwang(pieces) {
-      score := -negamax(pieces, castling, 0, depth - 3, !whose_turn, *line, repetitions, ply + 1, -beta, -beta + 1, fifty);
+    if null_flag && depth >= NULL_MOVE_MAX && check == 0 && !has_ep(pieces) && !has_zugzwang(pieces) {
+      // R formula is taken stockfish
+      //R := max( ((1090+81*depth) / 256) + min((static_eval-beta) / 205, 3), 1);
+      //print("depth reduction: %, %\n", depth, depth-R);
+      score := -negamax(pieces, castling, 0, depth-2, !whose_turn, *line, repetitions, ply+2, false, -beta, -beta + 1, fifty);
       if score >= beta then {
         `return beta;
       }
@@ -226,12 +230,12 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   reverse_futility_pruning :: () #expand {
     // taken from BBC chess engine...
     `static_eval := nnue_evaluate(pieces, whose_turn, fifty);
-    if depth < 3 && !pv_node && check == 0 && abs(beta-1) > -INF + 100 then {
-      eval_margin := 120 * depth;
-      if static_eval - eval_margin >= beta then {
-        `return static_eval - eval_margin;
+    /*if depth < 3 && !pv_node && check == 0 && abs(beta-1) > -INF + 100 then {
+      futility_margin := 500 * depth; // stockfish has its futility_margin at 214 * depth.
+      if static_eval - futility_margin >= beta then {
+        `return static_eval - futility_margin;
       }
-    }
+    }*/
   }
 
   razoring :: () #expand {
@@ -240,19 +244,13 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       score := static_eval + 125;
       if score < beta && depth == 1 {
         new_score := quiescene(pieces, castling, ep, whose_turn, alpha, beta, fifty);
-        if new_score > score
-          `return new_score;
-        else
-          `return score;
+        `return ifx new_score > score then new_score else score;
       }
       score += 175;
       if score < beta && depth <= 2 {
         new_score := quiescene(pieces, castling, ep, whose_turn, alpha, beta, fifty);
         if new_score < beta {
-          if new_score > score then
-            `return new_score;
-          else
-            `return score;
+          `return ifx new_score > score then new_score else score;
         }
       }
     }

@@ -103,7 +103,7 @@ main :: () {
     piece_bitboard, whose_turn, flags, ep_sq = chess_start_from_fen(fen_string);
   }
   generate_legal_moves(*piece_bitboard, flags, ep_sq, *moves_arr, whose_turn);
-  seed := cast(s32)(get_time() * 1.1350e3);
+  seed := cast(s32)(get_time() * 1.1350e14);
   random_seed(seed);
 
   while !glfwWindowShouldClose(window) {

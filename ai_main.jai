@@ -13,7 +13,7 @@ main :: () {
 
   // I don't know whether or not random is being called behind
   // my back... so do this just in case.
-  seed := cast(s32)(get_time() * 1.1350e3); 
+  seed := cast(s32)(get_time() * 1.1350e14);
   random_seed(seed);
 
   while true {
