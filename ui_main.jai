@@ -907,7 +907,7 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
     // make sure there are moves that could be made.
     if moves_arr.count > 0 && !w_human_turn() && !b_human_turn() {
       // TODO: Optimize this!
-      if (cast(int)(random_get()) % 100) < 90 {
+      if equal(fen_string, "startpos") && (cast(int)(random_get()) % 100) < 90 {
         TF, mov := pick_random_opening(move_record, opening_book);
         if TF {
           print("Random opening.\n");
