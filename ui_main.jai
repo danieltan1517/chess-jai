@@ -710,6 +710,7 @@ handle_reset :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flags: *
       } else {
         last_move_bb = 0;
       }
+      __game_status_text = "";
     }
   case .RESET_PRESS;
     if n_state == GLFW_RELEASE || (l_ctrl_key == GLFW_RELEASE && r_ctrl_key == GLFW_RELEASE) {
