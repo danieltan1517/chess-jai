@@ -9,6 +9,10 @@ Type `jai build.jai` to build the chess engine AI.
 
 Type `jai build.jai -- release` to build the release build.
 
+You need to download the NNUE library https://github.com/dshawul/nnue-probe to run the chess AI.
+
+The chess GUI uses the glfw3 and gl libraries.
+
 ## User Interface Features
 
 * Drag and drop behavior to move pieces

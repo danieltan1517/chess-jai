@@ -117,7 +117,6 @@ install :: () {
   // sudo apt install libc++abi-dev   --- Dear ImGui
   // sudo apt install libgl-dev       --- opengl 
   // sudo apt install libglfw3-dev     --- glfw
-  // sudo apt install clang           --- clang
   // https://github.com/Matthies/NN
 }
 
