@@ -72,9 +72,9 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   array_reserve(*move_array, 40);
   check := generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
   check_for_checkmate_stalemate();
-  reverse_futility_pruning();
+  //reverse_futility_pruning();
   null_move_pruning();
-  razoring();
+  //razoring();
 
   best_pv := true;
   move_ordering(pieces, move_array, whose_turn, pv_line, ply, bh_move);
@@ -214,7 +214,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
     has_ep :: (using pieces: *Piece_Bitboards) -> bool #expand {
       pawn := ifx whose_turn w_pawn else b_pawn;
-      return ((((ep << 1) & xx ~file_a) | ((ep >> 1) & xx ~file_h)) & pawn) != 0;
+      return ((((ep << 1) & xx (~file_a)) | ((ep >> 1) & xx (~file_h))) & pawn) != 0;
     }
 
     // zugzwang occurs primarily in King-Pawn endgames

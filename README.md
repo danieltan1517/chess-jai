@@ -2,6 +2,13 @@
 
 This Jai-Chess AI is a hobby project I created for fun. Here is a list of the features inside this simple chess engine.
 
+## How to Build:
+Type `jai build.jai -- ui` to build the chess engine GUI.
+
+Type `jai build.jai` to build the chess engine AI.
+
+Type `jai build.jai -- release` to build the release build.
+
 ## User Interface Features
 
 * Drag and drop behavior to move pieces

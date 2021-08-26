@@ -278,19 +278,19 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
   GREY_SHADE_BOARD :: Vector4.{0.2, 0.2, 0.2, 0.35};
 
   draw_every_piece :: ($draw_mouse_drag := false) #expand {
-    draw_bitboard(w_king & ~promotion_sq, u0=0.0, v0=0.0, u1=1.0/6.0, v1=0.5, BLANK, draw_mouse_drag=draw_mouse_drag);
-    draw_bitboard(w_queen & ~promotion_sq, u0=1.0/6.0, v0=0.0, u1=2.0/6.0, v1=1.0/2.0, BLANK, draw_mouse_drag=draw_mouse_drag);
-    draw_bitboard(w_rook & ~promotion_sq, u0=4.0/6.0, v0=0.0, u1=5.0/6.0, v1=1.0/2.0, BLANK,draw_mouse_drag=draw_mouse_drag );
-    draw_bitboard(w_bishop & ~promotion_sq, u0=2.0/6.0, v0=0.0, u1=3.0/6.0, v1=1.0/2.0, BLANK, draw_mouse_drag=draw_mouse_drag);
-    draw_bitboard(w_knight & ~promotion_sq, u0=3.0/6.0, v0=0.0, u1=4.0/6.0, v1=1.0/2.0, BLANK,draw_mouse_drag=draw_mouse_drag );
-    draw_bitboard(w_pawn & ~promotion_sq, u0=5.0/6.0, v0=0.0, u1=1.0, v1=1.0/2.0, BLANK,draw_mouse_drag=draw_mouse_drag);
+    draw_bitboard(w_king & (~promotion_sq), u0=0.0, v0=0.0, u1=1.0/6.0, v1=0.5, BLANK, draw_mouse_drag=draw_mouse_drag);
+    draw_bitboard(w_queen & (~promotion_sq), u0=1.0/6.0, v0=0.0, u1=2.0/6.0, v1=1.0/2.0, BLANK, draw_mouse_drag=draw_mouse_drag);
+    draw_bitboard(w_rook & (~promotion_sq), u0=4.0/6.0, v0=0.0, u1=5.0/6.0, v1=1.0/2.0, BLANK,draw_mouse_drag=draw_mouse_drag );
+    draw_bitboard(w_bishop & (~promotion_sq), u0=2.0/6.0, v0=0.0, u1=3.0/6.0, v1=1.0/2.0, BLANK, draw_mouse_drag=draw_mouse_drag);
+    draw_bitboard(w_knight & (~promotion_sq), u0=3.0/6.0, v0=0.0, u1=4.0/6.0, v1=1.0/2.0, BLANK,draw_mouse_drag=draw_mouse_drag );
+    draw_bitboard(w_pawn & (~promotion_sq), u0=5.0/6.0, v0=0.0, u1=1.0, v1=1.0/2.0, BLANK,draw_mouse_drag=draw_mouse_drag);
  
-    draw_bitboard(b_king & ~promotion_sq, u0=0.0, v0=0.5, u1=1.0/6.0, v1=1.0, BLANK,draw_mouse_drag=draw_mouse_drag);
-    draw_bitboard(b_queen & ~promotion_sq, u0=1.0/6.0, v0=0.5, u1=2.0/6.0, v1=1.0, BLANK,draw_mouse_drag=draw_mouse_drag);
-    draw_bitboard(b_rook & ~promotion_sq, u0=4.0/6.0, v0=0.5, u1=5.0/6.0, v1=1.0, BLANK,draw_mouse_drag=draw_mouse_drag);
-    draw_bitboard(b_bishop & ~promotion_sq, u0=2.0/6.0, v0=0.5, u1=3.0/6.0, v1=1.0, BLANK,draw_mouse_drag=draw_mouse_drag);
-    draw_bitboard(b_knight & ~promotion_sq, u0=3.0/6.0, v0=0.5, u1=4.0/6.0, v1=1.0, BLANK,draw_mouse_drag=draw_mouse_drag);
-    draw_bitboard(b_pawn & ~promotion_sq, u0=5.0/6.0, v0=0.5, u1=1.0, v1=1.0, BLANK,draw_mouse_drag=draw_mouse_drag);
+    draw_bitboard(b_king & (~promotion_sq), u0=0.0, v0=0.5, u1=1.0/6.0, v1=1.0, BLANK,draw_mouse_drag=draw_mouse_drag);
+    draw_bitboard(b_queen & (~promotion_sq), u0=1.0/6.0, v0=0.5, u1=2.0/6.0, v1=1.0, BLANK,draw_mouse_drag=draw_mouse_drag);
+    draw_bitboard(b_rook & (~promotion_sq), u0=4.0/6.0, v0=0.5, u1=5.0/6.0, v1=1.0, BLANK,draw_mouse_drag=draw_mouse_drag);
+    draw_bitboard(b_bishop & (~promotion_sq), u0=2.0/6.0, v0=0.5, u1=3.0/6.0, v1=1.0, BLANK,draw_mouse_drag=draw_mouse_drag);
+    draw_bitboard(b_knight & (~promotion_sq), u0=3.0/6.0, v0=0.5, u1=4.0/6.0, v1=1.0, BLANK,draw_mouse_drag=draw_mouse_drag);
+    draw_bitboard(b_pawn & (~promotion_sq), u0=5.0/6.0, v0=0.5, u1=1.0, v1=1.0, BLANK,draw_mouse_drag=draw_mouse_drag);
   }
 
   draw_promotion_ui :: (promote_sq: u64) #expand {
@@ -360,7 +360,7 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
   draw_bitboard :: (bit_board: u64, $u0: float, $v0: float, $u1: float, $v1: float, $c: Vector4, $draw_mouse_drag := false) #expand {
     value: u64 = 0;
     #if !draw_mouse_drag 
-      value = bit_board & ~highlight_square;
+      value = bit_board & (~highlight_square);
     else 
       value = bit_board & highlight_square;
 
@@ -732,7 +732,6 @@ ui_handle_move_made :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_s
   whose_turn = !whose_turn;
   array_reset(moves_arr);
   check_bb = generate_legal_moves(piece_bitboard, <<flags, <<ep_sq, moves_arr, whose_turn);
-
   after_pawn := piece_bitboard.w_pawn | piece_bitboard.b_pawn;
 
   // zero if there has been a capture, or a pawn has moved.

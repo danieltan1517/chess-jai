@@ -33,7 +33,7 @@ using bboard :: enum_flags u64 {
 }
 
 king_side :: file_e | file_f | file_g | file_h;
-queen_side :: ~king_side;
+queen_side :: (~king_side);
 
 Piece_Bitboards :: struct {
   w_king :  u64;
@@ -307,46 +307,46 @@ make_move :: (using pieces: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, cap
     case Quiet;
       white_piece_move();
     case Double_Pawn_Push;
-      w_pawn = (w_pawn & ~from_bit) | to_bit;
+      w_pawn = (w_pawn & (~from_bit)) | to_bit;
       <<ep_sq = to_bit;
     case King_Castle;
-      w_king = (w_king & ~from_bit) | to_bit;
-      w_rook = (w_rook & xx ~h1) | xx f1;
+      w_king = (w_king & (~from_bit)) | to_bit;
+      w_rook = (w_rook & xx (~h1)) | xx f1;
       <<flags &= ~(Castling.W_KS | Castling.W_QS);
     case Queen_Castle;
-      w_king = (w_king & ~from_bit) | to_bit;
-      w_rook = (w_rook & xx ~a1) | xx d1;
+      w_king = (w_king & (~from_bit)) | to_bit;
+      w_rook = (w_rook & xx (~a1)) | xx d1;
       <<flags &= ~(Castling.W_KS | Castling.W_QS);
     case Capture;
       white_piece_move();
       black_piece_taken();
     case Ep_Capture;
-      w_pawn = (w_pawn & ~from_bit) | to_bit;
-      b_pawn = b_pawn & ~(to_bit >> 8);
+      w_pawn = (w_pawn & (~from_bit)) | to_bit;
+      b_pawn = b_pawn & (~(to_bit >> 8));
       <<captured = PieceType.Pawn;
     case Knight_Promotion_Capture;
       black_piece_taken();
       #through;
     case Knight_Promotion;
-      w_pawn = w_pawn & ~from_bit;
+      w_pawn = w_pawn & (~from_bit);
       w_knight = w_knight | to_bit;
     case Bishop_Promotion_Capture;
       black_piece_taken();
       #through;
     case Bishop_Promotion;
-      w_pawn = w_pawn & ~from_bit;
+      w_pawn = w_pawn & (~from_bit);
       w_bishop = w_bishop | to_bit;
     case Rook_Promotion_Capture;
       black_piece_taken();
       #through;
     case Rook_Promotion;
-      w_pawn = w_pawn & ~from_bit;
+      w_pawn = w_pawn & (~from_bit);
       w_rook = w_rook | to_bit;
     case Queen_Promotion_Capture;
       black_piece_taken();
       #through;
     case Queen_Promotion;
-      w_pawn = w_pawn & ~from_bit;
+      w_pawn = w_pawn & (~from_bit);
       w_queen = w_queen | to_bit;
     }
   } else {
@@ -354,46 +354,46 @@ make_move :: (using pieces: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, cap
     case Quiet;
       black_piece_move();
     case Double_Pawn_Push;
-      b_pawn = (b_pawn & ~from_bit) | to_bit;
+      b_pawn = (b_pawn & (~from_bit)) | to_bit;
       <<ep_sq = to_bit;
     case King_Castle;
-      b_king = (b_king & ~from_bit) | to_bit;
-      b_rook = (b_rook & xx ~h8) | xx f8;
+      b_king = (b_king & (~from_bit)) | to_bit;
+      b_rook = (b_rook & xx (~h8)) | xx f8;
       <<flags &= ~(Castling.B_KS | Castling.B_QS);
     case Queen_Castle;
-      b_king = (b_king & ~from_bit) | to_bit;
-      b_rook = (b_rook & xx ~a8) | xx d8;
+      b_king = (b_king & (~from_bit)) | to_bit;
+      b_rook = (b_rook & xx (~a8)) | xx d8;
       <<flags &= ~(Castling.B_KS | Castling.B_QS);
     case Capture;
       black_piece_move();
       white_piece_taken();
     case Ep_Capture;
-      b_pawn = (b_pawn & ~from_bit) | to_bit;
-      w_pawn = w_pawn & ~(to_bit << 8);
+      b_pawn = (b_pawn & (~from_bit)) | to_bit;
+      w_pawn = w_pawn & (~(to_bit << 8));
       <<captured = PieceType.Pawn;
     case Knight_Promotion_Capture;
       white_piece_taken();
       #through;
     case Knight_Promotion;
-      b_pawn = b_pawn & ~from_bit;
+      b_pawn = b_pawn & (~from_bit);
       b_knight = b_knight | to_bit;
     case Bishop_Promotion_Capture;
       white_piece_taken();
       #through;
     case Bishop_Promotion;
-      b_pawn = b_pawn & ~from_bit;
+      b_pawn = b_pawn & (~from_bit);
       b_bishop = b_bishop | to_bit;
     case Rook_Promotion_Capture;
       white_piece_taken();
       #through;
     case Rook_Promotion;
-      b_pawn = b_pawn & ~from_bit;
+      b_pawn = b_pawn & (~from_bit);
       b_rook = b_rook | to_bit;
     case Queen_Promotion_Capture;
       white_piece_taken();
       #through;
     case Queen_Promotion;
-      b_pawn = b_pawn & ~from_bit;
+      b_pawn = b_pawn & (~from_bit);
       b_queen = b_queen | to_bit;
     }
   }
@@ -415,58 +415,58 @@ make_move :: (using pieces: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, cap
 
   white_piece_move :: () #expand {
     if w_king & from_bit {
-      w_king = (w_king & ~from_bit) | to_bit;
+      w_king = (w_king & (~from_bit)) | to_bit;
       <<flags &= ~(Castling.W_KS | Castling.W_QS);
       return;
     }
     if w_queen & from_bit {
-      w_queen = (w_queen & ~from_bit) | to_bit;
+      w_queen = (w_queen & (~from_bit)) | to_bit;
       return;
     }
     if w_rook & from_bit {
-      w_rook = (w_rook & ~from_bit) | to_bit;
+      w_rook = (w_rook & (~from_bit)) | to_bit;
       return;
     }
     if w_bishop & from_bit {
-      w_bishop = (w_bishop & ~from_bit) | to_bit;
+      w_bishop = (w_bishop & (~from_bit)) | to_bit;
       return;
     }
     if w_knight & from_bit {
-      w_knight = (w_knight & ~from_bit) | to_bit;
+      w_knight = (w_knight & (~from_bit)) | to_bit;
       return;
     }
 
     if w_pawn & from_bit {
-      w_pawn = (w_pawn & ~from_bit) | to_bit;
+      w_pawn = (w_pawn & (~from_bit)) | to_bit;
       return;
     }
   }
 
   black_piece_move :: () #expand {
     if b_king & from_bit {
-      b_king = (b_king & ~from_bit) | to_bit;
+      b_king = (b_king & (~from_bit)) | to_bit;
       <<flags &= ~(Castling.B_KS | Castling.B_QS);
       return;
     }
     if b_queen & from_bit {
-      b_queen = (b_queen & ~from_bit) | to_bit;
+      b_queen = (b_queen & (~from_bit)) | to_bit;
       return;
     }
     if b_rook & from_bit {
-      b_rook = (b_rook & ~from_bit) | to_bit;
+      b_rook = (b_rook & (~from_bit)) | to_bit;
       return;
     }
     if b_bishop & from_bit {
-      b_bishop = (b_bishop & ~from_bit) | to_bit;
+      b_bishop = (b_bishop & (~from_bit)) | to_bit;
       return;
     }
     if b_knight & from_bit {
-      b_knight = (b_knight & ~from_bit) | to_bit;
+      b_knight = (b_knight & (~from_bit)) | to_bit;
       return;
     }
 
     if b_pawn & from_bit {
-      b_pawn = (b_pawn & ~from_bit) | to_bit;
+      b_pawn = (b_pawn & (~from_bit)) | to_bit;
       return;
     }
   }
@@ -528,11 +528,11 @@ unmake_move :: (using pieces: *Piece_Bitboards, captured: PieceType, move: Move1
     case King_Castle;
       black_piece_undo_capture(); 
       w_king = xx e1;
-      w_rook = (w_rook & xx ~f1) | (xx h1);
+      w_rook = (w_rook & xx (~f1)) | (xx h1);
     case Queen_Castle;
       black_piece_undo_capture(); 
       w_king = xx e1;
-      w_rook = (w_rook & xx ~d1) | (xx a1);
+      w_rook = (w_rook & xx (~d1)) | (xx a1);
     case Knight_Promotion_Capture; #through;
     case Knight_Promotion;
       black_piece_undo_capture(); 
@@ -541,20 +541,20 @@ unmake_move :: (using pieces: *Piece_Bitboards, captured: PieceType, move: Move1
     case Bishop_Promotion_Capture; #through;
     case Bishop_Promotion;
       black_piece_undo_capture(); 
-      w_bishop &= xx ~to_bb;
+      w_bishop &= xx (~to_bb);
       w_pawn = w_pawn | from_bb;
     case Rook_Promotion_Capture; #through;
     case Rook_Promotion;
       black_piece_undo_capture(); 
-      w_rook &= xx ~to_bb;
+      w_rook &= xx (~to_bb);
       w_pawn = w_pawn | from_bb;
     case Queen_Promotion_Capture; #through;
     case Queen_Promotion;
       black_piece_undo_capture(); 
-      w_queen = (w_queen & ~to_bb);
+      w_queen = (w_queen & (~to_bb));
       w_pawn = w_pawn | from_bb;
     case Ep_Capture;
-      w_pawn = (w_pawn & ~to_bb) | from_bb;
+      w_pawn = (w_pawn & (~to_bb)) | from_bb;
       b_pawn = b_pawn | (to_bb >> 8);
     case;
       black_piece_undo_capture(); 
@@ -564,10 +564,10 @@ unmake_move :: (using pieces: *Piece_Bitboards, captured: PieceType, move: Move1
     if type == {
     case King_Castle;
       b_king = xx e8;
-      b_rook = (b_rook & xx ~f8) | (xx h8);
+      b_rook = (b_rook & xx (~f8)) | (xx h8);
     case Queen_Castle;
       b_king = xx e8;
-      b_rook = (b_rook & xx ~d8) | (xx a8);
+      b_rook = (b_rook & xx (~d8)) | (xx a8);
     case Knight_Promotion_Capture; #through;
     case Knight_Promotion;
       white_piece_undo_capture();
@@ -589,7 +589,7 @@ unmake_move :: (using pieces: *Piece_Bitboards, captured: PieceType, move: Move1
       b_queen &= ~to_bb;
       b_pawn = b_pawn | from_bb;
     case Ep_Capture;
-      b_pawn = (b_pawn & ~to_bb) | from_bb;
+      b_pawn = (b_pawn & (~to_bb)) | from_bb;
       w_pawn = w_pawn | (to_bb << 8);
     case;
       white_piece_undo_capture();
@@ -630,56 +630,56 @@ unmake_move :: (using pieces: *Piece_Bitboards, captured: PieceType, move: Move1
 
   white_piece_undo_move :: () #expand {
     if w_king & to_bb {
-      w_king = (w_king & ~to_bb) | from_bb;
+      w_king = (w_king & (~to_bb)) | from_bb;
       return;
     }
     if w_queen & to_bb {
-      w_queen = (w_queen & ~to_bb) | from_bb;
+      w_queen = (w_queen & (~to_bb)) | from_bb;
       return;
     }
     if w_rook & to_bb {
-      w_rook = (w_rook & ~to_bb) | from_bb;
+      w_rook = (w_rook & (~to_bb)) | from_bb;
       return;
     }
     if w_bishop & to_bb {
-      w_bishop = (w_bishop & ~to_bb) | from_bb;
+      w_bishop = (w_bishop & (~to_bb)) | from_bb;
       return;
     }
     if w_knight & to_bb {
-      w_knight = (w_knight & ~to_bb) | from_bb;
+      w_knight = (w_knight & (~to_bb)) | from_bb;
       return;
     }
 
     if w_pawn & to_bb {
-      w_pawn = (w_pawn & ~to_bb) | from_bb;
+      w_pawn = (w_pawn & (~to_bb)) | from_bb;
       return;
     }
   }
 
   black_piece_undo_move :: () #expand {
     if b_king & to_bb {
-      b_king = (b_king & ~to_bb) | from_bb;
+      b_king = (b_king & (~to_bb)) | from_bb;
       return;
     }
     if b_queen & to_bb {
-      b_queen = (b_queen & ~to_bb) | from_bb;
+      b_queen = (b_queen & (~to_bb)) | from_bb;
       return;
     }
     if b_rook & to_bb {
-      b_rook = (b_rook & ~to_bb) | from_bb;
+      b_rook = (b_rook & (~to_bb)) | from_bb;
       return;
     }
     if b_bishop & to_bb {
-      b_bishop = (b_bishop & ~to_bb) | from_bb;
+      b_bishop = (b_bishop & (~to_bb)) | from_bb;
       return;
     }
     if b_knight & to_bb {
-      b_knight = (b_knight & ~to_bb) | from_bb;
+      b_knight = (b_knight & (~to_bb)) | from_bb;
       return;
     }
 
     if b_pawn & to_bb {
-      b_pawn = (b_pawn & ~to_bb) | from_bb;
+      b_pawn = (b_pawn & (~to_bb)) | from_bb;
       return;
     }
   }
@@ -708,9 +708,9 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
                        opp_king: u64, opp_queen: u64, opp_rook: u64, opp_bishop: u64, opp_knight: u64, opp_pawn: u64,
                        whose_turn: bool) -> u64 {
 
-  // NOTE: we do (occupied & ~king) so that if    R - - - K - - -,
+  // NOTE: we do (occupied & (~king)) so that if    R - - - K - - -,
   // then the sliding will go through the king to cover other the unsafe squares
-  attacks := generate_attacks(occ=occupied & ~king, 
+  attacks := generate_attacks(occ=occupied & (~king), 
                king=opp_king, queen=opp_queen, rook=opp_rook, bishop=opp_bishop, knight=opp_knight, pawn=opp_pawn, 
                whose_turn=!whose_turn);
   checks: u64 = 0;
@@ -742,7 +742,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
   // handle double-check.
   if num_checks == 2 {
     // we only need to generate king moves during a double-check
-    king_moves_bb := king_moves(occupied, i, king, pieces) & ~attacks;
+    king_moves_bb := king_moves(occupied, i, king, pieces) & (~attacks);
     generate_normal_moves_from_bitboard(moves_arr, king, king_moves_bb, opp_pieces);
     return checks;
   }
@@ -756,7 +756,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     if num_checks == 1 continue; // ignore pinned pieces when in check
 
     if (queen|rook) & pinned_piece {
-      valid_moves := (between_sqs | sq) & ~pinned_piece;
+      valid_moves := (between_sqs | sq) & (~pinned_piece);
       // make pinned piece moves.
       generate_normal_moves_from_bitboard(moves_arr, pinned_piece, valid_moves, opp_pieces);
       continue;
@@ -766,12 +766,12 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     // pawn vertical only, NO pawn horizontal, since pawns cannot move horizontally
     if (pawn & pinned_piece & k_file) {
       if whose_turn {
-        move := (pinned_piece << 8) & ~occupied;
-        move = move | ((move & xx rank_3) << 8) & ~occupied;
+        move := (pinned_piece << 8) & (~occupied);
+        move = move | ((move & xx rank_3) << 8) & (~occupied);
         generate_pawn_moves_from_bitboard(moves_arr, pinned_piece, move, opp_pieces);
       } else {
-        move := (pinned_piece >> 8) & ~occupied;
-        move = move | ((move & xx rank_6) >> 8) & ~occupied;
+        move := (pinned_piece >> 8) & (~occupied);
+        move = move | ((move & xx rank_6) >> 8) & (~occupied);
         generate_pawn_moves_from_bitboard(moves_arr, pinned_piece, move, opp_pieces);
       }
     }
@@ -790,7 +790,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     // pinned queen/bishop
     if (queen|bishop) & pinned_piece {
       // make pinned piece moves.
-      valid_moves := (between_sqs | sq) & ~pinned_piece;
+      valid_moves := (between_sqs | sq) & (~pinned_piece);
       generate_normal_moves_from_bitboard(moves_arr, pinned_piece, valid_moves, opp_pieces);
       continue;
     }
@@ -858,6 +858,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     i := serialize_bit(rook);
     from_bb := cast(u64)(1 << i);
     to_bb := rook_moves(occupied, i, from_bb, pieces) & check_sqs;
+    //print("ROOK: [%] [%] [%] [%]\n", cast(bboard)rook, i, cast(bboard)from_bb, cast(bboard)to_bb);
     generate_normal_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces);
     rook = rook & (rook-1);
   }
@@ -865,6 +866,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     i := serialize_bit(bishop);
     from_bb := cast(u64)(1 << i);
     to_bb := bishop_moves(occupied, i, from_bb, pieces) & check_sqs;
+    //print("BISHOP: [%] [%] [%] [%]\n", cast(bboard)bishop, i, cast(bboard)from_bb, cast(bboard)to_bb);
     generate_normal_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces);
     bishop = bishop & (bishop-1);
   }
@@ -872,6 +874,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     i := serialize_bit(knight);
     from_bb := cast(u64)(1 << i);
     to_bb := knight_moves(occupied, i, from_bb, pieces) & check_sqs;
+    //print("KNIGHT: [%] [%] [%] [%]\n", cast(bboard)knight, i, cast(bboard)from_bb, cast(bboard)to_bb);
     generate_normal_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces);
     knight = knight & (knight-1);
   }
@@ -879,6 +882,8 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     i := serialize_bit(pawn);
     from_bb := cast(u64)(1 << i);
     to_bb: u64 = 0;
+    //print("PAWN: [%] [%] [%]\n", cast(bboard)pawn, i, cast(bboard)from_bb);
+
     if whose_turn then {
       to_bb = white_pawn_moves(occupied, i, from_bb, pieces) & check_sqs;
     } else {
@@ -906,7 +911,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
           while opp_qr {
             ooo := cast(u64) (1 << serialize_bit(opp_qr));
             btwn := between_bitboard(king, ooo);
-            erase_both := occupied & ~(from_bb|ep_sq);
+            erase_both := occupied & (~(from_bb|ep_sq));
             if (btwn & erase_both) == 0 {
               // there is no blocker, doing the en paesant capture puts king in check.
               TF = false;
@@ -935,7 +940,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
           while opp_qr {
             ooo := cast(u64) (1 << serialize_bit(opp_qr));
             btwn := between_bitboard(king, ooo);
-            erase_both := occupied & ~(from_bb|ep_sq);
+            erase_both := occupied & (~(from_bb|ep_sq));
             if (btwn & erase_both) == 0 {
               // there is no blocker, doing the en paesant capture puts king in check.
               TF = false;
@@ -953,7 +958,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     }
     pawn = pawn & (pawn-1);
   }
-  king_moves_bb := king_moves(occupied, i, king, pieces) & ~attacks;
+  king_moves_bb := king_moves(occupied, i, king, pieces) & (~attacks);
   generate_normal_moves_from_bitboard(moves_arr, king, king_moves_bb, opp_pieces);
   return checks;
 }
@@ -1021,39 +1026,40 @@ xray_bishop_attacks :: (occ: u64, blockers: u64, i: int, bishop_sq: u64) -> u64,
 }
 
 white_pawn_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
-  up1 := (slider << 8) & ~occupied;
-  captures := white_pawn_captures(slider) & (occupied & ~friends);
-  pawn_power := ((up1 & (xx rank_3)) << 8) & ~occupied;
+  up1 := (slider << 8) & (~occupied);
+  captures := white_pawn_captures(slider) & (occupied & (~friends));
+  pawn_power := ((up1 & (xx rank_3)) << 8) & (~occupied);
+  //print("up1: %\n", cast(bboard)up1);
   return up1 | captures | pawn_power;
 }
 
 black_pawn_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
-  up1 := (slider >> 8) & ~occupied;
-  captures := black_pawn_captures(slider) & (occupied & ~friends);
-  pawn_power := ((up1 & (xx rank_6)) >> 8) & ~occupied;
+  up1 := (slider >> 8) & (~occupied);
+  captures := black_pawn_captures(slider) & (occupied & (~friends));
+  pawn_power := ((up1 & (xx rank_6)) >> 8) & (~occupied);
   return up1 | captures | pawn_power;
 }
 
 bishop_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
   diag_slide  := sliding(occupied, slider,  diag_of(i));
   adiag_slide := sliding(occupied, slider, adiag_of(i));
-  return (diag_slide | adiag_slide) & ~friends;
+  return (diag_slide | adiag_slide) & (~friends);
 }
 
 knight_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
-  east1 := (slider << 1) & xx ~file_a;
-  west1 := (slider >> 1) & xx ~file_h;
-  east2 := (east1  << 1) & xx ~file_a;
-  west2 := (west1  >> 1) & xx ~file_h;
+  east1 := (slider << 1) & xx (~file_a);
+  west1 := (slider >> 1) & xx (~file_h);
+  east2 := (east1  << 1) & xx (~file_a);
+  west2 := (west1  >> 1) & xx (~file_h);
   sqs1 := east1 | west1;
   sqs2 := east2 | west2;
-  return ((sqs2 << 8) | (sqs2 >> 8) | (sqs1 << 16) | (sqs1 >> 16)) & ~friends;
+  return ((sqs2 << 8) | (sqs2 >> 8) | (sqs1 << 16) | (sqs1 >> 16)) & (~friends);
 }
 
 rook_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
   file_slide := sliding(occupied, slider, file_of(i));        
   rank_slide := sliding(occupied, slider, rank_of(i));        
-  return (file_slide | rank_slide) & ~friends;
+  return (file_slide | rank_slide) & (~friends);
 } 
 
 queen_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
@@ -1061,21 +1067,21 @@ queen_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -
   rank_slide  := sliding(occupied, slider,  rank_of(i));        
   diag_slide  := sliding(occupied, slider,  diag_of(i));
   adiag_slide := sliding(occupied, slider, adiag_of(i));
-  return (file_slide | rank_slide | diag_slide | adiag_slide) & ~friends;
+  return (file_slide | rank_slide | diag_slide | adiag_slide) & (~friends);
 }
 
 king_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
-  k := slider | ((slider << 1) & xx ~file_a) | ((slider >> 1) & xx ~file_h);
-  neighbors := (k | (k << 8) | (k >> 8)) & ~slider;
-  return neighbors & ~friends;
+  k := slider | ((slider << 1) & xx (~file_a)) | ((slider >> 1) & xx (~file_h));
+  neighbors := (k | (k << 8) | (k >> 8)) & (~slider);
+  return neighbors & (~friends);
 }
 
 white_pawn_captures :: inline (slider: u64) -> u64 {
-  return ((slider << 9) & xx ~file_a) | ((slider << 7) & xx ~file_h);
+  return ((slider << 9) & xx (~file_a)) | ((slider << 7) & xx (~file_h));
 }
 
 black_pawn_captures :: inline (slider: u64) -> u64 {
-  return ((slider >> 7) & xx ~file_a) | ((slider >> 9) & xx ~file_h);
+  return ((slider >> 7) & xx (~file_a)) | ((slider >> 9) & xx (~file_h));
 }
 
 file_of :: inline (i: int) -> u64 {
@@ -1087,14 +1093,14 @@ file_of :: inline (i: int) -> u64 {
 
 rank_of :: inline (i: int) -> u64 {
   assert(0 <= i && i <= 63);
-  r := i & ~7;
+  r := i & (~7);
   rank: u64 = (cast(u64) rank_1) << r;
   return rank;
 }
 
 diag_of :: inline (i: int)->u64 {
   assert(0 <= i && i <= 63);
-  f := (i & ~7) >> 3;
+  f := (i & (~7)) >> 3;
   r := i & 7;
   index := 7 + f - r;
   return xx diags[index];
@@ -1102,7 +1108,7 @@ diag_of :: inline (i: int)->u64 {
 
 adiag_of :: inline (i: int)->u64 {
   assert(0 <= i && i <= 63);
-  f := (i & ~7) >> 3;
+  f := (i & (~7)) >> 3;
   r := i & 7;
   index := f + r;
   return xx a_diags[index];
@@ -1136,7 +1142,7 @@ print_bitboard :: (b: u64) {
   }
 }
 
-//bb_file := sliding(bb1, bb2, f) & ~(bb1|bb2);
+//bb_file := sliding(bb1, bb2, f) & (~(bb1|bb2));
 // TODO: This function is WAY to slow...
 // Actually, I don't know whether this is okay or too slow...can't tell....
 init_global_bitboards :: () {
@@ -1192,13 +1198,13 @@ init_global_bitboards :: () {
       while iii != yy {
         i := serialize_bit(xx iii);
         j := serialize_bit(xx yy);
-        entry := file_entry & ~(iii|yy);
+        entry := file_entry & (~(iii|yy));
         between_look_up_table[i][j] = xx entry;
         between_look_up_table[j][i] = xx entry;
-        file_entry = file_entry & ~iii;
+        file_entry = file_entry & (~iii);
         iii = iii << num;
       }
-      ff = ff & ~yy;
+      ff = ff & (~yy);
       yy = yy >> num;
     }
   }
@@ -1315,7 +1321,9 @@ zobrist_init_globals :: (s : s32 = 861097715) {
   }
 }
 
-trailing_zeros :: (input: u64)->int #expand {
+// COMPILER BUG: the #asm instruction is being removed, and this function is just
+// returning -1.
+trailing_zeros :: inline (input: u64)->int {
   result := -1;
   #asm { bsf.q result, input; }
   return result;
@@ -1334,9 +1342,6 @@ popcount :: (value: u64) -> int #expand {
 }
 
 bit_reverse64  :: (x: u64) -> u64 #expand {
-  CONST1 : u64 : #run -> u64 { return xx (~1085102592571150096 + 1); };
-  CONST2 : u64 : #run -> u64 { return xx (~3689348814741910324 + 1); };
-  CONST3 : u64 : #run -> u64 { return xx (~6148914691236517206 + 1); };
   // Modified from clang objdump
   rdi: u64 = x;
   rax, rcx, rdx: u64;
@@ -1345,19 +1350,19 @@ bit_reverse64  :: (x: u64) -> u64 #expand {
     mov.q     rax, 1085102592571150095;
     and.q     rax, rdi;
     shl.q     rax, 4;
-    mov.q     rcx, CONST1;
+    mov.q     rcx, -1085102592571150096;
     and.q     rcx, rdi;
     shr.q     rcx, 4;
     or.q      rcx, rax;
     mov.q     rax, 3689348814741910323;
     and.q     rax, rcx;
-    mov.q     rdx, CONST2;
+    mov.q     rdx, -3689348814741910324;
     and.q     rdx, rcx;
     shr.q     rdx, 2;
     lea.q     rax, [rdx + rax*4];
     mov.q     rcx, 6148914691236517205;
     and.q     rcx, rax;
-    mov.q     rdx, CONST3;
+    mov.q     rdx, -6148914691236517206;
     and.q     rdx, rax;
     shr.q     rdx;
     lea.q     rax, [rdx + rcx*2];
