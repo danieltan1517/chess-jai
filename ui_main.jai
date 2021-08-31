@@ -238,7 +238,6 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
   }
 
   draw_bitboard(last_move_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, YELLOW);
-  draw_bitboard(check_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, RED);
   draw_bitboard(possible_moves_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, GREY);
   if font {
     // add board labels.
@@ -321,7 +320,7 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
     // need to be done.
     im_set_texture(null);
     im_draw_rect(x, y, x + len, y + len, c=GREY_SHADE_BOARD);
-    index := serialize_bit(promote_sq);
+    index := bit_scan_forward(promote_sq);
     i, j := 0;
     if white_side {
       i, j = index &  7, index >> 3;
@@ -365,7 +364,7 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
       value = bit_board & highlight_square;
 
     while value {
-      index := serialize_bit(value);
+      index := bit_scan_forward(value);
       i, j := 0;
       if white_side {
         i = index &  7;
@@ -473,7 +472,7 @@ handle_board_click :: (width: float, height: float, piece_bitboard: *Piece_Bitbo
     wants_to_promote = mouse_button_1_state == .MOUSE_PRESSED;
     x := cen_x - len*.5;
     y := cen_y - len*.5;
-    index := serialize_bit(promotion_sq);
+    index := bit_scan_forward(promotion_sq);
     i, j := 0;
     if white_side {
       i, j = index &  7, index >> 3;

@@ -715,7 +715,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
                whose_turn=!whose_turn);
   checks: u64 = 0;
   pins: u64 = 0;
-  i := serialize_bit(king);
+  i := bit_scan_forward(king);
   k_file := file_of(i);
   k_rank := rank_of(i);
   k_diag := diag_of(i);
@@ -748,7 +748,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
   }
 
   while rook_pin {
-    sq: u64 = xx  (1 << serialize_bit(rook_pin));
+    sq: u64 = xx  (1 << bit_scan_forward(rook_pin));
     between_sqs := between_bitboard(sq, king);
     pinned_piece := between_sqs & pieces;
     pins = pins | pinned_piece;
@@ -778,7 +778,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
   }
 
   while bishop_pin {
-    sq: u64 = xx  (1 << serialize_bit(bishop_pin));
+    sq: u64 = xx  (1 << bit_scan_forward(bishop_pin));
     between_sqs := between_bitboard(sq, king);
     pinned_piece := between_sqs & pieces;
     pins = pins | pinned_piece;
@@ -848,14 +848,14 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
   }
 
   while queen {
-    i := serialize_bit(queen);
+    i := bit_scan_forward(queen);
     from_bb := cast(u64)(1 << i);
     to_bb := queen_moves(occupied, i, from_bb, pieces) & check_sqs;
     generate_normal_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces);
     queen = queen & (queen-1);
   }
   while rook {
-    i := serialize_bit(rook);
+    i := bit_scan_forward(rook);
     from_bb := cast(u64)(1 << i);
     to_bb := rook_moves(occupied, i, from_bb, pieces) & check_sqs;
     //print("ROOK: [%] [%] [%] [%]\n", cast(bboard)rook, i, cast(bboard)from_bb, cast(bboard)to_bb);
@@ -863,7 +863,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     rook = rook & (rook-1);
   }
   while bishop {
-    i := serialize_bit(bishop);
+    i := bit_scan_forward(bishop);
     from_bb := cast(u64)(1 << i);
     to_bb := bishop_moves(occupied, i, from_bb, pieces) & check_sqs;
     //print("BISHOP: [%] [%] [%] [%]\n", cast(bboard)bishop, i, cast(bboard)from_bb, cast(bboard)to_bb);
@@ -871,7 +871,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     bishop = bishop & (bishop-1);
   }
   while knight {
-    i := serialize_bit(knight);
+    i := bit_scan_forward(knight);
     from_bb := cast(u64)(1 << i);
     to_bb := knight_moves(occupied, i, from_bb, pieces) & check_sqs;
     //print("KNIGHT: [%] [%] [%] [%]\n", cast(bboard)knight, i, cast(bboard)from_bb, cast(bboard)to_bb);
@@ -879,7 +879,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     knight = knight & (knight-1);
   }
   while pawn {
-    i := serialize_bit(pawn);
+    i := bit_scan_forward(pawn);
     from_bb := cast(u64)(1 << i);
     to_bb: u64 = 0;
     //print("PAWN: [%] [%] [%]\n", cast(bboard)pawn, i, cast(bboard)from_bb);
@@ -909,7 +909,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
         if (king & xx rank_5) && opp_qr {
           TF := true;
           while opp_qr {
-            ooo := cast(u64) (1 << serialize_bit(opp_qr));
+            ooo := cast(u64) (1 << bit_scan_forward(opp_qr));
             btwn := between_bitboard(king, ooo);
             erase_both := occupied & (~(from_bb|ep_sq));
             if (btwn & erase_both) == 0 {
@@ -938,7 +938,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
         if (king & xx rank_4) && opp_qr {
           TF := true;
           while opp_qr {
-            ooo := cast(u64) (1 << serialize_bit(opp_qr));
+            ooo := cast(u64) (1 << bit_scan_forward(opp_qr));
             btwn := between_bitboard(king, ooo);
             erase_both := occupied & (~(from_bb|ep_sq));
             if (btwn & erase_both) == 0 {
@@ -975,21 +975,21 @@ generate_attacks :: (occ: u64, king: u64, queen: u64, rook: u64, bishop: u64, kn
   king_attacks := king_moves(0, 0, king); 
   queen_attacks: u64 = 0;
   while queen {
-    i := serialize_bit(queen);
+    i := bit_scan_forward(queen);
     bb: u64 = xx (1 << i);
     queen_attacks = queen_attacks | queen_moves(occ, i, bb);
     queen = queen & (queen-1);
   }
   rook_attacks: u64 = 0;
   while rook {
-    i := serialize_bit(rook);
+    i := bit_scan_forward(rook);
     bb: u64 = xx (1 << i);
     rook_attacks = rook_attacks | rook_moves(occ, i, bb);
     rook = rook & (rook-1);
   }
   bishop_attacks: u64 = 0;
   while bishop {
-    i := serialize_bit(bishop);
+    i := bit_scan_forward(bishop);
     bb: u64 = xx (1 << i);
     bishop_attacks = bishop_attacks | bishop_moves(occ, i, bb);
     bishop = bishop & (bishop - 1);
@@ -1114,8 +1114,6 @@ adiag_of :: inline (i: int)->u64 {
   return xx a_diags[index];
 }
 
-serialize_bit :: trailing_zeros;
-
 print_bitboard :: (b: u64) {
   loop(xx a8, "8 ");
   loop(xx a7, "7 ");
@@ -1196,8 +1194,8 @@ init_global_bitboards :: () {
       iii := a;
       file_entry := ff;
       while iii != yy {
-        i := serialize_bit(xx iii);
-        j := serialize_bit(xx yy);
+        i := bit_scan_forward(xx iii);
+        j := bit_scan_forward(xx yy);
         entry := file_entry & (~(iii|yy));
         between_look_up_table[i][j] = xx entry;
         between_look_up_table[j][i] = xx entry;
@@ -1211,8 +1209,8 @@ init_global_bitboards :: () {
 }
 
 encode_move_bb :: inline (f: u64, t: u64, flags: Move16) -> Move16 {
-  from := serialize_bit(f);
-  to   := serialize_bit(t);
+  from := bit_scan_forward(f);
+  to   := bit_scan_forward(t);
   ret  := (from << 10) | (to << 4) | (xx flags);
   //print("%, %, %\n", cast(serialized_bb)from, cast(serialized_bb)to, ret);
   return cast, trunc(Move16) ret;
@@ -1227,8 +1225,8 @@ decode_move :: inline (mov: Move16) -> flags: Move16, from: int, to: int {
 
 find_move :: (moves: [..]Move16, from: u64, to: u64, typ: Move16=Move16.Quiet) -> Move16 {
   if typ == Move16.Quiet {
-    fr1 := serialize_bit(from);
-    to1 := serialize_bit(to);
+    fr1 := bit_scan_forward(from);
+    to1 := bit_scan_forward(to);
     for mov: moves {
       flags, fr2, to2 := decode_move(mov);
       if fr1 == fr2 && to1 == to2 {
@@ -1236,8 +1234,8 @@ find_move :: (moves: [..]Move16, from: u64, to: u64, typ: Move16=Move16.Quiet) -
       }
     }
   } else if Move16.Knight_Promotion <= typ && typ <= Move16.Queen_Promotion_Capture {
-    fr1 := serialize_bit(from);
-    to1 := serialize_bit(to);
+    fr1 := bit_scan_forward(from);
+    to1 := bit_scan_forward(to);
     for mov: moves {
       flags, fr2, to2 := decode_move(mov);
       if fr1 == fr2 && to1 == to2 && ((flags == typ) || flags == (typ + xx 4)) {
@@ -1281,7 +1279,7 @@ zobrist_hash :: (using p: *Piece_Bitboards, c: Castling, ep: u64, whose_turn: bo
   hash_pieces :: (p: u64, __zhash_values: [64] u64) -> u64 {
     ret : u64 = 0;
     while p {
-      idx := cast(int)serialize_bit(p);
+      idx := cast(int)bit_scan_forward(p);
       ret = ret ^ __zhash_values[idx];
       p &= p-1;
     }
@@ -1323,7 +1321,7 @@ zobrist_init_globals :: (s : s32 = 861097715) {
 
 // COMPILER BUG: the #asm instruction is being removed, and this function is just
 // returning -1.
-trailing_zeros :: inline (input: u64)->int {
+bit_scan_forward :: (input: u64)->int {
   result := -1;
   #asm { bsf.q result, input; }
   return result;
@@ -1391,8 +1389,8 @@ sliding_half_2 :: inline (o: u64, r: u64) -> u64 {
 }
 
 between_bitboard :: inline (i: u64, j: u64) -> u64 {
-  ii := serialize_bit(i);
-  jj := serialize_bit(j);
+  ii := bit_scan_forward(i);
+  jj := bit_scan_forward(j);
   ret := between_look_up_table[ii][jj];
   return ret;
 }
@@ -1441,7 +1439,7 @@ a_diags :: bboard.[
 generate_normal_moves_from_bitboard :: (moves_arr: *[..]Move16, from: u64, to: u64, opp_pieces: u64) {
   using Move16;
   while to {
-    to_bb := cast(u64)(1 << serialize_bit(to));
+    to_bb := cast(u64)(1 << bit_scan_forward(to));
     flags := ifx (to_bb & opp_pieces) Capture else Quiet; 
     move := encode_move_bb(from, to_bb, flags);
     array_add(moves_arr, move);
@@ -1454,7 +1452,7 @@ generate_pawn_moves_from_bitboard :: (moves_arr: *[..]Move16, from: u64, to: u64
   using Move16;
 
   while to {
-    to_bb := cast(u64)(1 << serialize_bit(to));
+    to_bb := cast(u64)(1 << bit_scan_forward(to));
     // promotion
     if to_bb & xx (rank_1|rank_8) {
       // add all promotion possibilities 

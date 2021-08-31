@@ -30,7 +30,7 @@ nnue_evaluate :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) -> in
   translate_bitboard :: (bb: u64, piece_type: s32) #expand {
     while bb {
       pieces [index] = piece_type;
-      squares[index] = xx serialize_bit(bb);
+      squares[index] = xx bit_scan_forward(bb);
       index += 1;
       bb &= bb - 1;
     }
