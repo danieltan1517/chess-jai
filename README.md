@@ -52,7 +52,7 @@ The chess GUI uses the glfw3 and gl libraries.
 * Null Move Pruning 
 * Reverse Futility Pruning/Static Move Pruning
 * Razoring
+* Simple Mop-Up Endgame Evaluation.
 
 ## Still needs to be implemented
 * Better optimization for movegen 
-* Endgame evaluation (may need some optimization)
