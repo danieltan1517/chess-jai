@@ -410,7 +410,7 @@ INF :: 0x7FFF_FFFF; // Alias
 // see: https://www.chessprogramming.org/Quiescence_Search
 quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, alpha: int, beta: int, fifty: int = 0) -> int {
   auto_release_temp();
-  eval := nnue_evaluate(pieces, whose_turn, fifty);
+  eval := evaluate(pieces, whose_turn, fifty);
   if eval >= beta then
     return beta;
   if alpha < eval then

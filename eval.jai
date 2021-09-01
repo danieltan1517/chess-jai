@@ -4,6 +4,13 @@ nnue_init :: () {
   __nnue_init(eval_file=eval_file);
 }
 
+evaluate :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) -> int {
+  trivial_evaluation(p, whose_turn, fifty); // attempt trivial eval. else use NNUE.
+  return nnue_evaluate(p, whose_turn, fifty);
+}
+
+
+#scope_file
 nnue_evaluate :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) -> int {
   pieces: [65] s32;
   squares: [65] s32;
@@ -37,7 +44,55 @@ nnue_evaluate :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) -> in
   }
 }
 
-#scope_file
+// We use trivial evaluation to deal with endgame positions.
+trivial_evaluation :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) #expand {
+  // used for trivial checkmates/draws.
+  w_pieces := w_queen|w_rook|w_bishop|w_knight|w_pawn;
+  b_pieces := b_queen|b_rook|b_bishop|b_knight|b_pawn;
+
+  if w_pieces == 0 && b_pieces == 0 {
+    `return 0;  // K v K.
+  }
+
+  if w_pieces & (~(w_pawn|w_knight)) && b_pieces == 0 {
+    side := ifx whose_turn then 1 else -1;
+    eval := eval_winning_position(w_king, b_king) * side;
+    `return (eval * (100 - fifty)) / 100;
+  } 
+
+  if b_pieces & (~(b_pawn|b_knight)) && w_pieces == 0 {
+    side := ifx whose_turn then -1 else 1;
+    eval := eval_winning_position(b_king, w_king) * side;
+    `return (eval * (100 - fifty)) / 100;
+  } 
+
+  eval_winning_position :: (strong_king: u64, weak_king: u64) -> int {
+    win := bit_scan_forward(strong_king);
+    los := bit_scan_forward(weak_king);
+
+    winx := win / 8;
+    winy := win % 8;
+
+    losx := los / 8;
+    losy := los % 8;
+
+    distance   := abs(winx - losx) + abs(winy - losy);
+    push_close := 140 - 20 * distance;
+    edge       := king_endgame[los];
+    return push_close + edge + 0x7FF_FFFF;
+
+    king_endgame :: int.[
+      500,400,300,200,200,300,400,500,
+      400,300,200,200,200,200,300,400,
+      300,200,100,100,100,100,200,300,
+      300,200,100,  0,  0,100,200,300,
+      300,200,100,  0,  0,100,200,300,
+      300,200,100,100,100,100,200,300,
+      400,300,200,200,200,200,300,400,
+      500,400,300,300,300,300,400,500];
+  }
+}
+
 nnue :: #foreign_library "nnue-probe/src/libnnueprobe";
 
 //eval_file :: #run join(#filepath, "resources/nn-fb50f1a2b1-20210705.nnue");
