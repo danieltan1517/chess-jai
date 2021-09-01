@@ -53,18 +53,29 @@ trivial_evaluation :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) 
   if w_pieces == 0 && b_pieces == 0 {
     `return 0;  // K v K.
   }
+  if b_pieces == 0 {
 
-  if w_pieces & (~(w_pawn|w_knight)) && b_pieces == 0 {
-    side := ifx whose_turn then 1 else -1;
-    eval := eval_winning_position(w_king, b_king) * side;
-    `return (eval * (100 - fifty)) / 100;
-  } 
+    if w_bishop|w_knight == w_pieces && popcount(w_pieces) == 1
+      `return 0;
 
-  if b_pieces & (~(b_pawn|b_knight)) && w_pieces == 0 {
-    side := ifx whose_turn then -1 else 1;
-    eval := eval_winning_position(b_king, w_king) * side;
-    `return (eval * (100 - fifty)) / 100;
-  } 
+
+    if w_pieces & (~(w_pawn|w_knight)) {
+      side := ifx whose_turn then 1 else -1;
+      eval := eval_winning_position(w_king, b_king) * side;
+      `return (eval * (100 - fifty)) / 100;
+    } 
+  }
+
+  if w_pieces == 0 {
+    if b_bishop|b_knight == b_pieces && popcount(b_pieces) == 1
+      `return 0;
+
+    if b_pieces & (~(b_pawn|b_knight)) {
+      side := ifx whose_turn then -1 else 1;
+      eval := eval_winning_position(b_king, w_king) * side;
+      `return (eval * (100 - fifty)) / 100;
+    } 
+  }
 
   eval_winning_position :: (strong_king: u64, weak_king: u64) -> int {
     win := bit_scan_forward(strong_king);
