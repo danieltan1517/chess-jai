@@ -15,6 +15,8 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   best_eval : int; best_move : Move16;
   for iter_depth : 1..depth { 
     best_eval = negamax(pieces, castling, ep, iter_depth, whose_turn, *pv_line, repetitions, fifty=fifty);
+    if stdin_stop_signal() then
+      break;
     best_move = pv_line.argmove[0];
     time_taken := get_time() - time_begin;
     print_stats(iter_depth);
@@ -48,6 +50,8 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
 negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, repetitions: *[..]u64, ply: int = 0, $null_flag := true, alpha := -INF, beta := INF, fifty: int) -> int {
   FULL_DEPTH_MOVES :: 4;
   REDUCTION_LIMIT  :: 3;
+  if stdin_stop_signal()
+    return 0;
 
   auto_release_temp();
   line: PVLine;
@@ -203,10 +207,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     NULL_MOVE_MAX :: 4;
     // check for zugwang before null move pruning
     if null_flag && depth >= NULL_MOVE_MAX && check == 0 && !has_ep(pieces) && !has_zugzwang(pieces) {
-      // R formula is taken stockfish
-      //R := max( ((1090+81*depth) / 256) + min((static_eval-beta) / 205, 3), 1);
-      //print("depth reduction: %, %\n", depth, depth-R);
-      score := -negamax(pieces, castling, 0, depth-2, !whose_turn, *line, repetitions, ply+2, false, -beta, -beta + 1, fifty);
+      score := -negamax(pieces, castling, 0, depth-2, !whose_turn, *line, repetitions, ply+1, false, -beta, -beta + 1, fifty);
       if score >= beta then {
         `return beta;
       }
@@ -402,10 +403,9 @@ initialize_ai_globals :: () {
   zobrist_init_globals();
 }
 
-#scope_file
-
 INF :: 0x7FFF_FFFF; // Alias
 
+#scope_file
 // search capture moves only, we do this to avoid horizon effect
 // see: https://www.chessprogramming.org/Quiescence_Search
 quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, alpha: int, beta: int, fifty: int = 0) -> int {
@@ -448,7 +448,7 @@ filter_captures :: (move_array: [..] Move16) {
 
 PVLine :: struct {
   cmove: int;
-  argmove: [10] Move16;  // TODO: WTF, THIS is the thing that is taking up SOO much time?!?!
+  argmove: [16] Move16;  // TODO: WTF, THIS is the thing that is taking up SOO much time?!?!
 }
 
 // performance test

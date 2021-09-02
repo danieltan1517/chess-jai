@@ -61,7 +61,7 @@ trivial_evaluation :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) 
 
     if w_pieces & (~(w_pawn|w_knight)) {
       side := ifx whose_turn then 1 else -1;
-      eval := eval_winning_position(w_king, b_king) * side;
+      eval := eval_winning_position(w_king, q=w_queen, r=w_rook, b=w_bishop, n=w_knight, p=w_pawn, b_king) * side;
       `return (eval * (100 - fifty)) / 100;
     } 
   }
@@ -72,12 +72,12 @@ trivial_evaluation :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) 
 
     if b_pieces & (~(b_pawn|b_knight)) {
       side := ifx whose_turn then -1 else 1;
-      eval := eval_winning_position(b_king, w_king) * side;
+      eval := eval_winning_position(b_king, q=b_queen, r=b_rook, b=b_bishop, n=b_knight, p=b_pawn, w_king) * side;
       `return (eval * (100 - fifty)) / 100;
     } 
   }
 
-  eval_winning_position :: (strong_king: u64, weak_king: u64) -> int {
+  eval_winning_position :: (strong_king: u64, q: u64, r: u64, b: u64, n: u64, p: u64, weak_king: u64) -> int {
     win := bit_scan_forward(strong_king);
     los := bit_scan_forward(weak_king);
 
@@ -90,7 +90,9 @@ trivial_evaluation :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) 
     distance   := abs(winx - losx) + abs(winy - losy);
     push_close := 140 - 20 * distance;
     edge       := king_endgame[los];
-    return push_close + edge + 0x7FF_FFFF;
+    mat        := popcount(q)*90000 + popcount(r)*50000 + popcount(b)*35000 + popcount(n)*30000;
+    pawn       := popcount(p)*1000;
+    return push_close + edge + 0x7FF_FFFF + mat + pawn;
 
     king_endgame :: int.[
       500,400,300,200,200,300,400,500,

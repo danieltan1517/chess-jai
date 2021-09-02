@@ -16,7 +16,9 @@ main :: () {
   seed := cast(s32)(get_time() * 1.1350e14);
   random_seed(seed);
 
+  setup_stdin(); // set STDIN to non-blocking.
   while true {
+    reset_stop_signal();
     input := getline();
     if equal(input, "quit") {
       break;
@@ -118,7 +120,21 @@ main :: () {
       depth, TF := parse_int(*input);
       if !TF return;
       mov := search(*pieces, castling, ep, *repetitions, depth, whose_turn, fifty);
+      print_best_move(mov);
 
+    case "infinite";
+      depth := INF;   // make the depth arbitrarily high.
+      mov := search(*pieces, castling, ep, *repetitions, depth, whose_turn, fifty);
+      print_best_move(mov);
+
+    case "perft";
+      depth, TF := parse_int(*input);
+      if !TF return;
+      perft_divide(*pieces, castling, ep, whose_turn, depth);
+
+    }
+
+    print_best_move :: (mov: Move16) {
       flags, from, to := decode_move(mov);
       // hopefully promote the piece functions correctly...
       if flags == Move16.Knight_Promotion || flags == Move16.Knight_Promotion_Capture {
@@ -132,13 +148,27 @@ main :: () {
       } else {
         print("bestmove %1%2\n", cast(serialized_bb) from, cast(serialized_bb) to);
       }
-
-    case "perft";
-      depth, TF := parse_int(*input);
-      if !TF return;
-      perft_divide(*pieces, castling, ep, whose_turn, depth);
     }
   }
+}
+
+stdin_stop_signal :: () -> bool {
+  bytes_read := read(STDIN_FILENO, __buffer.data, __buffer.count-1);
+  if bytes_read >= 0 then {
+    str := to_string(__buffer.data, bytes_read-1); // -1 the '\n' char
+    for < line: split(str, "\n") {
+      if equal(line, "stop") {
+        __stop_signal = true;
+      } else {
+        array_add(*__array, line);
+      }
+    }
+  }
+  return __stop_signal;
+}
+
+reset_stop_signal :: () #expand {
+  __stop_signal = false;
 }
 
 #scope_file
@@ -152,12 +182,32 @@ DONE;
 // TODO: does this actually do getline, or can
 // it return "aaaa\nbbbb"?
 getline :: () -> string {
-  bytes_read := read(STDIN_FILENO, __buffer.data, __buffer.count-1);
+
+  if __array {
+    return pop(*__array);
+  }
+
+  bytes_read := 0;
+  while true {
+    bytes_read = read(STDIN_FILENO, __buffer.data, __buffer.count-1);
+    if bytes_read > 0
+      break;
+
+    sleep_milliseconds(25);
+  }
+
   str := to_string(__buffer.data, bytes_read-1); // -1 the '\n' char
-  return str;
+  for < line: split(str, "\n") {
+    array_add(*__array, line);
+  }
+  return pop(*__array);
 }
 
+__stop_signal := false;
 __buffer: [4096] u8;
+
+__array: [..] string;
+
 
 // TODO: this assumes the moves are valid
 // TODO: this is a long function...
@@ -290,7 +340,9 @@ get_move_type :: (using pieces: Piece_Bitboards, en_paesant: u64, from: u64, to:
 }
 
 
-
-
+setup_stdin :: () #expand {
+  flags := fcntl(STDIN_FILENO, F_GETFL, 0) | O_NONBLOCK;
+  fcntl(STDIN_FILENO, F_SETFL, flags);
+}
 
 

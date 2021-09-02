@@ -83,6 +83,7 @@ main :: () {
     // send quit command to the chess engine 
     // before closing the uci chess engine.
     if w_is_human == false || b_is_human == false {
+      uci_write_command("stop\n");
       uci_write_command("quit\n");
       uci_close_chess_engine();
     }
@@ -107,6 +108,7 @@ main :: () {
   random_seed(seed);
 
   while !glfwWindowShouldClose(window) {
+    ftime := cast(float)get_time();
     read_mouse_input(window);
     width, height : s32;
     glfwGetFramebufferSize(window, *width, *height);
@@ -133,8 +135,12 @@ main :: () {
     if w_is_human == false || b_is_human == false {
       uci_ai_game_loop (*piece_bitboard, *flags, *ep_sq, *moves_arr);
     }
+    ftime = cast(float)get_time() - ftime;
+    delta_time = ftime;
   }
 }
+
+delta_time : float32 = 0.0;
 
 handle_command_line :: () -> string #expand {
   // TODO: 
@@ -192,6 +198,11 @@ __game_status_text: string;
 draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *Texture, highlight_square: u64, possible_moves_bb: u64, last_move_bb: u64, white_side: bool) {
   cen_x := width * 0.5; 
   cen_y := height * 0.5;
+  if whose_turn then {
+    w_clock_time -= delta_time;
+  } else {
+    b_clock_time -= delta_time;
+  }
 
   len := min(width, height) * 0.8;
   square_len := len / 8.0;
@@ -209,12 +220,22 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
     bot_col: Vector4 = ifx  whose_turn then BLANK else L_BLANK;
     top_col: Vector4 = ifx !whose_turn then BLANK else L_BLANK;
 
+    bot_time := w_clock_time;
+    top_time := b_clock_time;
     if !white_side {
       swap(bottom, top);
       swap(bot_col, top_col);
+      swap(bot_time, top_time);
     }
-    im_draw_text(font, x, y - square_len*0.5, bot_col, bottom);
-    im_draw_text(font, x, y + len + square_len*0.5, top_col, top);
+
+    bottom_string := tprint("% %:%", bottom, formatInt(cast(int)(bot_time/60.0),      minimum_digits=2), 
+                                             formatInt(cast(int)fmod(bot_time, 60.0), minimum_digits=2));
+    top_string    := tprint("% %:%", top,    formatInt(cast(int)(top_time/60.0),      minimum_digits=2),
+                                             formatInt(cast(int)fmod(top_time, 60.0), minimum_digits=2));
+
+
+    im_draw_text(font, x, y - square_len*0.5,       bot_col, bottom_string);
+    im_draw_text(font, x, y + len + square_len*0.5, top_col, top_string);
     if __game_status_text {
       im_draw_text(font, 4, 4, BLANK, __game_status_text);
     }
@@ -710,6 +731,8 @@ handle_reset :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flags: *
         last_move_bb = 0;
       }
       __game_status_text = "";
+      w_clock_time = 30.0*60.0;
+      b_clock_time = 30.0*60.0;
     }
   case .RESET_PRESS;
     if n_state == GLFW_RELEASE || (l_ctrl_key == GLFW_RELEASE && r_ctrl_key == GLFW_RELEASE) {
@@ -791,6 +814,9 @@ possible_moves_bb: u64 = 0;
 check_bb : u64 = 0;
 w_is_human : bool = true;
 b_is_human : bool = true;
+
+w_clock_time : float = 30*60;
+b_clock_time : float = 30*60;
 
 w_human_turn :: () => (w_is_human && whose_turn);
 b_human_turn :: () => (b_is_human && !whose_turn);
@@ -895,10 +921,6 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
         uci_state = .UCI_NEWGAME;
       }
     }
-    // TODO: the welcome message would ideally be placed in main, but...
-    // the AI keeps on spewing out debug messages, so I placed the welcome message
-    // here..
-    print(welcome_message);
   case .UCI_NEWGAME;
     uci_write_command("ucinewgame\n");
     uci_state = .UCI_IDLE;
@@ -946,7 +968,6 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
         }
       }
     }
-
   case .UCI_BUG;
 
   }
@@ -985,7 +1006,7 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
 
 
 #scope_file
-
+__engine_pid := 0;
 // Universal Chess Interface Protocol
 
 uci_init_uci_chess_engine :: (engine_name: string, ai_path: string) -> bool {
@@ -1034,14 +1055,22 @@ uci_init_uci_chess_engine :: (engine_name: string, ai_path: string) -> bool {
     return false;  // to shut the compiler up.
   } else {
     // parent process
+    __engine_pid = child_pid;
     close(pipe_1[1]);
     close(pipe_2[0]);
     __write_pipe = pipe_2[1];
     __read_pipe  = pipe_1[0];
+    setup_pipe_nonblock(__read_pipe);
+
     __commands_string_array.allocator = __temporary_allocator; 
     __engine_name = engine_name;
     __commands_string_array.allocator = __temporary_allocator;
     return true; 
+  }
+
+  setup_pipe_nonblock :: (pipe: s32) #expand {
+    flags := fcntl(pipe, F_GETFL, 0) | O_NONBLOCK;
+    fcntl(pipe, F_SETFL, flags);
   }
 }
 
@@ -1051,12 +1080,20 @@ uci_write_command :: (command: string) {
 
 uci_read_incoming_commands :: (num_bytes : int = 16384) {
   __buffer := NewArray(num_bytes, u8, initialized=false, allocator=__temporary_allocator);
-  bytes_read := read(__read_pipe, __buffer.data, cast(u64)(num_bytes-1));
-  if bytes_read == 0 return;
-  if bytes_read < 0 {
-    print("uci_read_incoming_commands error, bytes_read = %.\n", bytes_read);
-    return;
+  while true {
+    bytes_read := read(__read_pipe, __buffer.data, cast(u64)(num_bytes-1));
+    if bytes_read <= 0 then
+      break;
+    str := to_string(__buffer.data, bytes_read-1); // -1 the '\n' char
+    for < line: split(str, "\n") {
+      array_add(*__commands_string_array, line);
+    }
   }
+
+  /*__buffer := NewArray(num_bytes, u8, initialized=false, allocator=__temporary_allocator);
+  bytes_read := read(__read_pipe, __buffer.data, cast(u64)(num_bytes-1));
+  if bytes_read <= 0 return;
+
   data: *u8 = __buffer.data;
   start := 0;
   for i: 0 .. bytes_read-1 {
@@ -1087,7 +1124,7 @@ uci_read_incoming_commands :: (num_bytes : int = 16384) {
   if start == (bytes_read-1) {
     __edge_case_count = bytes_read - start - 1;
     memcpy(__edge_case_buffer.data, data, __edge_case_count);
-  }
+  }*/
 }
 
 uci_has_commands :: inline () -> bool {
