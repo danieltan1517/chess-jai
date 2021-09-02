@@ -51,7 +51,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
 negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, repetitions: *[..]u64, ply: int = 0, $null_flag := true, alpha := -INF, beta := INF, fifty: int) -> int {
   FULL_DEPTH_MOVES :: 4;
   REDUCTION_LIMIT  :: 3;
-  if (__nodes_searched & 4096) && stdin_stop_signal()
+  if (__nodes_searched & 16384) && stdin_stop_signal()
     return 0;
 
   auto_release_temp();

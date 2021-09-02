@@ -773,12 +773,15 @@ ui_handle_move_made :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_s
   if moves_arr.count == 0 {
     if check_bb != 0 {
       __game_status_text = "Checkmate.";
+      timer_on = false;
     } else {
       __game_status_text = "Stalemate.";
+      timer_on = false;
     }
   } else if hash != 0 && check_for_repetition(hash_record, hash) {
     __game_status_text = "Stalemate by threefold repetition.";
     array_reset(moves_arr);
+    timer_on = false;
   } else if check_bb != 0 {
     __game_status_text = "Check.";
   } else {
