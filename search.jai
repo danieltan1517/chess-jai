@@ -65,6 +65,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   TF, tt_score, bh_move := transposition_table_lookup(alpha, beta, hash, key, depth);
   if TF then {
     pv_line.cmove = 0;
+    pv_line.argmove[0] = bh_move;
     return tt_score;
   }
 
@@ -507,9 +508,9 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       order[i] = 90000;
     } else {
       if __killer_moves[0][ply] == move_array[i] {
-        order[i] = 25000;
+        order[i] = 9000;
       } else if __killer_moves[1][ply] == move_array[i] {
-        order[i] = 22500;
+        order[i] = 8500;
       } else {
         order[i] = __history_moves[cast(int)whose_turn][from_index][to_index];
       }
