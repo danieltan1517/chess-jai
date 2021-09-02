@@ -1101,42 +1101,6 @@ uci_read_incoming_commands :: (num_bytes : int = 16384) {
       array_add(*__commands_string_array, line);
     }
   }
-
-  /*__buffer := NewArray(num_bytes, u8, initialized=false, allocator=__temporary_allocator);
-  bytes_read := read(__read_pipe, __buffer.data, cast(u64)(num_bytes-1));
-  if bytes_read <= 0 return;
-
-  data: *u8 = __buffer.data;
-  start := 0;
-  for i: 0 .. bytes_read-1 {
-    if __buffer[i] == #char "\n" {
-      cmd_string: string; 
-      cmd_string.data = data;
-      cmd_string.count = (i - start);
-      cmd_string_to_add := join(to_string(__edge_case_buffer.data, __edge_case_count), cmd_string);
-      array_add(*__commands_string_array, cmd_string_to_add);
-      data = * (__buffer[i+1]);
-      start = min(i+1, bytes_read-1);
-      break;
-    }
-  }
-
-  for i: start .. bytes_read-1 {
-    if __buffer[i] == #char "\n" {
-      cmd_string: string;
-      cmd_string.data = data;
-      cmd_string.count = (i - start);
-      array_add(*__commands_string_array, cmd_string);
-      data = * (__buffer[i+1]);
-      start = min(i+1, bytes_read-1);
-    }
-  }
-  
-  // detect an edge case.
-  if start == (bytes_read-1) {
-    __edge_case_count = bytes_read - start - 1;
-    memcpy(__edge_case_buffer.data, data, __edge_case_count);
-  }*/
 }
 
 uci_has_commands :: inline () -> bool {
@@ -1166,9 +1130,6 @@ uci_close_chess_engine :: () {
 __read_pipe:  s32;
 __write_pipe: s32;
 __commands_string_array: [..] string;
-
-__edge_case_buffer: [4096] u8;
-__edge_case_count := 0;
 
 
 font : *Dynamic_Font;
