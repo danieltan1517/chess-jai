@@ -507,9 +507,9 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       order[i] = 90000;
     } else {
       if __killer_moves[0][ply] == move_array[i] {
-        order[i] = 2500;
+        order[i] = 25000;
       } else if __killer_moves[1][ply] == move_array[i] {
-        order[i] = 2250;
+        order[i] = 22500;
       } else {
         order[i] = __history_moves[cast(int)whose_turn][from_index][to_index];
       }
