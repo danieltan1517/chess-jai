@@ -949,8 +949,19 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
     cmd_string := tprint("go depth %\n", __engine_depth_parameter);
     uci_write_command(cmd_string);
     uci_state = .UCI_GO_TURN;
+
+
+    timeout_timer = 0.0;
+
+
   case .UCI_GO_TURN;
+    TIMEOUT_LIMIT :: 20.0;
     uci_read_incoming_commands();
+    timeout_timer += delta_time;
+
+    if timeout_timer >= TIMEOUT_LIMIT
+      uci_write_command("stop\n");
+
     while uci_has_commands() {
       cmd_string := uci_getline();
       if starts_with(cmd_string, "bestmove ") {
@@ -1004,6 +1015,7 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
   }
 }
 
+timeout_timer := 0.0;
 
 #scope_file
 __engine_pid := 0;
