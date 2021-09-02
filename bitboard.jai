@@ -707,7 +707,6 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
                        king: u64,     queen: u64,     rook: u64,     bishop: u64,     knight: u64,     pawn: u64,
                        opp_king: u64, opp_queen: u64, opp_rook: u64, opp_bishop: u64, opp_knight: u64, opp_pawn: u64,
                        whose_turn: bool) -> u64 {
-
   // NOTE: we do (occupied & (~king)) so that if    R - - - K - - -,
   // then the sliding will go through the king to cover other the unsafe squares
   attacks := generate_attacks(occ=occupied & (~king), 
@@ -816,7 +815,6 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
       }
     }
   }
-  
   // eliminate pieces already handled by pins.
   queen  &= ~pins;
   rook   &= ~pins;
@@ -858,7 +856,6 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     i := bit_scan_forward(rook);
     from_bb := cast(u64)(1 << i);
     to_bb := rook_moves(occupied, i, from_bb, pieces) & check_sqs;
-    //print("ROOK: [%] [%] [%] [%]\n", cast(bboard)rook, i, cast(bboard)from_bb, cast(bboard)to_bb);
     generate_normal_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces);
     rook = rook & (rook-1);
   }
@@ -866,7 +863,6 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     i := bit_scan_forward(bishop);
     from_bb := cast(u64)(1 << i);
     to_bb := bishop_moves(occupied, i, from_bb, pieces) & check_sqs;
-    //print("BISHOP: [%] [%] [%] [%]\n", cast(bboard)bishop, i, cast(bboard)from_bb, cast(bboard)to_bb);
     generate_normal_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces);
     bishop = bishop & (bishop-1);
   }
@@ -874,7 +870,6 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     i := bit_scan_forward(knight);
     from_bb := cast(u64)(1 << i);
     to_bb := knight_moves(occupied, i, from_bb, pieces) & check_sqs;
-    //print("KNIGHT: [%] [%] [%] [%]\n", cast(bboard)knight, i, cast(bboard)from_bb, cast(bboard)to_bb);
     generate_normal_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces);
     knight = knight & (knight-1);
   }
@@ -882,8 +877,6 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     i := bit_scan_forward(pawn);
     from_bb := cast(u64)(1 << i);
     to_bb: u64 = 0;
-    //print("PAWN: [%] [%] [%]\n", cast(bboard)pawn, i, cast(bboard)from_bb);
-
     if whose_turn then {
       to_bb = white_pawn_moves(occupied, i, from_bb, pieces) & check_sqs;
     } else {
@@ -973,8 +966,21 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
 generate_attacks :: (occ: u64, king: u64, queen: u64, rook: u64, bishop: u64, knight: u64, pawn: u64, whose_turn: bool) -> u64 {
   // generate white attacks
   king_attacks := king_moves(0, 0, king); 
-  queen_attacks: u64 = 0;
-  while queen {
+  vertical_attacks := h_and_v_attacks(king, queen, rook, bishop, knight, pawn, occ & ~(king|queen|rook|bishop|knight|pawn));
+  bishop = bishop | queen;
+  bishop_attacks: u64 = 0;
+  while bishop {
+    i := bit_scan_forward(bishop);
+    bb: u64 = xx (1 << i);
+    bishop_attacks = bishop_attacks | bishop_moves(occ, i, bb);
+    bishop = bishop & (bishop - 1);
+  }
+
+  knight_attacks := knight_moves(occ, 0, knight);
+  pawn_attacks := ifx whose_turn white_pawn_captures(pawn) else black_pawn_captures(pawn);
+  return king_attacks | vertical_attacks | bishop_attacks | knight_attacks | pawn_attacks;
+
+  /*while queen {
     i := bit_scan_forward(queen);
     bb: u64 = xx (1 << i);
     queen_attacks = queen_attacks | queen_moves(occ, i, bb);
@@ -986,18 +992,7 @@ generate_attacks :: (occ: u64, king: u64, queen: u64, rook: u64, bishop: u64, kn
     bb: u64 = xx (1 << i);
     rook_attacks = rook_attacks | rook_moves(occ, i, bb);
     rook = rook & (rook-1);
-  }
-  bishop_attacks: u64 = 0;
-  while bishop {
-    i := bit_scan_forward(bishop);
-    bb: u64 = xx (1 << i);
-    bishop_attacks = bishop_attacks | bishop_moves(occ, i, bb);
-    bishop = bishop & (bishop - 1);
-  }
-
-  knight_attacks := knight_moves(occ, 0, knight);
-  pawn_attacks := ifx whose_turn white_pawn_captures(pawn) else black_pawn_captures(pawn);
-  return king_attacks | queen_attacks | rook_attacks | bishop_attacks | knight_attacks | pawn_attacks;
+  }*/
 }
 
 possible_moves_for :: (moves: [..] Move16, from: u64) -> u64 {
@@ -1029,7 +1024,6 @@ white_pawn_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 =
   up1 := (slider << 8) & (~occupied);
   captures := white_pawn_captures(slider) & (occupied & (~friends));
   pawn_power := ((up1 & (xx rank_3)) << 8) & (~occupied);
-  //print("up1: %\n", cast(bboard)up1);
   return up1 | captures | pawn_power;
 }
 
@@ -1057,9 +1051,15 @@ knight_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) 
 }
 
 rook_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
-  file_slide := sliding(occupied, slider, file_of(i));        
-  rank_slide := sliding(occupied, slider, rank_of(i));        
-  return (file_slide | rank_slide) & (~friends);
+  o     := occupied & (~friends) & (~slider);
+  up    := smear_upwards(slider, ~((o<<8)|friends));
+  down  := smear_downwards(slider, ~((o>>8)|friends));
+  right := smear_eastwards(slider, ~(((o<<1) & (xx ~ file_a))|friends));
+  left  := smear_westwards(slider, ~(((o>>1) & (xx ~ file_h))|friends));
+  return up ^ down ^ right ^ left;
+  /*file_slide := sliding(occupied, slider, file_of(i));        
+  rank_slide := sliding(occupied, slider, rank_of(i));
+  return (file_slide | rank_slide) & (~friends);*/
 } 
 
 queen_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
@@ -1212,7 +1212,6 @@ encode_move_bb :: inline (f: u64, t: u64, flags: Move16) -> Move16 {
   from := bit_scan_forward(f);
   to   := bit_scan_forward(t);
   ret  := (from << 10) | (to << 4) | (xx flags);
-  //print("%, %, %\n", cast(serialized_bb)from, cast(serialized_bb)to, ret);
   return cast, trunc(Move16) ret;
 }
 
@@ -1367,6 +1366,81 @@ bit_reverse64  :: (x: u64) -> u64 #expand {
   }
 
   return rax;
+}
+
+h_and_v_attacks :: (king: u64, queen: u64, rook: u64, bishop: u64, knight: u64, pawn: u64, opp: u64) -> u64 {
+  // NOTE: We do it in a loop since queens/rooks can form a battery.
+  g := queen|rook;
+  o := king|bishop|knight|pawn;
+  bits : u64 = 0;
+  while g {
+    lsb := cast(u64)(1 << bit_scan_forward(g));
+    up := smear_upwards(lsb, ~((o<<8)|opp));
+    down := smear_downwards(lsb, ~((o>>8)|opp));
+    right := smear_eastwards(lsb, ~(((o<<1) & (xx ~ file_a))|opp));
+    left  := smear_westwards(lsb, ~(((o>>1) & (xx ~ file_h))|opp));
+    bits |= up ^ down ^ right ^ left;
+    g &= g-1;
+  }
+  return bits;
+}
+
+diagonal_attacks :: (king: u64, queen: u64, rook: u64, bishop: u64, knight: u64, pawn: u64, opp: u64) -> u64 {
+  g := queen|bishop;
+  o := king|rook|knight|pawn;
+  bits : u64 = 0;
+  while g {
+    lsb := cast(u64)(1 << bit_scan_forward(g));
+
+
+    g &= g-1;
+  }
+  return bits;
+}
+
+//https://www.chessprogramming.org/Kogge-Stone_Algorithm
+smear_upwards :: (g: u64, p: u64) -> u64 {
+  g |= p & (g <<  8);
+  p &=     (p <<  8);
+  g |= p & (g << 16);
+  p &=     (p << 16);
+  g |= p & (g << 32);
+  return g;
+}
+
+smear_downwards :: (g: u64, p: u64) -> u64 {
+  g |= p & (g >>  8);
+  p &=     (p >>  8);
+  g |= p & (g >> 16);
+  p &=     (p >> 16);
+  g |= p & (g >> 32);
+  return g;
+}
+
+smear_eastwards :: (g: u64, p: u64) -> u64 {
+  NOT_A :: cast(u64) ~ file_a;
+  p &= NOT_A;
+  g |= p & (g << 1);
+  p &=     (p << 1);
+  //p &= NOT_A;
+  g |= p & (g << 2);
+  p &=     (p << 2);
+  //p &= NOT_A;
+  g |= p & (g << 4);
+  return g;
+}
+
+smear_westwards :: (g: u64, p: u64) -> u64 {
+  NOT_H :: cast(u64) ~ file_h;
+  p &= NOT_H;
+  g |= p & (g >> 1);
+  p &=     (p >> 1);
+  //p &= NOT_H;
+  g |= p & (g >> 2);
+  p &=     (p >> 2);
+  //p &= NOT_H;
+  g |= p & (g >> 4);
+  return g;
 }
 
 #scope_file
