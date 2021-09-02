@@ -140,6 +140,7 @@ main :: () {
   }
 }
 
+timer_on := false;
 delta_time : float32 = 0.0;
 
 handle_command_line :: () -> string #expand {
@@ -198,10 +199,12 @@ __game_status_text: string;
 draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *Texture, highlight_square: u64, possible_moves_bb: u64, last_move_bb: u64, white_side: bool) {
   cen_x := width * 0.5; 
   cen_y := height * 0.5;
-  if whose_turn then {
-    w_clock_time -= delta_time;
-  } else {
-    b_clock_time -= delta_time;
+  if timer_on == true {
+    if whose_turn then {
+      w_clock_time -= delta_time;
+    } else {
+      b_clock_time -= delta_time;
+    }
   }
 
   len := min(width, height) * 0.8;
@@ -708,6 +711,7 @@ handle_reset :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flags: *
   case .RESET_IDLE;
     if n_state == GLFW_PRESS && (l_ctrl_key == GLFW_PRESS || r_ctrl_key == GLFW_PRESS) {
       reset_key_state = .RESET_PRESS;
+      timer_on = false;
       while move_record {
         board_state := pop(*move_record);
         <<ep_sq = board_state.en_paesant_sq;
@@ -743,6 +747,7 @@ handle_reset :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flags: *
 
 ui_handle_move_made :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..] Move16, mov: Move16) {
   before_pawn := piece_bitboard.w_pawn | piece_bitboard.b_pawn;
+  timer_on = true;
   // record the move down 
   record_move: Board_States;
   record_move.move = mov;
