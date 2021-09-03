@@ -133,9 +133,7 @@ main :: () {
 
     reset_temporary_storage();
     if w_is_human == false || b_is_human == false {
-      //print("ai game loop begin\n");
       uci_ai_game_loop (*piece_bitboard, *flags, *ep_sq, *moves_arr);
-      //print("ai game loop end\n");
     }
     ftime = cast(float)get_time() - ftime;
     delta_time = ftime;
@@ -913,9 +911,9 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
     uci_write_command("uci\n");
     uci_state = .UCI_UCIOK;
   case .UCI_UCIOK;
-    uci_read_incoming_commands();
-    while uci_has_commands() {
+    while true {
       cmd_string := uci_getline();
+      if !cmd_string break;
       if equal(cmd_string, "uciok") {
         uci_state = .UCI_ISREADY;
       }
@@ -924,12 +922,12 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
     uci_write_command("isready\n");
     uci_state = .UCI_READY_OK;
   case .UCI_READY_OK;
-    uci_read_incoming_commands();
-    while uci_has_commands() {
+    while true {
       cmd_string := uci_getline();
+      if !cmd_string break;
       if equal(cmd_string, "readyok") {
         uci_state = .UCI_NEWGAME;
-      }
+      } 
     }
   case .UCI_NEWGAME;
     uci_write_command("ucinewgame\n");
@@ -959,25 +957,20 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
     cmd_string := tprint("go depth %\n", __engine_depth_parameter);
     uci_write_command(cmd_string);
     uci_state = .UCI_GO_TURN;
-
-
     timeout_timer = 0.0;
 
 
   case .UCI_GO_TURN;
-    TIMEOUT_LIMIT :: 0.5;
+    TIMEOUT_LIMIT :: 5;
     timeout_timer += delta_time;
 
     if timeout_timer >= TIMEOUT_LIMIT {
       uci_write_command("stop\n");
-      print("stop triggered.\n");
       timeout_timer = 0.0;
     }
-    print("uci read incoming commands begin.\n");
-    uci_read_incoming_commands();
-    print("uci read incoming commands end.\n");
-    while uci_has_commands() {
+    while true {
       cmd_string := uci_getline();
+      if !cmd_string break;
       if starts_with(cmd_string, "bestmove ") {
         TF, from, to, type := parse_best_move(cmd_string);
         // TODO: parse best move could fail, what to do if that happens????
@@ -985,9 +978,7 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
         uci_state = .UCI_IDLE;
         actual_move := find_move(<<moves_arr, from, to, type);
         if actual_move {
-          print("make the move begin!\n");
           ui_handle_move_made(piece_bitboard, flags, ep_sq, moves_arr, actual_move);
-          print("make the move end!\n");
           last_move_bb = from|to;
         } else {
           print("There is a bug.\n");
@@ -1002,7 +993,6 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
   parse_best_move :: (best_move_string: string) -> TF: bool, from: u64, to: u64, type: Move16 {
     parse_token(*best_move_string);
     move_sq_string := parse_token(*best_move_string);
-    print("move_sq_string: %\n", move_sq_string);
     if move_sq_string.count < 4 {
       return false, 0, 0, Move16.Quiet;
     }
@@ -1092,9 +1082,7 @@ uci_init_uci_chess_engine :: (engine_name: string, ai_path: string) -> bool {
     __read_pipe  = pipe_1[0];
     setup_pipe_nonblock(__read_pipe);
 
-    __commands_string_array.allocator = __temporary_allocator; 
     __engine_name = engine_name;
-    __commands_string_array.allocator = __temporary_allocator;
     return true; 
   }
 
@@ -1108,33 +1096,60 @@ uci_write_command :: (command: string) {
   write(__write_pipe, command.data, xx command.count);
 }
 
-uci_read_incoming_commands :: (num_bytes : int = 16384) {
-  __buffer := NewArray(num_bytes, u8, initialized=false, allocator=__temporary_allocator);
-  while true {
-    bytes_read := read(__read_pipe, __buffer.data, cast(u64)(num_bytes-1));
-    if bytes_read <= 0 then
-      break;
-    str := to_string(__buffer.data, bytes_read-1); // -1 the '\n' char
-    for < line: split(str, "\n") {
-      array_add(*__commands_string_array, line);
-    }
-  }
-}
-
-uci_has_commands :: inline () -> bool {
-  return __commands_string_array.count > 0;
-}
-
-uci_getline :: inline () -> string {
-  ret := pop(*__commands_string_array);
-  print("Engine [%]: %\n", __engine_name, ret);
-  return ret;
-}
-
 swap :: (a: Code, b: Code) #expand {
   t := (#insert a);
   (#insert a) = (#insert b);
   (#insert b) = t;
+}
+
+__stop_signal := false;
+__buffer: [16384] u8;
+__array: [100] string;
+__mark  := 0;
+__count := 0;
+
+enqueue :: (s: string) #expand {
+  __array[__count] = s;
+  __count += 1;
+}
+
+dequeue :: () -> string #expand {
+  assert(__mark <= __count);
+  s := __array[__mark];
+  __mark += 1;
+  return s;
+}
+
+has_elements_to_dequeue :: () -> bool #expand {
+  return __mark < __count;
+}
+
+reset_queue :: () #expand {
+  __mark  = 0;
+  __count = 0;
+}
+
+uci_getline :: () -> string {
+  // TODO: create a queue. then pop from the queue. this way of doing it is unreliable
+  // for "stop".
+  if has_elements_to_dequeue() {
+    s := dequeue();
+    print("Engine [%]: %\n", __engine_name, s);
+    return s; 
+  }
+  bytes_read := read(__read_pipe, __buffer.data, __buffer.count-1);
+  if bytes_read <= 0
+    return "";
+
+  reset_queue();
+  str := to_string(__buffer.data, bytes_read-1); // -1 the '\n' char
+  for line: split(str, "\n") {
+    enqueue(line);
+  }
+
+  s := dequeue();
+  print("Engine [%]: %\n", __engine_name, s);
+  return s;
 }
 
 uci_close_chess_engine :: () {
@@ -1147,7 +1162,6 @@ uci_close_chess_engine :: () {
 
 __read_pipe:  s32;
 __write_pipe: s32;
-__commands_string_array: [..] string;
 
 
 font : *Dynamic_Font;
@@ -1276,7 +1290,6 @@ load_opening_book :: (file_path: string) -> *BookNode {
     if move_string[0] == #char "," then    // TODO: parsing needs to be fixed!
       advance(*move_string, 1);
 
-    //print("opening move: %\n", move_string);
     if equal(move_string, "O-O") {
       // castle kingside.
       if whose_turn {
@@ -1347,21 +1360,17 @@ load_opening_book :: (file_path: string) -> *BookNode {
       advance(*move_string, 1);
     }
 
-    //print("% => %\n", cast(bboard)from_bitboard, cast(bboard)to_bitboard);
-
     moves_arr: [..] Move16;
     defer array_free(moves_arr);
     array_reserve(*moves_arr, 50);
 
     generate_legal_moves(*pieces, castling, ep, *moves_arr, whose_turn);
-    //print("legal moves = %, whose_turn=%, castling=%, ep=%\n", moves_arr.count, whose_turn, castling, cast(bboard)b_rook);
 
     // linear search through the legal moves
     for mov : moves_arr {
       f, from, to := decode_move(mov);
       from_mov_bb := cast(u64) (1 << from);
       to_mov_bb   := cast(u64) (1 << to);
-      //print("%, % \n", cast(serialized_bb)from, cast(serialized_bb) to);
       if (from_mov_bb & from_bitboard) && (to_mov_bb == to_bitboard) {
         return mov;
       }

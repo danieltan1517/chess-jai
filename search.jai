@@ -16,8 +16,10 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   best_eval : int; best_move : Move16;
   for iter_depth : 1..depth { 
     best_eval = negamax(pieces, castling, ep, iter_depth, whose_turn, *pv_line, repetitions, fifty=fifty);
-    if stdin_stop_signal() then
+    if stdin_stop_signal() then {
+      print("stop signal.\n");
       break;
+    }
     best_move = pv_line.argmove[0];
     time_taken := get_time() - time_begin;
     print_stats(iter_depth);

@@ -20,7 +20,9 @@ main :: () {
   while true {
     reset_stop_signal();
     input := getline();
+    print("Command obtained from input: %\n", input);
     if equal(input, "quit") {
+      print("Engine exit.\n");
       break;
     } else if equal(input, "uci") {
       print(uci_response);
@@ -156,11 +158,12 @@ stdin_stop_signal :: () -> bool {
   bytes_read := read(STDIN_FILENO, __buffer.data, __buffer.count-1);
   if bytes_read >= 0 then {
     str := to_string(__buffer.data, bytes_read-1); // -1 the '\n' char
-    for < line: split(str, "\n") {
+    for line: split(str, "\n") {
+      print("stdin_stop_signal: %\n", line);
       if equal(line, "stop") {
         __stop_signal = true;
       } else {
-        array_add(*__array, line);
+        enqueue(line);
       }
     }
   }
@@ -184,10 +187,8 @@ DONE;
 getline :: () -> string {
   // TODO: create a queue. then pop from the queue. this way of doing it is unreliable
   // for "stop".
-  if __array {
-    return pop(*__array);
-  }
-
+  if has_elements_to_dequeue()
+    return dequeue();
   bytes_read := 0;
   while true {
     bytes_read = read(STDIN_FILENO, __buffer.data, __buffer.count-1);
@@ -196,17 +197,40 @@ getline :: () -> string {
 
     sleep_milliseconds(25);
   }
-
+  reset_queue();
   str := to_string(__buffer.data, bytes_read-1); // -1 the '\n' char
-  for < line: split(str, "\n") {
-    array_add(*__array, line);
+  for line: split(str, "\n") {
+    enqueue(line);
   }
-  return pop(*__array);
+  return dequeue();
 }
 
 __stop_signal := false;
 __buffer: [16384] u8;
-__array: [..] string;
+__array: [100] string;
+__mark  := 0;
+__count := 0;
+
+enqueue :: (s: string) #expand {
+  __array[__count] = s;
+  __count += 1;
+}
+
+dequeue :: () -> string #expand {
+  assert(__mark <= __count);
+  s := __array[__mark];
+  __mark += 1;
+  return s;
+}
+
+has_elements_to_dequeue :: () -> bool #expand {
+  return __mark < __count;
+}
+
+reset_queue :: () #expand {
+  __mark  = 0;
+  __count = 0;
+}
 
 // TODO: this assumes the moves are valid
 // TODO: this is a long function...
