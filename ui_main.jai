@@ -133,7 +133,9 @@ main :: () {
 
     reset_temporary_storage();
     if w_is_human == false || b_is_human == false {
+      //print("ai game loop begin\n");
       uci_ai_game_loop (*piece_bitboard, *flags, *ep_sq, *moves_arr);
+      //print("ai game loop end\n");
     }
     ftime = cast(float)get_time() - ftime;
     delta_time = ftime;
@@ -963,13 +965,17 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
 
 
   case .UCI_GO_TURN;
-    TIMEOUT_LIMIT :: 20.0;
-    uci_read_incoming_commands();
+    TIMEOUT_LIMIT :: 0.5;
     timeout_timer += delta_time;
 
-    if timeout_timer >= TIMEOUT_LIMIT
+    if timeout_timer >= TIMEOUT_LIMIT {
       uci_write_command("stop\n");
-
+      print("stop triggered.\n");
+      timeout_timer = 0.0;
+    }
+    print("uci read incoming commands begin.\n");
+    uci_read_incoming_commands();
+    print("uci read incoming commands end.\n");
     while uci_has_commands() {
       cmd_string := uci_getline();
       if starts_with(cmd_string, "bestmove ") {
@@ -979,7 +985,9 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
         uci_state = .UCI_IDLE;
         actual_move := find_move(<<moves_arr, from, to, type);
         if actual_move {
+          print("make the move begin!\n");
           ui_handle_move_made(piece_bitboard, flags, ep_sq, moves_arr, actual_move);
+          print("make the move end!\n");
           last_move_bb = from|to;
         } else {
           print("There is a bug.\n");
@@ -992,7 +1000,9 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
   }
 
   parse_best_move :: (best_move_string: string) -> TF: bool, from: u64, to: u64, type: Move16 {
-    move_sq_string := advance(best_move_string, 9);
+    parse_token(*best_move_string);
+    move_sq_string := parse_token(*best_move_string);
+    print("move_sq_string: %\n", move_sq_string);
     if move_sq_string.count < 4 {
       return false, 0, 0, Move16.Quiet;
     }

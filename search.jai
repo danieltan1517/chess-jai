@@ -56,7 +56,6 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
   auto_release_temp();
   line: PVLine;
-  pv_node := (beta-alpha) > 1;
 
   __nodes_searched += 1;
   hash := zobrist_hash(pieces, castling, ep, whose_turn);
@@ -78,8 +77,9 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   array_reserve(*move_array, 40);
   check := generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
   check_for_checkmate_stalemate();
-  //reverse_futility_pruning();
   null_move_pruning();
+
+  //reverse_futility_pruning();
   //razoring();
 
   best_pv := true;
@@ -420,8 +420,7 @@ quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn:
 
   move_array: [..] Move16;
   array_reserve(*move_array, 40);
-  generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
-  filter_captures(move_array);
+  generate_legal_moves(pieces, castling, ep, *move_array, whose_turn, captures_only=true);
   capture_order(pieces, move_array, whose_turn);
 
   // search captures only, captures negate the fifty move rule

@@ -182,7 +182,8 @@ DONE;
 // TODO: does this actually do getline, or can
 // it return "aaaa\nbbbb"?
 getline :: () -> string {
-
+  // TODO: create a queue. then pop from the queue. this way of doing it is unreliable
+  // for "stop".
   if __array {
     return pop(*__array);
   }
@@ -204,10 +205,8 @@ getline :: () -> string {
 }
 
 __stop_signal := false;
-__buffer: [4096] u8;
-
+__buffer: [16384] u8;
 __array: [..] string;
-
 
 // TODO: this assumes the moves are valid
 // TODO: this is a long function...

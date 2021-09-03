@@ -686,7 +686,7 @@ unmake_move :: (using pieces: *Piece_Bitboards, captured: PieceType, move: Move1
 }
 
 
-generate_legal_moves :: (p: *Piece_Bitboards, c_flags: Castling, ep_sq: u64, moves_arr: *[..] Move16, whose_turn: bool) -> u64 {
+generate_legal_moves :: (p: *Piece_Bitboards, c_flags: Castling, ep_sq: u64, moves_arr: *[..] Move16, whose_turn: bool, $captures_only := false) -> u64 {
   w_pieces := get_white_pieces(p);
   b_pieces := get_black_pieces(p);
   occupied := w_pieces | b_pieces;
@@ -694,19 +694,19 @@ generate_legal_moves :: (p: *Piece_Bitboards, c_flags: Castling, ep_sq: u64, mov
      return generate_moves_for(moves_arr=moves_arr, c_flags=c_flags, ep_sq=ep_sq, occupied=occupied, pieces=w_pieces, opp_pieces=b_pieces,
        king=p.w_king,     queen=p.w_queen,     rook=p.w_rook,     bishop=p.w_bishop,     knight=p.w_knight,     pawn=p.w_pawn,
        opp_king=p.b_king, opp_queen=p.b_queen, opp_rook=p.b_rook, opp_bishop=p.b_bishop, opp_knight=p.b_knight, opp_pawn=p.b_pawn,
-       whose_turn=whose_turn);
+       whose_turn=whose_turn, captures_only=captures_only);
   } else {
      return generate_moves_for(moves_arr=moves_arr, c_flags=c_flags, ep_sq=ep_sq, occupied=occupied, pieces=b_pieces, opp_pieces=w_pieces,
        king=p.b_king,     queen=p.b_queen,     rook=p.b_rook,     bishop=p.b_bishop,     knight=p.b_knight,     pawn=p.b_pawn,
        opp_king=p.w_king, opp_queen=p.w_queen, opp_rook=p.w_rook, opp_bishop=p.w_bishop, opp_knight=p.w_knight, opp_pawn=p.w_pawn,
-       whose_turn=whose_turn);
+       whose_turn=whose_turn, captures_only=captures_only);
   }
 }
 
 generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, occupied: u64, pieces: u64, opp_pieces: u64, 
                        king: u64,     queen: u64,     rook: u64,     bishop: u64,     knight: u64,     pawn: u64,
                        opp_king: u64, opp_queen: u64, opp_rook: u64, opp_bishop: u64, opp_knight: u64, opp_pawn: u64,
-                       whose_turn: bool) -> u64 {
+                       whose_turn: bool, $captures_only : bool) -> u64 {
   // NOTE: we do (occupied & (~king)) so that if    R - - - K - - -,
   // then the sliding will go through the king to cover other the unsafe squares
   attacks := generate_attacks(occ=occupied & (~king), 
@@ -843,6 +843,15 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
         }
       }
     }
+  }
+ 
+  #if captures_only {
+    sq : u64 = 0;
+    if whose_turn then
+      sq = ep_sq << 8;
+    else
+      sq = ep_sq >> 8;
+    check_sqs &= (opp_pieces|sq);
   }
 
   while queen {
