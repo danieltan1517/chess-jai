@@ -20,7 +20,6 @@ main :: () {
   while true {
     reset_stop_signal();
     input := getline();
-    print("Command obtained from input: %\n", input);
     if equal(input, "quit") {
       print("Engine exit.\n");
       break;
@@ -137,15 +136,16 @@ main :: () {
     }
 
     print_best_move :: (mov: Move16) {
+      using Move16;
       flags, from, to := decode_move(mov);
       // hopefully promote the piece functions correctly...
-      if flags == Move16.Knight_Promotion || flags == Move16.Knight_Promotion_Capture {
+      if flags == Knight_Promotion || flags == Knight_Promotion_Capture {
         print("bestmove %1%2n\n", cast(serialized_bb) from, cast(serialized_bb) to);
-      } else if flags == Move16.Bishop_Promotion || flags == Move16.Bishop_Promotion_Capture {
+      } else if flags == Bishop_Promotion || flags == Bishop_Promotion_Capture {
         print("bestmove %1%2b\n", cast(serialized_bb) from, cast(serialized_bb) to);
-      } else if flags == Move16.Rook_Promotion || flags == Move16.Rook_Promotion_Capture {
+      } else if flags == Rook_Promotion || flags == Rook_Promotion_Capture {
         print("bestmove %1%2r\n", cast(serialized_bb) from, cast(serialized_bb) to);
-      } else if flags == Move16.Queen_Promotion || flags == Move16.Queen_Promotion_Capture {
+      } else if flags == Queen_Promotion || flags == Queen_Promotion_Capture {
         print("bestmove %1%2q\n", cast(serialized_bb) from, cast(serialized_bb) to);
       } else {
         print("bestmove %1%2\n", cast(serialized_bb) from, cast(serialized_bb) to);
@@ -159,7 +159,6 @@ stdin_stop_signal :: () -> bool {
   if bytes_read >= 0 then {
     str := to_string(__buffer.data, bytes_read-1); // -1 the '\n' char
     for line: split(str, "\n") {
-      print("stdin_stop_signal: %\n", line);
       if equal(line, "stop") {
         __stop_signal = true;
       } else {
@@ -167,6 +166,10 @@ stdin_stop_signal :: () -> bool {
       }
     }
   }
+  return __stop_signal;
+}
+
+stop_signal_triggered :: () -> bool {
   return __stop_signal;
 }
 
@@ -190,6 +193,7 @@ getline :: () -> string {
   if has_elements_to_dequeue()
     return dequeue();
   bytes_read := 0;
+  memset(__buffer.data, 0, __buffer.count);
   while true {
     bytes_read = read(STDIN_FILENO, __buffer.data, __buffer.count-1);
     if bytes_read > 0
@@ -212,12 +216,13 @@ __mark  := 0;
 __count := 0;
 
 enqueue :: (s: string) #expand {
+  assert(__count < __array.count);
   __array[__count] = s;
   __count += 1;
 }
 
 dequeue :: () -> string #expand {
-  assert(__mark <= __count);
+  assert(__mark <= __count, "Error.\n");
   s := __array[__mark];
   __mark += 1;
   return s;

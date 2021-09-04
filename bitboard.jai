@@ -710,7 +710,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
   // NOTE: we do (occupied & (~king)) so that if    R - - - K - - -,
   // then the sliding will go through the king to cover other the unsafe squares
   attacks := generate_attacks(occ=occupied & (~king), 
-               king=opp_king, queen=opp_queen, rook=opp_rook, bishop=opp_bishop, knight=opp_knight, pawn=opp_pawn, 
+               king=opp_king, queen=opp_queen, rook=opp_rook, bishop=opp_bishop, knight=opp_knight, pawn=opp_pawn,
                whose_turn=!whose_turn);
   checks: u64 = 0;
   pins: u64 = 0;
@@ -752,26 +752,26 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     pinned_piece := between_sqs & pieces;
     pins = pins | pinned_piece;
     rook_pin = rook_pin & (rook_pin - 1);
-    if num_checks == 1 continue; // ignore pinned pieces when in check
-
+    if num_checks == 1 break;
     if (queen|rook) & pinned_piece {
-      valid_moves := (between_sqs | sq) & (~pinned_piece);
-      // make pinned piece moves.
+      valid_moves : u64 = (between_sqs | sq) & (~pinned_piece);
       generate_normal_moves_from_bitboard(moves_arr, pinned_piece, valid_moves, opp_pieces);
       continue;
     }
 
     // no knight/bishop
     // pawn vertical only, NO pawn horizontal, since pawns cannot move horizontally
-    if (pawn & pinned_piece & k_file) {
-      if whose_turn {
-        move := (pinned_piece << 8) & (~occupied);
-        move = move | ((move & xx rank_3) << 8) & (~occupied);
-        generate_pawn_moves_from_bitboard(moves_arr, pinned_piece, move, opp_pieces);
-      } else {
-        move := (pinned_piece >> 8) & (~occupied);
-        move = move | ((move & xx rank_6) >> 8) & (~occupied);
-        generate_pawn_moves_from_bitboard(moves_arr, pinned_piece, move, opp_pieces);
+    #if !captures_only {
+      if (pawn & pinned_piece & k_file) {
+        if whose_turn {
+          move := (pinned_piece << 8) & (~occupied);
+          move = move | ((move & xx rank_3) << 8) & (~occupied);
+          generate_pawn_moves_from_bitboard(moves_arr, pinned_piece, move, opp_pieces);
+        } else {
+          move := (pinned_piece >> 8) & (~occupied);
+          move = move | ((move & xx rank_6) >> 8) & (~occupied);
+          generate_pawn_moves_from_bitboard(moves_arr, pinned_piece, move, opp_pieces);
+        }
       }
     }
   }
@@ -782,8 +782,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     pinned_piece := between_sqs & pieces;
     pins = pins | pinned_piece;
     bishop_pin = bishop_pin & (bishop_pin - 1);
-
-    if num_checks == 1 continue; // ignore pinned pieces when in check
+    if num_checks == 1 break;
     // no rooks/knights
 
     // pinned queen/bishop
@@ -846,12 +845,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
   }
  
   #if captures_only {
-    sq : u64 = 0;
-    if whose_turn then
-      sq = ep_sq << 8;
-    else
-      sq = ep_sq >> 8;
-    check_sqs &= (opp_pieces|sq);
+    check_sqs &= opp_pieces;
   }
 
   while queen {
@@ -961,6 +955,9 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     pawn = pawn & (pawn-1);
   }
   king_moves_bb := king_moves(occupied, i, king, pieces) & (~attacks);
+  #if captures_only {
+    king_moves_bb &= opp_pieces;
+  }
   generate_normal_moves_from_bitboard(moves_arr, king, king_moves_bb, opp_pieces);
   return checks;
 }
@@ -973,35 +970,13 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
 // generate attacks deals with king safe squares.
 
 generate_attacks :: (occ: u64, king: u64, queen: u64, rook: u64, bishop: u64, knight: u64, pawn: u64, whose_turn: bool) -> u64 {
-  // generate white attacks
   king_attacks := king_moves(0, 0, king); 
-  vertical_attacks := h_and_v_attacks(king, queen, rook, bishop, knight, pawn, occ & ~(king|queen|rook|bishop|knight|pawn));
-  bishop = bishop | queen;
-  bishop_attacks: u64 = 0;
-  while bishop {
-    i := bit_scan_forward(bishop);
-    bb: u64 = xx (1 << i);
-    bishop_attacks = bishop_attacks | bishop_moves(occ, i, bb);
-    bishop = bishop & (bishop - 1);
-  }
-
+  opp_pieces := occ & ~(king|queen|rook|bishop|knight|pawn);
+  vertical_attacks := h_and_v_attacks(king, queen, rook, bishop, knight, pawn, opp_pieces);
+  diag_attacks :=     diagonal_attacks(king, queen, rook, bishop, knight, pawn, opp_pieces);
   knight_attacks := knight_moves(occ, 0, knight);
   pawn_attacks := ifx whose_turn white_pawn_captures(pawn) else black_pawn_captures(pawn);
-  return king_attacks | vertical_attacks | bishop_attacks | knight_attacks | pawn_attacks;
-
-  /*while queen {
-    i := bit_scan_forward(queen);
-    bb: u64 = xx (1 << i);
-    queen_attacks = queen_attacks | queen_moves(occ, i, bb);
-    queen = queen & (queen-1);
-  }
-  rook_attacks: u64 = 0;
-  while rook {
-    i := bit_scan_forward(rook);
-    bb: u64 = xx (1 << i);
-    rook_attacks = rook_attacks | rook_moves(occ, i, bb);
-    rook = rook & (rook-1);
-  }*/
+  return king_attacks | vertical_attacks | diag_attacks | knight_attacks | pawn_attacks;
 }
 
 possible_moves_for :: (moves: [..] Move16, from: u64) -> u64 {
@@ -1044,9 +1019,15 @@ black_pawn_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 =
 }
 
 bishop_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
-  diag_slide  := sliding(occupied, slider,  diag_of(i));
+  /*diag_slide  := sliding(occupied, slider,  diag_of(i));
   adiag_slide := sliding(occupied, slider, adiag_of(i));
-  return (diag_slide | adiag_slide) & (~friends);
+  return (diag_slide | adiag_slide) & (~friends);*/
+  o := occupied & (~friends) & (~slider);
+  ne := smear_northeast(slider, ~(((o<<9) & (xx ~ file_a))|friends));
+  se := smear_southeast(slider, ~(((o>>7) & (xx ~ file_a))|friends));
+  sw := smear_southwest(slider, ~(((o>>9) & (xx ~ file_h))|friends));
+  nw := smear_northwest(slider, ~(((o<<7) & (xx ~ file_h))|friends));
+  return ne ^ se ^ sw ^ nw;
 }
 
 knight_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
@@ -1094,21 +1075,21 @@ black_pawn_captures :: inline (slider: u64) -> u64 {
 }
 
 file_of :: inline (i: int) -> u64 {
-  assert(0 <= i && i <= 63);
+  //assert(0 <= i && i <= 63);
   f := i & 7;
   file: u64 = (cast(u64) file_a) << f;
   return file;
 }
 
 rank_of :: inline (i: int) -> u64 {
-  assert(0 <= i && i <= 63);
+  //assert(0 <= i && i <= 63);
   r := i & (~7);
   rank: u64 = (cast(u64) rank_1) << r;
   return rank;
 }
 
 diag_of :: inline (i: int)->u64 {
-  assert(0 <= i && i <= 63);
+  //assert(0 <= i && i <= 63);
   f := (i & (~7)) >> 3;
   r := i & 7;
   index := 7 + f - r;
@@ -1116,7 +1097,7 @@ diag_of :: inline (i: int)->u64 {
 }
 
 adiag_of :: inline (i: int)->u64 {
-  assert(0 <= i && i <= 63);
+  //assert(0 <= i && i <= 63);
   f := (i & (~7)) >> 3;
   r := i & 7;
   index := f + r;
@@ -1389,7 +1370,7 @@ h_and_v_attacks :: (king: u64, queen: u64, rook: u64, bishop: u64, knight: u64, 
     right := smear_eastwards(lsb, ~(((o<<1) & (xx ~ file_a))|opp));
     left  := smear_westwards(lsb, ~(((o>>1) & (xx ~ file_h))|opp));
     bits |= up ^ down ^ right ^ left;
-    g &= g-1;
+    g &= ~lsb;
   }
   return bits;
 }
@@ -1400,9 +1381,12 @@ diagonal_attacks :: (king: u64, queen: u64, rook: u64, bishop: u64, knight: u64,
   bits : u64 = 0;
   while g {
     lsb := cast(u64)(1 << bit_scan_forward(g));
-
-
-    g &= g-1;
+    ne := smear_northeast(lsb, ~(((o<<9) & (xx ~ file_a))|opp));
+    se := smear_southeast(lsb, ~(((o>>7) & (xx ~ file_a))|opp));
+    sw := smear_southwest(lsb, ~(((o>>9) & (xx ~ file_h))|opp));
+    nw := smear_northwest(lsb, ~(((o<<7) & (xx ~ file_h))|opp));
+    bits |= ne ^ se ^ sw ^ nw;
+    g &= ~lsb;
   }
   return bits;
 }
@@ -1431,10 +1415,8 @@ smear_eastwards :: (g: u64, p: u64) -> u64 {
   p &= NOT_A;
   g |= p & (g << 1);
   p &=     (p << 1);
-  //p &= NOT_A;
   g |= p & (g << 2);
   p &=     (p << 2);
-  //p &= NOT_A;
   g |= p & (g << 4);
   return g;
 }
@@ -1444,11 +1426,53 @@ smear_westwards :: (g: u64, p: u64) -> u64 {
   p &= NOT_H;
   g |= p & (g >> 1);
   p &=     (p >> 1);
-  //p &= NOT_H;
   g |= p & (g >> 2);
   p &=     (p >> 2);
-  //p &= NOT_H;
   g |= p & (g >> 4);
+  return g;
+}
+
+smear_northeast :: (g: u64, p: u64) -> u64 {
+  NOT_A :: cast(u64) ~ file_a;
+  p &= NOT_A;
+  g |= p & (g << 9);
+  p &=     (p << 9);
+  g |= p & (g << 18);
+  p &=     (p << 18);
+  g |= p & (g << 36);
+  return g;
+}
+
+smear_southeast :: (g: u64, p: u64) -> u64 {
+  NOT_A :: cast(u64) ~ file_a;
+  p &= NOT_A;
+  g |= p & (g >> 7);
+  p &=     (p >> 7);
+  g |= p & (g >> 14);
+  p &=     (p >> 14);
+  g |= p & (g >> 28);
+  return g;
+}
+
+smear_southwest :: (g: u64, p: u64) -> u64 {
+  NOT_H :: cast(u64) ~ file_h;
+  p &= NOT_H;
+  g |= p & (g >> 9);
+  p &=     (p >> 9);
+  g |= p & (g >> 18);
+  p &=     (p >> 18);
+  g |= p & (g >> 36);
+  return g;
+}
+
+smear_northwest :: (g: u64, p: u64) -> u64 {
+  NOT_H :: cast(u64) ~ file_h;
+  p &= NOT_H;
+  g |= p & (g << 7);
+  p &=     (p << 7);
+  g |= p & (g << 14);
+  p &=     (p << 14);
+  g |= p & (g << 28);
   return g;
 }
 

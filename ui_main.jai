@@ -83,6 +83,7 @@ main :: () {
     // send quit command to the chess engine 
     // before closing the uci chess engine.
     if w_is_human == false || b_is_human == false {
+      print("Application closed\n");
       uci_write_command("stop\n");
       uci_write_command("quit\n");
       uci_close_chess_engine();
@@ -737,6 +738,7 @@ handle_reset :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flags: *
       __game_status_text = "";
       w_clock_time = 30.0*60.0;
       b_clock_time = 30.0*60.0;
+      uci_state = .UCI_NEWGAME;
     }
   case .RESET_PRESS;
     if n_state == GLFW_RELEASE || (l_ctrl_key == GLFW_RELEASE && r_ctrl_key == GLFW_RELEASE) {
@@ -897,7 +899,6 @@ uci_state : enum {
   UCI_INIT; 
   UCI_UCIOK; 
   UCI_ISREADY; 
-  UCI_READY_OK; 
   UCI_NEWGAME; 
   UCI_IDLE;
   UCI_POS_CMD;
@@ -920,8 +921,6 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
     }
   case .UCI_ISREADY;
     uci_write_command("isready\n");
-    uci_state = .UCI_READY_OK;
-  case .UCI_READY_OK;
     while true {
       cmd_string := uci_getline();
       if !cmd_string break;
@@ -959,13 +958,13 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
     uci_state = .UCI_GO_TURN;
     timeout_timer = 0.0;
 
-
   case .UCI_GO_TURN;
     TIMEOUT_LIMIT :: 5;
     timeout_timer += delta_time;
 
     if timeout_timer >= TIMEOUT_LIMIT {
       uci_write_command("stop\n");
+      print("timeout!\n");
       timeout_timer = 0.0;
     }
     while true {
@@ -975,11 +974,11 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
         TF, from, to, type := parse_best_move(cmd_string);
         // TODO: parse best move could fail, what to do if that happens????
         assert(TF);
-        uci_state = .UCI_IDLE;
         actual_move := find_move(<<moves_arr, from, to, type);
         if actual_move {
           ui_handle_move_made(piece_bitboard, flags, ep_sq, moves_arr, actual_move);
           last_move_bb = from|to;
+          uci_state = .UCI_IDLE;
         } else {
           print("There is a bug.\n");
           uci_state = .UCI_BUG;
@@ -1114,7 +1113,7 @@ enqueue :: (s: string) #expand {
 }
 
 dequeue :: () -> string #expand {
-  assert(__mark <= __count);
+  assert(__mark <= __count, "Error.\n");
   s := __array[__mark];
   __mark += 1;
   return s;
@@ -1155,7 +1154,9 @@ uci_getline :: () -> string {
 uci_close_chess_engine :: () {
   // NOTE: this function does NOT call "uci_write_command("quit")",
   // that needs to be called explicitly
-  wait(null);
+  value: s32;
+  wait(*value);
+  print("exit code: %\n" , value);
   close(__write_pipe);
   close(__read_pipe);
 }

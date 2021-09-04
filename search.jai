@@ -16,21 +16,19 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   best_eval : int; best_move : Move16;
   for iter_depth : 1..depth { 
     best_eval = negamax(pieces, castling, ep, iter_depth, whose_turn, *pv_line, repetitions, fifty=fifty);
-    if stdin_stop_signal() then {
-      print("stop signal.\n");
+    if stop_signal_triggered() then 
       break;
-    }
+
     best_move = pv_line.argmove[0];
     time_taken := get_time() - time_begin;
     print_stats(iter_depth);
   }
-
   return best_move;
 
   print_stats :: (depth: int) #expand {
     builder: String_Builder;
     t_ms := cast(int)(`time_taken*1000.0); // convert secs to ms
-    nps  := cast(int)(__nodes_searched/`time_taken);
+    nps  := cast(int)(__nodes_searched/(`time_taken+0.0001));
     print_to_builder(*builder, "info depth % ", depth);
     print_to_builder(*builder, "nodes % time % score cp % nps % pv ", __nodes_searched, t_ms, best_eval, nps);
     for mv: pv_line.argmove {
@@ -41,8 +39,8 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
     str := builder_to_string(*builder, allocator=__temporary_allocator);
     print("%\n", str);
     reset_temporary_storage();
+    memset(__killer_moves.data,  0, size_of(Move16)*2*64);
     __nodes_searched = 0;
-
     print_move_to_buffer :: (mv: Move16) #expand {
       _, from, to := decode_move(mv);
       print_to_builder(*builder, "%1%2 ", cast(serialized_bb)from, cast(serialized_bb)to);
@@ -90,7 +88,6 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   for move, moves_searched : move_array {
     c_copy, ep_copy, capture := castling, ep, PieceType.None;
     mflag, from, to := decode_move(move);
-
 
     before_pawn := pieces.w_pawn | pieces.b_pawn;
     make_move(pieces, *c_copy, *ep_copy, *capture, move, whose_turn);
@@ -184,8 +181,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     }
 
     if fifty >= 100 then {
-      r := random_get() % move_array.count;
-      pv_line.argmove[0] = move_array[r];  // TODO: I don't know picking a random move helps or not...
+      pv_line.argmove[0] = move_array[0];  
       `return 0;
     }
 
@@ -196,8 +192,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       if hash == (<<repetitions) [repetitions.count - 1 - count] then {
         reps += 1;
         if reps >= 2 then {
-          r := random_get() % move_array.count;
-          pv_line.argmove[0] = move_array[r];  // TODO: I don't know picking a random move helps or not...
+          pv_line.argmove[0] = move_array[0];
           `return 0;
         }
       }
@@ -413,6 +408,8 @@ INF :: 0x7FFF_FFFF; // Alias
 // search capture moves only, we do this to avoid horizon effect
 // see: https://www.chessprogramming.org/Quiescence_Search
 quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, alpha: int, beta: int, fifty: int = 0) -> int {
+  if (__nodes_searched & 16384) && stdin_stop_signal()
+    return 0;
   auto_release_temp();
   eval := evaluate(pieces, whose_turn, fifty);
   if eval >= beta then
