@@ -742,7 +742,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
   if num_checks == 2 {
     // we only need to generate king moves during a double-check
     king_moves_bb := king_moves(occupied, i, king, pieces) & (~attacks);
-    generate_normal_moves_from_bitboard(moves_arr, king, king_moves_bb, opp_pieces);
+    generate_normal_moves_from_bitboard(moves_arr, king, king_moves_bb, opp_pieces, captures_only);
     return checks;
   }
 
@@ -755,7 +755,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     if num_checks == 1 break;
     if (queen|rook) & pinned_piece {
       valid_moves : u64 = (between_sqs | sq) & (~pinned_piece);
-      generate_normal_moves_from_bitboard(moves_arr, pinned_piece, valid_moves, opp_pieces);
+      generate_normal_moves_from_bitboard(moves_arr, pinned_piece, valid_moves, opp_pieces, captures_only);
       continue;
     }
 
@@ -766,11 +766,11 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
         if whose_turn {
           move := (pinned_piece << 8) & (~occupied);
           move = move | ((move & xx rank_3) << 8) & (~occupied);
-          generate_pawn_moves_from_bitboard(moves_arr, pinned_piece, move, opp_pieces);
+          generate_pawn_moves_from_bitboard(moves_arr, pinned_piece, move, opp_pieces, captures_only);
         } else {
           move := (pinned_piece >> 8) & (~occupied);
           move = move | ((move & xx rank_6) >> 8) & (~occupied);
-          generate_pawn_moves_from_bitboard(moves_arr, pinned_piece, move, opp_pieces);
+          generate_pawn_moves_from_bitboard(moves_arr, pinned_piece, move, opp_pieces, captures_only);
         }
       }
     }
@@ -789,7 +789,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     if (queen|bishop) & pinned_piece {
       // make pinned piece moves.
       valid_moves := (between_sqs | sq) & (~pinned_piece);
-      generate_normal_moves_from_bitboard(moves_arr, pinned_piece, valid_moves, opp_pieces);
+      generate_normal_moves_from_bitboard(moves_arr, pinned_piece, valid_moves, opp_pieces, captures_only);
       continue;
     }
 
@@ -798,7 +798,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
       if whose_turn {
         wp_attacks := white_pawn_captures(pinned_piece & pawn);
         pawn_move := wp_attacks & opp_pieces & (between_sqs|sq);
-        generate_pawn_moves_from_bitboard(moves_arr, pinned_piece, pawn_move, opp_pieces);
+        generate_pawn_moves_from_bitboard(moves_arr, pinned_piece, pawn_move, opp_pieces, captures_only);
         ep_bb : u64 = (ep_sq << 8);
         if wp_attacks & ep_bb & between_sqs {
           array_add(moves_arr, encode_move_bb(pinned_piece, ep_bb, Move16.Ep_Capture));
@@ -806,7 +806,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
       } else {
         bp_attacks := black_pawn_captures(pinned_piece & pawn);
         pawn_move := bp_attacks & opp_pieces & (between_sqs|sq);
-        generate_pawn_moves_from_bitboard(moves_arr, pinned_piece, pawn_move, opp_pieces);
+        generate_pawn_moves_from_bitboard(moves_arr, pinned_piece, pawn_move, opp_pieces, captures_only);
         ep_bb : u64 = (ep_sq >> 8);
         if bp_attacks & ep_bb & between_sqs {
           array_add(moves_arr, encode_move_bb(pinned_piece, ep_bb, Move16.Ep_Capture));
@@ -825,57 +825,53 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     check_sqs = between_bitboard(checks, king) | checks;
   } else {
     check_sqs = ~0;
-    safe_sqs := cast(bboard) ~attacks;
-    not_occu := cast(bboard) ~occupied;
-    if whose_turn {
-      handle_castling(Castling.W_KS, f1|g1, f1|g1, e1, g1, Move16.King_Castle);
-      handle_castling(Castling.W_QS, c1|d1, b1|c1|d1, e1, c1, Move16.Queen_Castle);
-    } else {
-      handle_castling(Castling.B_KS, f8|g8, f8|g8, e8, g8, Move16.King_Castle);
-      handle_castling(Castling.B_QS, c8|d8, b8|c8|d8, e8, c8, Move16.Queen_Castle);
-    }
-
-    handle_castling :: ($F: Castling, $castle_sqs: bboard, $check_occ: bboard, $from: bboard, $to: bboard, $flags: Move16) #expand {
-      if c_flags & F {
-        if (safe_sqs & castle_sqs) == castle_sqs && (not_occu & check_occ) == check_occ {
-          array_add(moves_arr, encode_move_bb(xx from, xx to, flags));
+    #if captures_only == false then {
+      safe_sqs := cast(bboard) ~attacks;
+      not_occu := cast(bboard) ~occupied;
+      if whose_turn {
+        handle_castling(Castling.W_KS, f1|g1, f1|g1, e1, g1, Move16.King_Castle);
+        handle_castling(Castling.W_QS, c1|d1, b1|c1|d1, e1, c1, Move16.Queen_Castle);
+      } else {
+        handle_castling(Castling.B_KS, f8|g8, f8|g8, e8, g8, Move16.King_Castle);
+        handle_castling(Castling.B_QS, c8|d8, b8|c8|d8, e8, c8, Move16.Queen_Castle);
+      }
+     
+      handle_castling :: ($F: Castling, $castle_sqs: bboard, $check_occ: bboard, $from: bboard, $to: bboard, $flags: Move16) #expand {
+        if c_flags & F {
+          if (safe_sqs & castle_sqs) == castle_sqs && (not_occu & check_occ) == check_occ {
+            array_add(moves_arr, encode_move_bb(xx from, xx to, flags));
+          }
         }
       }
     }
   }
  
-  #if captures_only {
-    check_sqs &= opp_pieces;
+  qr := queen|rook;   // lump queen moves and rook moves into 1 loop
+  while qr {
+    i := bit_scan_forward(qr);
+    from_bb := cast(u64) (1 << i);
+    to_bb   := rook_moves(occupied, i, from_bb, pieces) & check_sqs;
+    generate_normal_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces, captures_only);
+    qr ^= from_bb;
   }
 
-  while queen {
-    i := bit_scan_forward(queen);
-    from_bb := cast(u64)(1 << i);
-    to_bb := queen_moves(occupied, i, from_bb, pieces) & check_sqs;
-    generate_normal_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces);
-    queen = queen & (queen-1);
+  qb := queen|bishop;  // lump queen moves and bishop moves into 1 loop
+  while qb {
+    i := bit_scan_forward(qb);
+    from_bb := cast(u64) (1 << i);
+    to_bb   := bishop_moves(occupied, i, from_bb, pieces) & check_sqs;
+    generate_normal_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces, captures_only);
+    qb ^= from_bb;
   }
-  while rook {
-    i := bit_scan_forward(rook);
-    from_bb := cast(u64)(1 << i);
-    to_bb := rook_moves(occupied, i, from_bb, pieces) & check_sqs;
-    generate_normal_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces);
-    rook = rook & (rook-1);
-  }
-  while bishop {
-    i := bit_scan_forward(bishop);
-    from_bb := cast(u64)(1 << i);
-    to_bb := bishop_moves(occupied, i, from_bb, pieces) & check_sqs;
-    generate_normal_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces);
-    bishop = bishop & (bishop-1);
-  }
+
   while knight {
     i := bit_scan_forward(knight);
     from_bb := cast(u64)(1 << i);
     to_bb := knight_moves(occupied, i, from_bb, pieces) & check_sqs;
-    generate_normal_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces);
-    knight = knight & (knight-1);
+    generate_normal_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces, captures_only);
+    knight ^= from_bb;
   }
+
   while pawn {
     i := bit_scan_forward(pawn);
     from_bb := cast(u64)(1 << i);
@@ -885,7 +881,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     } else {
       to_bb = black_pawn_moves(occupied, i, from_bb, pieces) & check_sqs;
     }
-    generate_pawn_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces);
+    generate_pawn_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces, captures_only);
 
     // en paesant move. need to handle the strange special en_paesant pin...
     //    - - - - -  EP - - -
@@ -952,13 +948,10 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
         }
       }
     }
-    pawn = pawn & (pawn-1);
+    pawn ^= from_bb;
   }
   king_moves_bb := king_moves(occupied, i, king, pieces) & (~attacks);
-  #if captures_only {
-    king_moves_bb &= opp_pieces;
-  }
-  generate_normal_moves_from_bitboard(moves_arr, king, king_moves_bb, opp_pieces);
+  generate_normal_moves_from_bitboard(moves_arr, king, king_moves_bb, opp_pieces, captures_only);
   return checks;
 }
 
@@ -1000,7 +993,8 @@ xray_rook_attacks :: (occ: u64, blockers: u64, i: int, rook_sq: u64) -> u64, u64
 
 xray_bishop_attacks :: (occ: u64, blockers: u64, i: int, bishop_sq: u64) -> u64, u64 {
   attacks := bishop_moves(occ, i, bishop_sq);
-  blockers &= attacks;
+  blockers &= attacks & 0x007E7E7E7E7E7E00;
+  if blockers == 0 return 0, attacks;
   return attacks ^ bishop_moves(occ ^ blockers, i, bishop_sq), attacks;
 }
 
@@ -1019,9 +1013,6 @@ black_pawn_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 =
 }
 
 bishop_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
-  /*diag_slide  := sliding(occupied, slider,  diag_of(i));
-  adiag_slide := sliding(occupied, slider, adiag_of(i));
-  return (diag_slide | adiag_slide) & (~friends);*/
   o := occupied & (~friends) & (~slider);
   ne := smear_northeast(slider, ~(((o<<9) & (xx ~ file_a))|friends));
   se := smear_southeast(slider, ~(((o>>7) & (xx ~ file_a))|friends));
@@ -1047,18 +1038,7 @@ rook_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) ->
   right := smear_eastwards(slider, ~(((o<<1) & (xx ~ file_a))|friends));
   left  := smear_westwards(slider, ~(((o>>1) & (xx ~ file_h))|friends));
   return up ^ down ^ right ^ left;
-  /*file_slide := sliding(occupied, slider, file_of(i));        
-  rank_slide := sliding(occupied, slider, rank_of(i));
-  return (file_slide | rank_slide) & (~friends);*/
 } 
-
-queen_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
-  file_slide  := sliding(occupied, slider,  file_of(i));        
-  rank_slide  := sliding(occupied, slider,  rank_of(i));        
-  diag_slide  := sliding(occupied, slider,  diag_of(i));
-  adiag_slide := sliding(occupied, slider, adiag_of(i));
-  return (file_slide | rank_slide | diag_slide | adiag_slide) & (~friends);
-}
 
 king_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
   k := slider | ((slider << 1) & xx (~file_a)) | ((slider >> 1) & xx (~file_h));
@@ -1478,23 +1458,6 @@ smear_northwest :: (g: u64, p: u64) -> u64 {
 
 #scope_file
 
-// o = occupied, r = piece, m = mask
-sliding :: inline (o: u64, r: u64, m: u64) -> u64 {
-  o_bar := bit_reverse64(o & m);
-  r_bar := bit_reverse64(r);
-  return (((o & m) - (2*r)) ^ bit_reverse64(o_bar - (2*r_bar))) & m;
-}
-
-sliding_half_1 :: inline (o: u64, r: u64) -> u64 {
-  return o - (2*r);
-}
-
-sliding_half_2 :: inline (o: u64, r: u64) -> u64 {
-  o_bar := bit_reverse64(o);
-  r_bar := bit_reverse64(r);
-  return bit_reverse64(o_bar - (2*r_bar));
-}
-
 between_bitboard :: inline (i: u64, j: u64) -> u64 {
   ii := bit_scan_forward(i);
   jj := bit_scan_forward(j);
@@ -1543,20 +1506,25 @@ a_diags :: bboard.[
 ];
 
 // generates normal moves. NOTE: does not handle special moves.
-generate_normal_moves_from_bitboard :: (moves_arr: *[..]Move16, from: u64, to: u64, opp_pieces: u64) {
+generate_normal_moves_from_bitboard :: (moves_arr: *[..]Move16, from: u64, to: u64, opp_pieces: u64, $captures_only: bool) {
   using Move16;
+  #if captures_only then
+    to &= opp_pieces;
+
   while to {
     to_bb := cast(u64)(1 << bit_scan_forward(to));
     flags := ifx (to_bb & opp_pieces) Capture else Quiet; 
     move := encode_move_bb(from, to_bb, flags);
     array_add(moves_arr, move);
-    to = to & (to - 1);
+    to ^= to_bb;
   }
 }
 
 // handle pawn moves except for en paesant
-generate_pawn_moves_from_bitboard :: (moves_arr: *[..]Move16, from: u64, to: u64, opp_pieces: u64) {
+generate_pawn_moves_from_bitboard :: (moves_arr: *[..]Move16, from: u64, to: u64, opp_pieces: u64, $captures_only: bool) {
   using Move16;
+  #if captures_only then
+    to &= opp_pieces;
 
   while to {
     to_bb := cast(u64)(1 << bit_scan_forward(to));
@@ -1590,7 +1558,7 @@ generate_pawn_moves_from_bitboard :: (moves_arr: *[..]Move16, from: u64, to: u64
       move := encode_move_bb(from, to_bb, flags);
       array_add(moves_arr, move);
     }
-    to = to & (to - 1);
+    to ^= to_bb;
   }
 }
 

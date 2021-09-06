@@ -12,8 +12,8 @@ evaluate :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) -> int {
 
 #scope_file
 nnue_evaluate :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) -> int {
-  pieces: [65] s32;
-  squares: [65] s32;
+  pieces:  [33] s32; // TODO: should this be 65 or 33?
+  squares: [33] s32;
 
   index := 0;
   translate_bitboard(w_king, 1);

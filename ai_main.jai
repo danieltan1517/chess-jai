@@ -121,21 +121,26 @@ main :: () {
       depth, TF := parse_int(*input);
       if !TF return;
       mov := search(*pieces, castling, ep, *repetitions, depth, whose_turn, fifty);
-      print_best_move(mov);
+      print_best_move(mov, whose_turn);
 
     case "infinite";
       depth := INF;   // make the depth arbitrarily high.
       mov := search(*pieces, castling, ep, *repetitions, depth, whose_turn, fifty);
-      print_best_move(mov);
+      print_best_move(mov, whose_turn);
 
     case "perft";
       depth, TF := parse_int(*input);
       if !TF return;
       perft_divide(*pieces, castling, ep, whose_turn, depth);
-
     }
 
-    print_best_move :: (mov: Move16) {
+    print_best_move :: (mov: Move16, whose_turn: bool) {
+
+      if mov == 0 then {
+        print("bestmove (none)\n");
+        return;
+      }
+
       using Move16;
       flags, from, to := decode_move(mov);
       // hopefully promote the piece functions correctly...

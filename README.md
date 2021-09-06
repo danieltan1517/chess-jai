@@ -35,7 +35,7 @@ The chess GUI uses the glfw3 and gl libraries.
 * Legal move generation and detection
 * Passes all perft tests
 * Implements Bitboards for fast move generation
-* Move generator can generate approximately 24 million positions per second
+* Move generator can generate approximately 28 million positions per second
 * Uses https://github.com/dshawul/nnue-probe for NNUE (Efficiently Updatable Neural Networks) for chess evaluation function
 * Negamax search with Alpha-Beta Pruning
 * Encodes Moves as 16-bit integers

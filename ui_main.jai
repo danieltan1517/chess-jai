@@ -959,7 +959,7 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
     timeout_timer = 0.0;
 
   case .UCI_GO_TURN;
-    TIMEOUT_LIMIT :: 5;
+    TIMEOUT_LIMIT :: 10.0;
     timeout_timer += delta_time;
 
     if timeout_timer >= TIMEOUT_LIMIT {

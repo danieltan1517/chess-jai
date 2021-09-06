@@ -9,19 +9,31 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   __nodes_searched = 0;
   clear_hash_table();
   reset_temporary_storage();
-
   Push_Temporary();
 
   pv_line: PVLine;
-  best_eval : int; best_move : Move16;
-  for iter_depth : 1..depth { 
-    best_eval = negamax(pieces, castling, ep, iter_depth, whose_turn, *pv_line, repetitions, fifty=fifty);
+  score : int; best_move : Move16;
+  alpha: int = -INF;
+  beta:  int = INF;
+  cur_depth := 1;
+  while cur_depth <= depth { 
+    score = negamax(pieces, castling, ep, cur_depth, whose_turn, *pv_line, repetitions, alpha=alpha, beta=beta, fifty=fifty);
     if stop_signal_triggered() then 
       break;
 
+    if score <= alpha || score >= beta {
+      alpha = -INF;
+      beta  = INF;
+      continue;
+    }
+
+    alpha = score - 50;
+    beta  = score + 50;
+
     best_move = pv_line.argmove[0];
     time_taken := get_time() - time_begin;
-    print_stats(iter_depth);
+    print_stats(cur_depth);
+    cur_depth += 1;
   }
   return best_move;
 
@@ -30,7 +42,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
     t_ms := cast(int)(`time_taken*1000.0); // convert secs to ms
     nps  := cast(int)(__nodes_searched/(`time_taken+0.0001));
     print_to_builder(*builder, "info depth % ", depth);
-    print_to_builder(*builder, "nodes % time % score cp % nps % pv ", __nodes_searched, t_ms, best_eval, nps);
+    print_to_builder(*builder, "nodes % time % score cp % nps % pv ", __nodes_searched, t_ms, score, nps);
     for mv: pv_line.argmove {
       if mv == 0 then
         break;
@@ -84,6 +96,8 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
   best_pv := true;
   move_ordering(pieces, move_array, whose_turn, pv_line, ply, bh_move);
+
+  best_eval := -INF;
   hash_flag := TFLAGS.UPPER;
   for move, moves_searched : move_array {
     c_copy, ep_copy, capture := castling, ep, PieceType.None;
@@ -180,19 +194,19 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       }
     }
 
+    // threefold repetition check / fifty move rule.
     if fifty >= 100 then {
-      pv_line.argmove[0] = move_array[0];  
+      pv_line.argmove[0] = move_array[random_get() % move_array.count];  
       `return 0;
     }
 
-    // threefold repetition check.
     count := 0;
     reps := 0;
     while count < fifty {
       if hash == (<<repetitions) [repetitions.count - 1 - count] then {
         reps += 1;
         if reps >= 2 then {
-          pv_line.argmove[0] = move_array[0];
+          pv_line.argmove[0] = move_array[random_get() % move_array.count];
           `return 0;
         }
       }
@@ -204,17 +218,12 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
   null_move_pruning :: () #expand {
     NULL_MOVE_MAX :: 4;
-    // check for zugwang before null move pruning
-    if null_flag && depth >= NULL_MOVE_MAX && check == 0 && !has_ep(pieces) && !has_zugzwang(pieces) {
+    // check for zugwang before null move pruning && TODO: make sure engine doesn't bug out at en paesant.
+    if null_flag && depth >= NULL_MOVE_MAX && check == 0 && !has_zugzwang(pieces) {
       score := -negamax(pieces, castling, 0, depth-2, !whose_turn, *line, repetitions, ply+1, false, -beta, -beta + 1, fifty);
       if score >= beta then {
         `return beta;
       }
-    }
-
-    has_ep :: (using pieces: *Piece_Bitboards) -> bool #expand {
-      pawn := ifx whose_turn w_pawn else b_pawn;
-      return ((((ep << 1) & xx (~file_a)) | ((ep >> 1) & xx (~file_h))) & pawn) != 0;
     }
 
     // zugzwang occurs primarily in King-Pawn endgames
@@ -533,7 +542,7 @@ capture_order :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       piece_to_type := piece_type_at(to, pieces, !whose_turn);
       order[i] = mvv_lva(piece_to_type, piece_from_type);
     } else if flags == Ep_Capture {
-      order[i] = mvv_lva(PieceType.Pawn, PieceType.Pawn);
+      order[i] = mvv_lva(PieceType.Queen, PieceType.Pawn);
     } else if Knight_Promotion_Capture <= flags && flags <= Queen_Promotion_Capture {
       piece_to_type := piece_type_at(to, pieces, !whose_turn);
       order[i] = mvv_lva(piece_to_type, PieceType.Pawn);
