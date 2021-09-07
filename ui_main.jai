@@ -849,9 +849,9 @@ uci_position_command :: () -> string {
   builder: String_Builder;
   builder.allocator = __temporary_allocator;
   if equal(fen_string, "startpos") {
-    print_to_builder(*builder, "position % moves ", fen_string);
+    print_to_builder(*builder, "position % moves", fen_string);
   } else {
-    print_to_builder(*builder, "position fen % moves ", fen_string);
+    print_to_builder(*builder, "position fen % moves", fen_string);
   }
 
   for move: move_record {
@@ -1104,6 +1104,7 @@ uci_init_uci_chess_engine :: (engine_name: string, ai_path: string) -> bool {
 }
 
 uci_write_command :: (command: string) {
+  print("writing: %\n", command);
   write(__write_pipe, command.data, xx command.count);
 }
 

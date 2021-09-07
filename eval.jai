@@ -108,8 +108,8 @@ trivial_evaluation :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) 
 
 nnue :: #foreign_library "nnue-probe/src/libnnueprobe";
 
-//eval_file :: #run join(#filepath, "resources/nn-fb50f1a2b1-20210705.nnue");
-eval_file :: #run join(#filepath, "resources/nn-04cf2b4ed1da.nnue");
+eval_file :: #run join(#filepath, "resources/nn-fb50f1a2b1-20210705.nnue");
+//eval_file :: #run join(#filepath, "resources/nn-04cf2b4ed1da.nnue");
 
 __nnue_init :: (eval_file: *s8) #foreign nnue "nnue_init"; 
 __nnue_evaluate :: (player: s32, pieces: *s32, squares: *s32) -> s32 #foreign nnue "nnue_evaluate";
