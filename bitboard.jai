@@ -741,7 +741,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
   // handle double-check.
   if num_checks == 2 {
     // we only need to generate king moves during a double-check
-    king_moves_bb := king_moves(occupied, i, king, pieces) & (~attacks);
+    king_moves_bb := king_moves_lookup(i) & (~pieces) & (~attacks);
     generate_normal_moves_from_bitboard(moves_arr, king, king_moves_bb, opp_pieces, captures_only);
     return checks;
   }
@@ -866,8 +866,8 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
 
   while knight {
     i := bit_scan_forward(knight);
-    from_bb := cast(u64)(1 << i);
-    to_bb := knight_moves(occupied, i, from_bb, pieces) & check_sqs;
+    from_bb := cast(u64) (1 << i);
+    to_bb := knight_moves_lookup(i) & (~pieces) & check_sqs;
     generate_normal_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces, captures_only);
     knight ^= from_bb;
   }
@@ -950,7 +950,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     }
     pawn ^= from_bb;
   }
-  king_moves_bb := king_moves(occupied, i, king, pieces) & (~attacks);
+  king_moves_bb := king_moves_lookup(i) & (~pieces) & (~attacks);
   generate_normal_moves_from_bitboard(moves_arr, king, king_moves_bb, opp_pieces, captures_only);
   return checks;
 }
@@ -963,7 +963,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
 // generate attacks deals with king safe squares.
 
 generate_attacks :: (occ: u64, king: u64, queen: u64, rook: u64, bishop: u64, knight: u64, pawn: u64, whose_turn: bool) -> u64 {
-  king_attacks := king_moves(0, 0, king); 
+  king_attacks := king_moves_lookup(bit_scan_forward(king));
   opp_pieces := occ & ~(king|queen|rook|bishop|knight|pawn);
   vertical_attacks := h_and_v_attacks(king, queen, rook, bishop, knight, pawn, opp_pieces);
   diag_attacks :=     diagonal_attacks(king, queen, rook, bishop, knight, pawn, opp_pieces);
@@ -1000,14 +1000,14 @@ xray_bishop_attacks :: (occ: u64, blockers: u64, i: int, bishop_sq: u64) -> u64,
 
 white_pawn_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
   up1 := (slider << 8) & (~occupied);
-  captures := white_pawn_captures(slider) & (occupied & (~friends));
+  captures := wpawn_cap_lookup(i) & (occupied & (~friends));
   pawn_power := ((up1 & (xx rank_3)) << 8) & (~occupied);
   return up1 | captures | pawn_power;
 }
 
 black_pawn_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
   up1 := (slider >> 8) & (~occupied);
-  captures := black_pawn_captures(slider) & (occupied & (~friends));
+  captures := bpawn_cap_lookup(i) & (occupied & (~friends));
   pawn_power := ((up1 & (xx rank_6)) >> 8) & (~occupied);
   return up1 | captures | pawn_power;
 }
@@ -1052,6 +1052,22 @@ white_pawn_captures :: inline (slider: u64) -> u64 {
 
 black_pawn_captures :: inline (slider: u64) -> u64 {
   return ((slider >> 7) & xx (~file_a)) | ((slider >> 9) & xx (~file_h));
+}
+
+knight_moves_lookup :: inline (i: int) -> u64 {
+  return knight_look_up_table[i];
+}
+
+king_moves_lookup :: inline (i: int) -> u64 {
+  return king_look_up_table[i];
+}
+
+wpawn_cap_lookup :: inline (i: int) -> u64 {
+  return wpawn_cap_look_up_table[i];
+}
+
+bpawn_cap_lookup :: inline (i: int) -> u64 {
+  return bpawn_cap_look_up_table[i];
 }
 
 file_of :: inline (i: int) -> u64 {
@@ -1155,6 +1171,14 @@ init_global_bitboards :: () {
   init_lines(h4, d8, d8|e7|f6|g5|h4, 7);
   init_lines(h5, e8, e8|f7|g6|h5, 7);
   init_lines(h6, f8, f8|g7|h6, 7);
+
+  for i: 0..63 {
+    king_look_up_table     [i] = king_moves(0, i, cast(u64) (1<<i));
+    knight_look_up_table   [i] = knight_moves(0, i, cast(u64) (1<<i));
+    wpawn_cap_look_up_table[i] = white_pawn_captures(cast(u64) (1<<i));
+    bpawn_cap_look_up_table[i] = black_pawn_captures(cast(u64) (1<<i));
+  }
+
 
   // this runs 2x faster in release mode when just a function rather than a macro.
   init_lines :: (a: bboard, b: bboard, file: bboard, $num: int) {
@@ -1348,7 +1372,7 @@ h_and_v_attacks :: (king: u64, queen: u64, rook: u64, bishop: u64, knight: u64, 
     right := smear_eastwards(lsb, ~(((o<<1) & (xx ~ file_a))|opp));
     left  := smear_westwards(lsb, ~(((o>>1) & (xx ~ file_h))|opp));
     bits |= up ^ down ^ right ^ left;
-    g &= ~lsb;
+    g ^= lsb;
   }
   return bits;
 }
@@ -1364,10 +1388,12 @@ diagonal_attacks :: (king: u64, queen: u64, rook: u64, bishop: u64, knight: u64,
     sw := smear_southwest(lsb, ~(((o>>9) & (xx ~ file_h))|opp));
     nw := smear_northwest(lsb, ~(((o<<7) & (xx ~ file_h))|opp));
     bits |= ne ^ se ^ sw ^ nw;
-    g &= ~lsb;
+    g ^= lsb;
   }
   return bits;
 }
+
+#scope_file
 
 //https://www.chessprogramming.org/Kogge-Stone_Algorithm
 smear_upwards :: (g: u64, p: u64) -> u64 {
@@ -1454,7 +1480,6 @@ smear_northwest :: (g: u64, p: u64) -> u64 {
   return g;
 }
 
-#scope_file
 
 between_bitboard :: inline (i: u64, j: u64) -> u64 {
   ii := bit_scan_forward(i);
@@ -1466,6 +1491,13 @@ between_bitboard :: inline (i: u64, j: u64) -> u64 {
 // this look-up table can be found inside stockfish chess engine.
 // I don't know whether it is correct... might be a bit slow...
 between_look_up_table: [64][64] u64;
+
+
+// magic bit boards for king/knight/pawn look up.
+king_look_up_table:   [64] u64;
+knight_look_up_table: [64] u64;
+wpawn_cap_look_up_table: [64] u64;
+bpawn_cap_look_up_table: [64] u64;
 
 diags :: bboard.[
   h1,
