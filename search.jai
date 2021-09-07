@@ -435,7 +435,7 @@ quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn:
   for cap_move: move_array {
     c_copy, ep_copy, capture := castling, ep, PieceType.None;
     make_move(pieces, *c_copy, *ep_copy, *capture, cap_move, whose_turn);
-    score := -quiescene(pieces, c_copy, ep_copy, !whose_turn, -beta, -alpha, 0);
+    score := -quiescene(pieces, c_copy, ep_copy, !whose_turn, -beta, -alpha, fifty=0);
     unmake_move(pieces, capture, cap_move, whose_turn);
 
     if score >= beta then

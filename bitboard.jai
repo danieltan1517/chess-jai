@@ -1288,9 +1288,7 @@ zobrist_init_globals :: (s : s32 = 861097715) {
   }
 }
 
-// COMPILER BUG: the #asm instruction is being removed, and this function is just
-// returning -1.
-bit_scan_forward :: (input: u64)->int {
+bit_scan_forward :: (input: u64)->int #expand {
   result := -1;
   #asm { bsf.q result, input; }
   return result;

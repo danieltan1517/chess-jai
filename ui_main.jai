@@ -696,12 +696,6 @@ handle_undo_move :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flag
 reset_key_state: enum { RESET_IDLE; RESET_PRESS; } = .RESET_IDLE;
 
 handle_reset :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..] Move16) {
-  // TODO: handle ai
-  if !w_human_turn() && !b_human_turn() && (w_is_human == true || b_is_human == true) then
-    return; // disable undo for AI vs AI.
-  if w_is_human == false && b_is_human == false && moves_arr.count != 0 then
-    return;
-
   if piece_select_state != .PIECE_IDLE then
     return;
   n_state    := glfwGetKey(window, GLFW_KEY_N);
@@ -932,10 +926,16 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
     uci_write_command("ucinewgame\n");
     uci_state = .UCI_IDLE;
   case .UCI_IDLE;
+    uci_getline(); // getline and throw away input.
+    reset_queue(); 
+
+
     // make sure there are moves that could be made.
     if moves_arr.count > 0 && !w_human_turn() && !b_human_turn() {
-      // TODO: Optimize this!
-      if equal(fen_string, "startpos") && (cast(int)(random_get()) % 100) < 90 {
+      
+      if reset_key_state == .RESET_PRESS then {
+        uci_state = .UCI_NEWGAME;
+      } else if equal(fen_string, "startpos") && (cast(int)(random_get()) % 100) < 90 {
         TF, mov := pick_random_opening(move_record, opening_book);
         if TF {
           print("Random opening.\n");
@@ -953,23 +953,35 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
     }
 
   case .UCI_POS_CMD;
-    cmd_string := tprint("go depth %\n", __engine_depth_parameter);
-    uci_write_command(cmd_string);
-    uci_state = .UCI_GO_TURN;
-    timeout_timer = 0.0;
+    if reset_key_state == .RESET_PRESS {
+      uci_state = .UCI_NEWGAME;
+    } else {
+      cmd_string := tprint("go depth %\n", __engine_depth_parameter);
+      uci_write_command(cmd_string);
+      uci_state = .UCI_GO_TURN;
+      timeout_timer = 0.0;
+    }
 
   case .UCI_GO_TURN;
     TIMEOUT_LIMIT :: 10.0;
     timeout_timer += delta_time;
-
-    if timeout_timer >= TIMEOUT_LIMIT {
+    if reset_key_state == .RESET_PRESS {
+      uci_write_command("stop\n");
+      timeout_timer = 0.0;
+      uci_state = .UCI_NEWGAME;
+    } else if timeout_timer >= TIMEOUT_LIMIT {
       uci_write_command("stop\n");
       print("timeout!\n");
       timeout_timer = 0.0;
-    }
+    } 
     while true {
       cmd_string := uci_getline();
       if !cmd_string break;
+      if reset_key_state == .RESET_PRESS {
+        reset_queue();
+        continue;
+      }
+
       if starts_with(cmd_string, "bestmove ") {
         TF, from, to, type := parse_best_move(cmd_string);
         // TODO: parse best move could fail, what to do if that happens????
