@@ -472,48 +472,58 @@ make_move :: (using pieces: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, cap
   }
 
   white_piece_taken :: () #expand {
+    if w_pawn & to_bit {
+      w_pawn &= ~to_bit;
+      <<captured = PieceType.Pawn;
+      return;
+    }
     if w_queen & to_bit {
       w_queen &= ~to_bit;
       <<captured = PieceType.Queen;
+      return;
     }
     if w_rook & to_bit {
       w_rook  &= ~to_bit;
       <<captured = PieceType.Rook;
+      return;
     }
     if w_bishop & to_bit {
       w_bishop &= ~to_bit;
       <<captured = PieceType.Bishop;
+      return;
     }
     if w_knight & to_bit {
       w_knight &= ~to_bit;
       <<captured = PieceType.Knight;
-    }
-    if w_pawn & to_bit {
-      w_pawn &= ~to_bit;
-      <<captured = PieceType.Pawn;
+      return;
     }
   }
 
   black_piece_taken :: () #expand {
+    if b_pawn & to_bit {
+      b_pawn &= ~to_bit;
+      <<captured = PieceType.Pawn;
+      return;
+    }
     if b_queen & to_bit {
       b_queen &= ~to_bit;
       <<captured = PieceType.Queen;
+      return;
     }
     if b_rook & to_bit {
       b_rook  &= ~to_bit;
       <<captured = PieceType.Rook;
+      return;
     }
     if b_bishop & to_bit {
       b_bishop &= ~to_bit;
       <<captured = PieceType.Bishop;
+      return;
     }
     if b_knight & to_bit {
       b_knight &= ~to_bit;
       <<captured = PieceType.Knight;
-    }
-    if b_pawn & to_bit {
-      b_pawn &= ~to_bit;
-      <<captured = PieceType.Pawn;
+      return;
     }
   }
 }
@@ -1054,19 +1064,19 @@ black_pawn_captures :: inline (slider: u64) -> u64 {
   return ((slider >> 7) & xx (~file_a)) | ((slider >> 9) & xx (~file_h));
 }
 
-knight_moves_lookup :: inline (i: int) -> u64 {
+knight_moves_lookup :: inline (i: int) -> u64 #expand {
   return knight_look_up_table[i];
 }
 
-king_moves_lookup :: inline (i: int) -> u64 {
+king_moves_lookup :: inline (i: int) -> u64 #expand {
   return king_look_up_table[i];
 }
 
-wpawn_cap_lookup :: inline (i: int) -> u64 {
+wpawn_cap_lookup :: inline (i: int) -> u64 #expand {
   return wpawn_cap_look_up_table[i];
 }
 
-bpawn_cap_lookup :: inline (i: int) -> u64 {
+bpawn_cap_lookup :: inline (i: int) -> u64 #expand {
   return bpawn_cap_look_up_table[i];
 }
 
@@ -1561,19 +1571,19 @@ generate_pawn_moves_from_bitboard :: (moves_arr: *[..]Move16, from: u64, to: u64
     // promotion
     if to_bb & xx (rank_1|rank_8) {
       // add all promotion possibilities 
-      num := moves_arr.count;
       if to_bb & opp_pieces {
         array_add(moves_arr, encode_move_bb(from, to_bb, Knight_Promotion_Capture));
         array_add(moves_arr, encode_move_bb(from, to_bb, Bishop_Promotion_Capture));
         array_add(moves_arr, encode_move_bb(from, to_bb, Rook_Promotion_Capture));
         array_add(moves_arr, encode_move_bb(from, to_bb, Queen_Promotion_Capture));
       } else {
-        array_add(moves_arr, encode_move_bb(from, to_bb, Knight_Promotion));
-        array_add(moves_arr, encode_move_bb(from, to_bb, Bishop_Promotion));
-        array_add(moves_arr, encode_move_bb(from, to_bb, Rook_Promotion));
-        array_add(moves_arr, encode_move_bb(from, to_bb, Queen_Promotion));
+        #if !captures_only {
+          array_add(moves_arr, encode_move_bb(from, to_bb, Knight_Promotion));
+          array_add(moves_arr, encode_move_bb(from, to_bb, Bishop_Promotion));
+          array_add(moves_arr, encode_move_bb(from, to_bb, Rook_Promotion));
+          array_add(moves_arr, encode_move_bb(from, to_bb, Queen_Promotion));
+        }
       }
-      num = moves_arr.count - num;
     } else {
       // non-promotion
       flags: Move16;

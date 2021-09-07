@@ -7,7 +7,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   memset(__history_moves.data, 0, size_of(float)*2*64*64);
   memset(__killer_moves.data,  0, size_of(Move16)*2*64);
   __nodes_searched = 0;
-  clear_hash_table();
+  //clear_hash_table();
   reset_temporary_storage();
   Push_Temporary();
 
@@ -73,7 +73,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   hash := zobrist_hash(pieces, castling, ep, whose_turn);
   key  := hash % TSIZE;
 
-  TF, tt_score, bh_move := transposition_table_lookup(alpha, beta, hash, key, depth);
+  TF, tt_score, bh_move := transposition_table_lookup(alpha, beta, hash, key, depth, ply);
   if TF then {
     pv_line.cmove = 0;
     pv_line.argmove[0] = bh_move;
@@ -157,8 +157,9 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   transposition_table_store(hash, key, alpha, hash_flag, depth, bh_move);
   return alpha;
 
-  transposition_table_lookup :: (alpha: int, beta: int, hash: u64, key: u64, depth: int) -> bool, int, Move16 {
+  transposition_table_lookup :: (alpha: int, beta: int, hash: u64, key: u64, depth: int, ply: int) -> bool, int, Move16 {
     bh_move := Move16.Quiet;
+    if ply == 0 then return false, 0, bh_move;
     if ttable.hash[key] == hash {
       bh_move = ttable.entries[key].bmove;
       if ttable.entries[key].depth >= depth then {

@@ -1104,7 +1104,6 @@ uci_init_uci_chess_engine :: (engine_name: string, ai_path: string) -> bool {
 }
 
 uci_write_command :: (command: string) {
-  print("writing: %\n", command);
   write(__write_pipe, command.data, xx command.count);
 }
 
@@ -1268,10 +1267,11 @@ load_opening_book :: (file_path: string) -> *BookNode {
     moves := slice(line, t2_start, t2_end - t2_start);
 
     pieces, whose_turn, castling, ep := chess_start_pos();
-
+    print("[%]: %\n", i, line);
     // TODO: this code is sloppy, need to fix.
     node := opening_book;
     for move_string : split(moves, " ") {
+      print("[%]\n", move_string);
       if !move_string continue;
       capture := PieceType.None;
       mov := parse_algebraic_notation(move_string, pieces, whose_turn, castling, ep);
@@ -1389,7 +1389,8 @@ load_opening_book :: (file_path: string) -> *BookNode {
         return mov;
       }
     }
-    assert(false);
+    // TODO: some of these WILL NOT load correctly!
+    //assert(false);
     return Move16.Quiet;
   }
 
