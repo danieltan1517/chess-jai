@@ -938,7 +938,6 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
       } else if equal(fen_string, "startpos") && (cast(int)(random_get()) % 100) < 90 {
         TF, mov := pick_random_opening(move_record, opening_book);
         if TF {
-          print("Random opening.\n");
           ui_handle_move_made(piece_bitboard, flags, ep_sq, moves_arr, mov);
         } else {
           cmd_str := uci_position_command();
@@ -1267,11 +1266,9 @@ load_opening_book :: (file_path: string) -> *BookNode {
     moves := slice(line, t2_start, t2_end - t2_start);
 
     pieces, whose_turn, castling, ep := chess_start_pos();
-    print("[%]: %\n", i, line);
     // TODO: this code is sloppy, need to fix.
     node := opening_book;
     for move_string : split(moves, " ") {
-      print("[%]\n", move_string);
       if !move_string continue;
       capture := PieceType.None;
       mov := parse_algebraic_notation(move_string, pieces, whose_turn, castling, ep);
