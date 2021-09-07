@@ -447,14 +447,6 @@ quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn:
   return alpha;
 }
 
-filter_captures :: (move_array: [..] Move16) {
-  for mov, i: move_array {
-    flags := decode_move(mov);
-    if !is_capture(flags)
-      remove mov;
-  }
-}
-
 PVLine :: struct {
   cmove: int;
   argmove: [16] Move16;  // TODO: WTF, THIS is the thing that is taking up SOO much time?!?!
@@ -581,17 +573,17 @@ mvv_lva :: (victim: PieceType, attacker: PieceType) -> score: int {
   vs := piece_score(victim);
   as := piece_score(attacker);
 
-  return vs + 1000 - (as / 100);
+  return vs - (as / 100);
 
   piece_score :: (using p: PieceType) -> score: int {
     if p == {
-    case King;   return 500000;
-    case Queen;  return  90000;
-    case Rook;   return  50000;
-    case Bishop; return  35000;
-    case Knight; return  32500;
-    case Pawn;   return  10000;
-    case;        return      0;
+    case King;   return 5000000;
+    case Queen;  return  900000;
+    case Rook;   return  500000;
+    case Bishop; return  350000;
+    case Knight; return  325000;
+    case Pawn;   return  100000;
+    case;        return       0;
     }
   }
 }
