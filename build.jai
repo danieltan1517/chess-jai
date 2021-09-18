@@ -73,10 +73,7 @@ build_debug :: (executable_name: string, file_names: [] string, workspace_name: 
       break;
     }
   }
-  compiler_end_intercept(w);
-  build_options := get_build_options();
-  build_options.output_type = .NO_OUTPUT;  // No executable for the primary workspace.
-  set_build_options(build_options);
+  set_build_options_dc(.{do_output=false});
 }
 
 build_release :: (executable_name: string, file_names: [] string, workspace_name: string) {
@@ -107,10 +104,7 @@ build_release :: (executable_name: string, file_names: [] string, workspace_name
       break;
     }
   }
-  compiler_end_intercept(w);
-  build_options := get_build_options();
-  build_options.output_type = .NO_OUTPUT;  // No executable for the primary workspace.
-  set_build_options(build_options);
+  set_build_options_dc(.{do_output=false});
 }
 
 install :: () {

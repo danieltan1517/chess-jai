@@ -7,7 +7,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   memset(__history_moves.data, 0, size_of(float)*2*64*64);
   memset(__killer_moves.data,  0, size_of(Move16)*2*64);
   __nodes_searched = 0;
-  //clear_hash_table();
+  clear_hash_table();
   reset_temporary_storage();
   Push_Temporary();
 

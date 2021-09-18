@@ -197,6 +197,7 @@ getline :: () -> string {
   // for "stop".
   if has_elements_to_dequeue()
     return dequeue();
+  reset_queue();
   bytes_read := 0;
   memset(__buffer.data, 0, __buffer.count);
   while true {
@@ -206,7 +207,6 @@ getline :: () -> string {
 
     sleep_milliseconds(25);
   }
-  reset_queue();
   str := to_string(__buffer.data, bytes_read-1); // -1 the '\n' char
   for line: split(str, "\n") {
     enqueue(line);

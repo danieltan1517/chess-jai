@@ -32,7 +32,7 @@ nnue_evaluate :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) -> in
   translate_bitboard(b_pawn, 12);
 
   eval := __nnue_evaluate(player=xx (!whose_turn), pieces.data, squares.data);
-  return (eval * (100 - fifty)) / 100;
+  return eval;  //(eval * (100 - fifty)) / 100;
 
   translate_bitboard :: (bb: u64, piece_type: s32) #expand {
     while bb {
@@ -109,8 +109,8 @@ trivial_evaluation :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) 
 nnue :: #foreign_library "nnue-probe/src/libnnueprobe";
 
 //eval_file :: #run join(#filepath, "resources/nn-fb50f1a2b1-20210705.nnue");
-//eval_file :: #run join(#filepath, "resources/nn-04cf2b4ed1da.nnue");
-eval_file :: #run join(#filepath, "resources/nn-eba324f53044.nnue");
+eval_file :: #run join(#filepath, "resources/nn-04cf2b4ed1da.nnue");
+//eval_file :: #run join(#filepath, "resources/nn-eba324f53044.nnue");
 
 __nnue_init :: (eval_file: *s8) #foreign nnue "nnue_init"; 
 __nnue_evaluate :: (player: s32, pieces: *s32, squares: *s32) -> s32 #foreign nnue "nnue_evaluate";
