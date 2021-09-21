@@ -72,7 +72,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   REDUCTION_LIMIT  :: 3;
   if (__nodes_searched & 16384) && stdin_stop_signal()
     return 0;
-
+  pv_node := (beta-alpha) > 1;
   auto_release_temp();
   line: PVLine;
 
@@ -96,12 +96,11 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   array_reserve(*move_array, 40);
   check := generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
   check_for_checkmate_stalemate();
-  null_move_pruning();
 
   //reverse_futility_pruning();
+  null_move_pruning();
   //razoring();
 
-  best_pv := true;
   move_ordering(pieces, move_array, whose_turn, pv_line, ply, bh_move);
 
   best_eval := -INF;
@@ -118,7 +117,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     }
 
     eval := 0;
-    if best_pv {
+    if moves_searched == 0 {
       eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -beta-1, -alpha, next_fifty);
     } else {
       // nega-scout
@@ -150,7 +149,6 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
     if eval > alpha {
       hash_flag = TFLAGS.EXACT;
-      best_pv = false;
       alpha = eval;
       pv_line.argmove[0], bh_move = move;
       memcpy(*pv_line.argmove[1], *line.argmove[0], line.cmove * size_of(Move16));
@@ -242,13 +240,13 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
   reverse_futility_pruning :: () #expand {
     // taken from BBC chess engine...
-    `static_eval := nnue_evaluate(pieces, whose_turn, fifty);
-    /*if depth < 3 && !pv_node && check == 0 && abs(beta-1) > -INF + 100 then {
-      futility_margin := 500 * depth; // stockfish has its futility_margin at 214 * depth.
+    `static_eval := evaluate(pieces, whose_turn, fifty);
+    if depth < 3 && !pv_node && check == 0 && abs(beta-1) > -INF + 100 then {
+      futility_margin := 214 * depth; // stockfish has its futility_margin at 214 * depth.
       if static_eval - futility_margin >= beta then {
         `return static_eval - futility_margin;
       }
-    }*/
+    }
   }
 
   razoring :: () #expand {
@@ -517,10 +515,6 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       } else {
         order[i] = __history_moves[cast(int)whose_turn][from_index][to_index];
       }
-    }
-
-    if from & (pieces.w_pawn|pieces.b_pawn) {
-      order[i] += 50;
     }
   }
 
