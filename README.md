@@ -29,6 +29,7 @@ The chess GUI uses the glfw3 and gl libraries.
 
 ## AI Chess Engine Features
 * AI Estimated Rating: 2200 (based on playing chess.com bots)
+* Aspiration Window Search
 * Parse and load FEN strings
 * Iterative Deepening
 * Implements UCI (Universal Chess Interface) Protocol to communicate with a UI

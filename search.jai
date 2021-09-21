@@ -15,20 +15,27 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   score : int; best_move : Move16;
   alpha: int = -INF;
   beta:  int = INF;
+  delta: int = 50;
   cur_depth := 1;
   while cur_depth <= depth { 
     score = negamax(pieces, castling, ep, cur_depth, whose_turn, *pv_line, repetitions, alpha=alpha, beta=beta, fifty=fifty);
     if stop_signal_triggered() then 
       break;
 
-    if score <= alpha || score >= beta {
-      alpha = -INF;
-      beta  = INF;
+    if score <= alpha then {
+      beta = (alpha + beta) / 2;
+      alpha = max(score - delta, -INF);
+      delta += (delta/4) + 5;
+      continue;
+    } else if score >= beta then {
+      beta = min(score + delta, INF);
+      delta += (delta/4) + 5;
       continue;
     }
 
-    alpha = score - 50;
-    beta  = score + 50;
+    alpha = max(score - delta, -INF);
+    beta  = min(score + delta,  INF);
+    delta = 50;
 
     best_move = pv_line.argmove[0];
     time_taken := get_time() - time_begin;
@@ -106,7 +113,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     make_move(pieces, *c_copy, *ep_copy, *capture, move, whose_turn);
 
     next_fifty := 0;
-    if mflag == Move16.Quiet && ((to & (pieces.w_pawn|pieces.b_pawn)) == 0) {
+    if mflag == Move16.Quiet && (((cast(u64) (1 << to)) & (pieces.w_pawn|pieces.b_pawn)) == 0) {
       next_fifty = fifty + 1;
     }
 
@@ -135,6 +142,8 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       alpha = beta;
       if !is_capture(mflag) {
         __history_moves[cast(int)whose_turn][from][to] += depth*depth;
+        __killer_moves[1][ply] = __killer_moves[0][ply];
+        __killer_moves[0][ply] = move;
       }
       break;
     }
@@ -146,10 +155,6 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       pv_line.argmove[0], bh_move = move;
       memcpy(*pv_line.argmove[1], *line.argmove[0], line.cmove * size_of(Move16));
       pv_line.cmove = line.cmove + 1;
-      if !is_capture(mflag) {
-        __killer_moves[1][ply] = __killer_moves[0][ply];
-        __killer_moves[0][ply] = move;
-      }
     }
   }
   transposition_table_store(hash, key, alpha, hash_flag, depth, bh_move);
@@ -165,9 +170,9 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
         flag  := ttable.entries[key].flag;
         if flag == TFLAGS.EXACT then {
           return true, value, 0;
-        } else if flag == TFLAGS.LOWER && value <= alpha then {
+        } else if flag == TFLAGS.UPPER && value <= alpha then {
           return true, alpha, 0;
-        } else if flag == TFLAGS.UPPER && value >= beta then {
+        } else if flag == TFLAGS.LOWER && value >= beta then {
           return true, beta, 0;
         }
       }
