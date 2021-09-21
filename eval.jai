@@ -32,7 +32,7 @@ nnue_evaluate :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) -> in
   translate_bitboard(b_pawn, 12);
 
   eval := __nnue_evaluate(player=xx (!whose_turn), pieces.data, squares.data);
-  return eval;  //(eval * (100 - fifty)) / 100;
+  return (eval * (100 - fifty)) / 100;
 
   translate_bitboard :: (bb: u64, piece_type: s32) #expand {
     while bb {

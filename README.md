@@ -28,7 +28,7 @@ The chess GUI uses the glfw3 and gl libraries.
 * Opening Book (need to clean up memory usage)
 
 ## AI Chess Engine Features
-* AI Estimated Rating: 2200 (based on playing chess.com bots)
+* AI Estimated Rating: 2500 (based on playing chess.com bots)
 * Aspiration Window Search
 * Parse and load FEN strings
 * Iterative Deepening
