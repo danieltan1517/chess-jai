@@ -939,6 +939,10 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
         TF, mov := pick_random_opening(move_record, opening_book);
         if TF {
           ui_handle_move_made(piece_bitboard, flags, ep_sq, moves_arr, mov);
+          f, fbb, tbb := decode_move(mov);
+          from := cast(u64)(1 << fbb);
+          to   := cast(u64)(1 << tbb);
+          last_move_bb = from|to;
         } else {
           cmd_str := uci_position_command();
           uci_write_command(cmd_str);

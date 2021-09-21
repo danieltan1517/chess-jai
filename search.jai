@@ -103,12 +103,10 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     c_copy, ep_copy, capture := castling, ep, PieceType.None;
     mflag, from, to := decode_move(move);
 
-    before_pawn := pieces.w_pawn | pieces.b_pawn;
     make_move(pieces, *c_copy, *ep_copy, *capture, move, whose_turn);
-    after_pawn := pieces.w_pawn | pieces.b_pawn;
 
     next_fifty := 0;
-    if mflag == Move16.Quiet && before_pawn == after_pawn {
+    if mflag == Move16.Quiet && ((to & (pieces.w_pawn|pieces.b_pawn)) == 0) {
       next_fifty = fifty + 1;
     }
 
@@ -221,7 +219,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     NULL_MOVE_MAX :: 4;
     // check for zugwang before null move pruning && TODO: make sure engine doesn't bug out at en paesant.
     if null_flag && depth >= NULL_MOVE_MAX && check == 0 && !has_zugzwang(pieces) {
-      score := -negamax(pieces, castling, 0, depth-2, !whose_turn, *line, repetitions, ply+1, false, -beta, -beta + 1, fifty);
+      score := -negamax(pieces, castling, 0, depth-3, !whose_turn, *line, repetitions, ply+1, false, -beta, -beta + 1, fifty);
       if score >= beta then {
         `return beta;
       }
@@ -514,6 +512,10 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       } else {
         order[i] = __history_moves[cast(int)whose_turn][from_index][to_index];
       }
+    }
+
+    if from & (pieces.w_pawn|pieces.b_pawn) {
+      order[i] += 50;
     }
   }
 
