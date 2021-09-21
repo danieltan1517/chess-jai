@@ -1564,7 +1564,7 @@ generate_normal_moves_from_bitboard :: (moves_arr: *[..]Move16, from: u64, to: u
 generate_pawn_moves_from_bitboard :: (moves_arr: *[..]Move16, from: u64, to: u64, opp_pieces: u64, $captures_only: bool) {
   using Move16;
   #if captures_only then
-    to &= opp_pieces;
+    to &= opp_pieces | (xx rank_1) | (xx rank_8);  // promotions are important too.
 
   while to {
     to_bb := cast(u64)(1 << bit_scan_forward(to));

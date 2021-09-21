@@ -936,7 +936,10 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
       if reset_key_state == .RESET_PRESS then {
         uci_state = .UCI_NEWGAME;
       } else if equal(fen_string, "startpos") && (cast(int)(random_get()) % 100) < 90 {
-        TF, mov := pick_random_opening(move_record, opening_book);
+        cmd_str := uci_position_command();
+        uci_write_command(cmd_str);
+        uci_state = .UCI_POS_CMD;
+        /*TF, mov := pick_random_opening(move_record, opening_book);
         if TF && mov != 0 {
           ui_handle_move_made(piece_bitboard, flags, ep_sq, moves_arr, mov);
           f, fbb, tbb := decode_move(mov);
@@ -947,7 +950,7 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
           cmd_str := uci_position_command();
           uci_write_command(cmd_str);
           uci_state = .UCI_POS_CMD;
-        }
+        }*/
       } else {
         cmd_str := uci_position_command();
         uci_write_command(cmd_str);
