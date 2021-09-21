@@ -68,7 +68,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
 }
 
 negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, repetitions: *[..]u64, ply: int = 0, $null_flag := true, alpha := -INF, beta := INF, fifty: int) -> int {
-  FULL_DEPTH_MOVES :: 4;
+  FULL_DEPTH_MOVES :: 6;
   REDUCTION_LIMIT  :: 3;
   if (__nodes_searched & 16384) && stdin_stop_signal()
     return 0;
@@ -102,8 +102,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   //razoring();
 
   move_ordering(pieces, move_array, whose_turn, pv_line, ply, bh_move);
-
-  best_eval := -INF;
+  best_pv := true;
   hash_flag := TFLAGS.UPPER;
   for move, moves_searched : move_array {
     c_copy, ep_copy, capture := castling, ep, PieceType.None;
@@ -117,13 +116,14 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     }
 
     eval := 0;
-    if moves_searched == 0 {
+    if best_pv == true {
       eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -beta-1, -alpha, next_fifty);
     } else {
       // nega-scout
       if moves_searched >= FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && check == 0 && mflag == Move16.Quiet { 
         // do late move reduction when not in check and making "quiet moves" 
-        eval = -negamax(pieces, c_copy, ep_copy, depth-2, !whose_turn, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty);
+        R := depth/4;
+        eval = -negamax(pieces, c_copy, ep_copy, depth-R-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty);
       } else {
         // do normal search.
         eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty);
@@ -149,6 +149,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
     if eval > alpha {
       hash_flag = TFLAGS.EXACT;
+      best_pv = false;
       alpha = eval;
       pv_line.argmove[0], bh_move = move;
       memcpy(*pv_line.argmove[1], *line.argmove[0], line.cmove * size_of(Move16));
@@ -222,7 +223,8 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     NULL_MOVE_MAX :: 4;
     // check for zugwang before null move pruning && TODO: make sure engine doesn't bug out at en paesant.
     if null_flag && depth >= NULL_MOVE_MAX && check == 0 && !has_zugzwang(pieces) {
-      score := -negamax(pieces, castling, 0, depth-3, !whose_turn, *line, repetitions, ply+1, false, -beta, -beta + 1, fifty);
+      R := depth/4;
+      score := -negamax(pieces, castling, 0, depth-R-1, !whose_turn, *line, repetitions, ply+1, false, -beta, -beta + 1, fifty);
       if score >= beta then {
         `return beta;
       }
