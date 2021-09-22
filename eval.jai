@@ -60,8 +60,8 @@ trivial_evaluation :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) 
 
 
     if w_pieces & (~(w_pawn|w_knight)) {
-      side := ifx whose_turn then 1 else -1;
-      eval := eval_winning_position(w_king, q=w_queen, r=w_rook, b=w_bishop, n=w_knight, p=w_pawn, b_king) * side;
+      side := ifx whose_turn then 1 else -1; 
+      eval := eval_winning_position(w_king, q=w_queen, r=w_rook, b=w_bishop, n=w_knight, p=bit_reverse64(w_pawn), b_king) * side;
       `return (eval * (100 - fifty)) / 100;
     } 
   }
@@ -91,8 +91,14 @@ trivial_evaluation :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) 
     push_close := 140 - 20 * distance;
     edge       := king_endgame[los];
     mat        := popcount(q)*90000 + popcount(r)*50000 + popcount(b)*35000 + popcount(n)*30000;
-    pawn       := popcount(p)*1000;
-    return push_close + edge + 0x7FF_FFFF + mat + pawn;
+    pawn_points:= 0;
+    while p {
+      i := bit_scan_forward(p);
+      pawn_points += eg_pawn_table[i];
+      p &= p-1;
+    }
+
+    return push_close + edge + 0x7FF_FFFF + mat + pawn_points;
 
     king_endgame :: int.[
       500,400,300,200,200,300,400,500,
@@ -103,6 +109,18 @@ trivial_evaluation :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) 
       300,200,100,100,100,100,200,300,
       400,300,200,200,200,200,300,400,
       500,400,300,300,300,300,400,500];
+
+    eg_pawn_table :: int.[
+      0,   0,   0,   0,   0,   0,   0,   0,
+    178, 173, 158, 134, 147, 132, 165, 187,
+     94, 100,  85,  67,  56,  53,  82,  84,
+     32,  24,  13,   5,  -2,   4,  17,  17,
+     13,   9,  -3,  -7,  -7,  -8,   3,  -1,
+      4,   7,  -6,   1,   0,  -5,  -1,  -8,
+     13,   8,   8,  10,  13,   0,   2,  -7,
+      0,   0,   0,   0,   0,   0,   0,   0,
+    ];
+
   }
 }
 
