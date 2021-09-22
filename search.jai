@@ -4,10 +4,10 @@
 search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *[..] u64, depth: int, whose_turn: bool, fifty: int) -> Move16 {
   // this is basically a fancy wrapper around negamax, negamax does all the work, this just sets everything up.
   time_begin := get_time();
-  memset(__history_moves.data, 0, size_of(float)*2*64*64);
-  memset(__killer_moves.data,  0, size_of(Move16)*2*64);
-  memset(__capture_history.data, 0, size_of(Move16)*2*64*64);
-  memset(__counter_moves.data, 0, size_of(Move16)*64*64);
+  memset(__history_moves.data, 0, size_of(type_of(__history_moves)));
+  memset(__killer_moves.data,  0, size_of(type_of(__killer_moves)));
+  memset(__capture_history.data, 0, size_of(type_of(__capture_history)));
+  memset(__counter_moves.data, 0, size_of(type_of(__counter_moves)));
   __nodes_searched = 0;
   clear_hash_table();
   reset_temporary_storage();
@@ -141,12 +141,13 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     if eval >= beta then {
       hash_flag = TFLAGS.LOWER;
       alpha = beta;
+      piece_type := piece_type_at(cast(u64)(1 << from), pieces, whose_turn);
       if !is_capture(mflag) {
-        __history_moves[cast(int)whose_turn][from][to] += depth*depth;
+        __history_moves[cast(int)whose_turn][cast(int)piece_type][to] += depth*depth;
         __killer_moves[1][ply] = __killer_moves[0][ply];
         __killer_moves[0][ply] = move;
       } else {
-        __capture_history[cast(int)whose_turn][from][to] += 1 << depth;
+        __capture_history[cast(int)whose_turn][cast(int)piece_type][to] += 1 << depth;
       }
       break;
     }
@@ -496,6 +497,7 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
   order := NewArray(count, int, allocator=__temporary_allocator);
   pawns := pieces.w_pawn | pieces.b_pawn;
   for i: 0..count-1 {
+
     if move_array[i] == pv_line.argmove[0] {
       order[i] = INF;
       continue;
@@ -506,15 +508,17 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
     flags, from_index, to_index := decode_move(move_array[i]);
     from := cast(u64) (1 << from_index);
     to   := cast(u64) (1 << to_index);
+    piece_type := piece_type_at(from, pieces, whose_turn);
 
     using Move16;
     if flags == Capture {
-      //piece_from_type := piece_type_at(from, pieces, whose_turn);
       piece_to_type := piece_type_at(to, pieces, !whose_turn);
-      order[i] = mvv(piece_to_type) + __capture_history[cast(int)whose_turn][from_index][to_index];
+      order[i] = mvv(piece_to_type) + __capture_history[cast(int)whose_turn][cast(int)piece_type][to_index];
+
     } else if flags == Ep_Capture {
       EP_SCORE :: #run mvv(PieceType.Queen);
-      order[i] = EP_SCORE + __capture_history[cast(int)whose_turn][from_index][to_index];
+      order[i] = EP_SCORE + __capture_history[cast(int)whose_turn][cast(int)piece_type][to_index];
+
     } else if flags == Knight_Promotion || flags == Knight_Promotion_Capture {
       order[i] = 32500;
     } else if flags == Bishop_Promotion || flags == Bishop_Promotion_Capture {
@@ -529,14 +533,14 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       } else if __killer_moves[1][ply] == move_array[i] {
         order[i] = 8500;
       } else {
-        order[i] = __history_moves[cast(int)whose_turn][from_index][to_index];
+        order[i] = __history_moves[cast(int)whose_turn][cast(int)piece_type][to_index];
       }
     }
     if move_array[i] == __counter_moves[from_index][to_index] then {
-      COUNTER_BONUS :: 225;
+      COUNTER_BONUS :: 512;
       order[i] += COUNTER_BONUS;
     }
-    if from & pawns {
+    if from & pawns then {
       order[i] += 3; // prefer pawn moves.
     }
   }
@@ -553,14 +557,15 @@ capture_order :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
     flags, from_index, to_index := decode_move(move_array[i]);
     from := cast(u64) (1 << from_index);
     to   := cast(u64) (1 << to_index);
+    piece_type := piece_type_at(from, pieces, !whose_turn);
     using Move16;
     if flags == Capture {
       piece_to_type := piece_type_at(to, pieces, !whose_turn);
-      order[i] = mvv(piece_to_type) + __capture_history[cast(int)whose_turn][from_index][to_index];
+      order[i] = mvv(piece_to_type) + __capture_history[cast(int)whose_turn][cast(int)piece_type][to_index];
     } else if flags == Ep_Capture {
-      order[i] = mvv(PieceType.Queen) + __capture_history[cast(int)whose_turn][from_index][to_index];
+      order[i] = mvv(PieceType.Queen) + __capture_history[cast(int)whose_turn][cast(int)piece_type][to_index];
     } else if Knight_Promotion_Capture <= flags && flags <= Queen_Promotion_Capture {
-      order[i] = mvv(PieceType.Queen) + __capture_history[cast(int)whose_turn][from_index][to_index];
+      order[i] = mvv(PieceType.Queen) + __capture_history[cast(int)whose_turn][cast(int)piece_type][to_index];
     }
   }
   bubble_sort(order, move_array, count);
@@ -639,8 +644,8 @@ piece_type_at :: (bit: u64, using p: *Piece_Bitboards, whose_turn: bool) -> Piec
 
 
 __nodes_searched := 0;
-__history_moves:   [2][64][64] int;
-__capture_history: [2][64][64] int;
+__history_moves:   [2][7][64] int;
+__capture_history: [2][7][64] int;
 __killer_moves:    [2][64] Move16;
 __counter_moves:   [64][64] Move16;
 
