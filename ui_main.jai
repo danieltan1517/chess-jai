@@ -15,14 +15,16 @@ you can try out this program with chess engines that implement
 UCI, e.g. Stockfish, Lc0, RubiChess, etc.
 
 Command-Line Arguments:
-depth=x -- sets the search depth of the engine to x
-hh      -- white=human vs black=human
-hc      -- white=human vs black=ai
-ch      -- white=ai vs black=human
-cc      -- white=ai vs black=ai
-r       -- random side, human vs computer
-ai=Lc0  -- sets the ai to that particular ai. Must be in the resources directory.
-fen="x" -- loads the fen string into the board.
+depth=x      -- sets the search depth of the engine to x
+hh           -- white=human vs black=human
+hc           -- white=human vs black=ai
+ch           -- white=ai vs black=human
+cc           -- white=ai vs black=ai
+r            -- random side, human vs computer
+ai=Lc0       -- sets the ai to that particular ai. Must be in the resources directory.
+fen="x"      -- loads the fen string into the board.
+openings_on  -- turns openings book on
+openings_off -- turns opening book off
 
 Here is a sample command-line calling:
 
@@ -143,6 +145,7 @@ main :: () {
 
 timer_on := false;
 delta_time : float32 = 0.0;
+openings_on := true;
 
 handle_command_line :: () -> string #expand {
   // TODO: 
@@ -170,6 +173,10 @@ handle_command_line :: () -> string #expand {
       w_is_human = false;
       b_is_human = true;
       `white_side = false;
+    case "openings_on";
+      openings_on = true;
+    case "openings_off";
+      openings_on = false;
     case "r";
       // TODO: use rand function????
       w_is_human = xx ((cast(int)(get_time() * 130598103698.923467)) & 1);
@@ -935,11 +942,10 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
       
       if reset_key_state == .RESET_PRESS then {
         uci_state = .UCI_NEWGAME;
-      } else if equal(fen_string, "startpos") && (cast(int)(random_get()) % 100) < 90 {
+      } else if openings_on == true && equal(fen_string, "startpos") && (cast(int)(random_get()) % 100) < 90 {
         cmd_str := uci_position_command();
         uci_write_command(cmd_str);
-        uci_state = .UCI_POS_CMD;
-        /*TF, mov := pick_random_opening(move_record, opening_book);
+        TF, mov := pick_random_opening(move_record, opening_book);
         if TF && mov != 0 {
           ui_handle_move_made(piece_bitboard, flags, ep_sq, moves_arr, mov);
           f, fbb, tbb := decode_move(mov);
@@ -950,7 +956,7 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
           cmd_str := uci_position_command();
           uci_write_command(cmd_str);
           uci_state = .UCI_POS_CMD;
-        }*/
+        }
       } else {
         cmd_str := uci_position_command();
         uci_write_command(cmd_str);

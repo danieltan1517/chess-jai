@@ -95,7 +95,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   move_array: [..] Move16;
   array_reserve(*move_array, 40);
   check := generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
-  check_for_checkmate_stalemate();
+  is_stalemate := check_for_checkmate_stalemate();
 
   //reverse_futility_pruning();
   null_move_pruning();
@@ -156,6 +156,12 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       pv_line.cmove = line.cmove + 1;
     }
   }
+
+  if is_stalemate then {
+    alpha = 0 + ply;
+    depth = 50;
+  }
+
   transposition_table_store(hash, key, alpha, hash_flag, depth, bh_move);
   return alpha;
 
@@ -181,26 +187,27 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   }
 
   transposition_table_store :: (hash: u64, key: u64, value: int, hash_flag: TFLAGS, depth: int, bmove: Move16) {
-    ttable.hash[key] = hash;
-    ttable.entries[key].score = xx value;
-    ttable.entries[key].flag = hash_flag;
-    ttable.entries[key].depth = xx depth;
-    ttable.entries[key].bmove = bmove;
+    if depth >= ttable.entries[key].depth {
+      ttable.hash[key] = hash;
+      ttable.entries[key].score = xx value;
+      ttable.entries[key].flag = hash_flag;
+      ttable.entries[key].depth = xx depth;
+      ttable.entries[key].bmove = bmove;
+    }
   }
 
-  check_for_checkmate_stalemate :: () #expand {
+  check_for_checkmate_stalemate :: () -> bool #expand {
     if !move_array then {
       if check != 0 then {
         `return -INF + ply;
       } else {
-        `return 0;
+        `return 0 + ply;
       }
     }
 
     // threefold repetition check / fifty move rule.
     if fifty >= 100 then {
-      pv_line.argmove[0] = move_array[0];  
-      `return 0 - ply;
+      return true;
     }
 
     count := 0;
@@ -209,14 +216,14 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       if hash == (<<repetitions) [repetitions.count - 1 - count] then {
         reps += 1;
         if reps >= 2 then {
-          pv_line.argmove[0] = move_array[0];
-          `return 0 - ply;
+          return true;
         }
       }
       count += 1;
     }
     array_add(repetitions, hash);
     `defer pop(repetitions);
+    return false;
   }
 
   null_move_pruning :: () #expand {
