@@ -20,7 +20,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   delta: int = 50;
   cur_depth := 1;
   while cur_depth <= depth { 
-    score = negamax(pieces, castling, ep, cur_depth, whose_turn, *pv_line, repetitions, alpha=alpha, beta=beta, fifty=fifty);
+    score = negamax(pieces, castling, ep, cur_depth, whose_turn, *pv_line, repetitions, alpha=alpha, beta=beta, fifty=fifty, prev_move=Move16.Quiet);
     if stop_signal_triggered() then 
       break;
 
@@ -60,7 +60,6 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
     str := builder_to_string(*builder, allocator=__temporary_allocator);
     print("%\n", str);
     reset_temporary_storage();
-    memset(__killer_moves.data,  0, size_of(Move16)*2*64);
     __nodes_searched = 0;
     print_move_to_buffer :: (mv: Move16) #expand {
       _, from, to := decode_move(mv);
@@ -69,12 +68,11 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   }
 }
 
-negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, repetitions: *[..]u64, ply: int = 0, $null_flag := true, alpha := -INF, beta := INF, fifty: int) -> int {
+negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, repetitions: *[..]u64, ply: int = 0, $null_flag := true, alpha := -INF, beta := INF, fifty: int, prev_move: Move16) -> int {
   FULL_DEPTH_MOVES :: 6;
   REDUCTION_LIMIT  :: 3;
   if (__nodes_searched & 16384) && stdin_stop_signal()
     return 0;
-  pv_node := (beta-alpha) > 1;
   auto_release_temp();
   line: PVLine;
 
@@ -119,21 +117,21 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
     eval := 0;
     if best_pv == true {
-      eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -beta-1, -alpha, next_fifty);
+      eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -beta-1, -alpha, next_fifty, move);
     } else {
       // nega-scout
       if moves_searched >= FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && check == 0 && mflag == Move16.Quiet { 
         // do late move reduction when not in check and making "quiet moves" 
         R := depth/4;
-        eval = -negamax(pieces, c_copy, ep_copy, depth-R-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty);
+        eval = -negamax(pieces, c_copy, ep_copy, depth-R-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty, move);
       } else {
         // do normal search.
-        eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty);
+        eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty, move);
       }
 
       // re-search the move that has failed to be proved to be bad with normal alpha beta score bounds
       if eval > alpha && eval < beta then {
-        eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -beta, -alpha, next_fifty);
+        eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -beta, -alpha, next_fifty, move);
       }
     }
     unmake_move(pieces, capture, move, whose_turn);
@@ -148,6 +146,9 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
         __killer_moves[0][ply] = move;
       } else {
         __capture_history[cast(int)whose_turn][cast(int)piece_type][to] += 1 << depth;
+        if prev_move != 0 {
+          __counter_moves[from][to] = prev_move;
+        }
       }
       break;
     }
@@ -159,10 +160,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       pv_line.argmove[0], bh_move = move;
       memcpy(*pv_line.argmove[1], *line.argmove[0], line.cmove * size_of(Move16));
       pv_line.cmove = line.cmove + 1;
-    } else if eval == alpha {
-      // TODO: not correct, but it'll do for now...
-      __counter_moves[from][to] = move;
-    }
+    } 
   }
 
   if is_stalemate then {
@@ -170,7 +168,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     depth = 50;
   }
 
-  transposition_table_store(hash, key, alpha, hash_flag, depth, bh_move);
+  transposition_table_store(hash, key, alpha, hash_flag, depth, bh_move, line);
   return alpha;
 
   transposition_table_lookup :: (alpha: int, beta: int, hash: u64, key: u64, depth: int, ply: int) -> bool, int, Move16 {
@@ -194,7 +192,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     return false, 0, bh_move;
   }
 
-  transposition_table_store :: (hash: u64, key: u64, value: int, hash_flag: TFLAGS, depth: int, bmove: Move16) {
+  transposition_table_store :: (hash: u64, key: u64, value: int, hash_flag: TFLAGS, depth: int, bmove: Move16, line: PVLine) {
     if depth >= ttable.entries[key].depth {
       ttable.hash[key] = hash;
       ttable.entries[key].score = xx value;
@@ -239,7 +237,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     // check for zugwang before null move pruning && TODO: make sure engine doesn't bug out at en paesant.
     if null_flag && depth >= NULL_MOVE_MAX && check == 0 && !has_zugzwang(pieces) {
       R := depth/4;
-      score := -negamax(pieces, castling, 0, depth-R-1, !whose_turn, *line, repetitions, ply+1, false, -beta, -beta + 1, fifty);
+      score := -negamax(pieces, castling, 0, depth-R-1, !whose_turn, *line, repetitions, ply+1, false, -beta, -beta + 1, fifty, Move16.Quiet);
       if score >= beta then {
         `return beta;
       }
@@ -467,8 +465,8 @@ quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn:
 }
 
 PVLine :: struct {
-  cmove: int;
-  argmove: [16] Move16;  // TODO: WTF, THIS is the thing that is taking up SOO much time?!?!
+  cmove: u8;
+  argmove: [64] Move16;  // TODO: WTF, THIS is the thing that is taking up SOO much time?!?!
 }
 
 // performance test
@@ -549,7 +547,6 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
 }
 
 capture_order :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn: bool) {
-  // TODO: I don't know if some other function wants to use temporary storage.
   auto_release_temp();
   count := move_array.count;
   order := NewArray(count, int, allocator=__temporary_allocator);
@@ -564,7 +561,7 @@ capture_order :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       order[i] = mvv(piece_to_type) + __capture_history[cast(int)whose_turn][cast(int)piece_type][to_index];
     } else if flags == Ep_Capture {
       order[i] = mvv(PieceType.Queen) + __capture_history[cast(int)whose_turn][cast(int)piece_type][to_index];
-    } else if Knight_Promotion_Capture <= flags && flags <= Queen_Promotion_Capture {
+    } else if Knight_Promotion <= flags && flags <= Queen_Promotion_Capture {
       order[i] = mvv(PieceType.Queen) + __capture_history[cast(int)whose_turn][cast(int)piece_type][to_index];
     }
   }

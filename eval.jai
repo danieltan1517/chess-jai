@@ -12,9 +12,8 @@ evaluate :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) -> int {
 
 #scope_file
 nnue_evaluate :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) -> int {
-  pieces:  [33] s32; // TODO: should this be 65 or 33?
-  squares: [33] s32;
-
+  pieces  := NewArray(33, s32, allocator=__temporary_allocator);
+  squares := NewArray(33, s32, allocator=__temporary_allocator);
   index := 0;
   translate_bitboard(w_king, 1);
   translate_bitboard(b_king, 7);
@@ -112,12 +111,12 @@ trivial_evaluation :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) 
 
     eg_pawn_table :: int.[
       0,   0,   0,   0,   0,   0,   0,   0,
-    178, 173, 158, 134, 147, 132, 165, 187,
-     94, 100,  85,  67,  56,  53,  82,  84,
-     32,  24,  13,   5,  -2,   4,  17,  17,
-     13,   9,  -3,  -7,  -7,  -8,   3,  -1,
-      4,   7,  -6,   1,   0,  -5,  -1,  -8,
-     13,   8,   8,  10,  13,   0,   2,  -7,
+    750, 750, 750, 750, 750, 750, 750, 750,
+    550, 550, 550, 550, 550, 550, 550, 550,
+    250, 250, 250, 250, 250, 250, 250, 250,
+    150, 150, 150, 150, 150, 150, 150, 150,
+     50,  50,  50,  50,  50,  50,  50,  50,
+     25,  25,  25,  25,  25,  25,  25,  25,
       0,   0,   0,   0,   0,   0,   0,   0,
     ];
 
