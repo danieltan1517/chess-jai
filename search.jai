@@ -82,8 +82,6 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
   TF, tt_score, bh_move := transposition_table_lookup(alpha, beta, hash, key, depth, ply);
   if TF then {
-    pv_line.cmove = 0;
-    pv_line.argmove[0] = bh_move;
     return tt_score;
   }
 
@@ -140,15 +138,15 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       hash_flag = TFLAGS.LOWER;
       alpha = beta;
       piece_type := piece_type_at(cast(u64)(1 << from), pieces, whose_turn);
+      if prev_move != 0 {
+        __counter_moves[from][to] = prev_move;
+      }
       if !is_capture(mflag) {
         __history_moves[cast(int)whose_turn][cast(int)piece_type][to] += depth*depth;
         __killer_moves[1][ply] = __killer_moves[0][ply];
         __killer_moves[0][ply] = move;
       } else {
         __capture_history[cast(int)whose_turn][cast(int)piece_type][to] += 1 << depth;
-        if prev_move != 0 {
-          __counter_moves[from][to] = prev_move;
-        }
       }
       break;
     }
@@ -166,6 +164,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   if is_stalemate then {
     alpha = 0 + ply;
     depth = 50;
+    hash_flag = TFLAGS.EXACT;
   }
 
   transposition_table_store(hash, key, alpha, hash_flag, depth, bh_move, line);
@@ -647,7 +646,7 @@ __killer_moves:    [2][64] Move16;
 __counter_moves:   [64][64] Move16;
 
 // get something off the ground.
-TSIZE :: 0x100_000;
+TSIZE :: 0x200_000;
 
 ttable : struct {
   hash:     [TSIZE] u64;
