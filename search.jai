@@ -82,6 +82,8 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
   TF, tt_score, bh_move := transposition_table_lookup(alpha, beta, hash, key, depth, ply);
   if TF then {
+    pv_line.cmove = 0;
+    pv_line.argmove[0] = bh_move;
     return tt_score;
   }
 
