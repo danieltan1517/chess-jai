@@ -145,7 +145,7 @@ main :: () {
 
 timer_on := false;
 delta_time : float32 = 0.0;
-openings_on := true;
+openings_on := false;
 
 handle_command_line :: () -> string #expand {
   // TODO: 
