@@ -66,7 +66,8 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
 
   print_depth :: (depth: int, move: Move16) #expand {
     _, from, to := decode_move(move);
-    print("info depth %1 currmove %2%3\n", depth, cast(serialized_bb)from, cast(serialized_bb)to);
+    print("info depth %1 score cp %2 alpha %3 beta %4 currmove %5%6\n", depth, score, alpha, beta, cast(serialized_bb)from, cast(serialized_bb)to);
+    reset_temporary_storage();
   }
 
 }
