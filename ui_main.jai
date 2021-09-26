@@ -975,7 +975,7 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
     }
 
   case .UCI_GO_TURN;
-    TIMEOUT_LIMIT :: 10.0;
+    TIMEOUT_LIMIT :: 3.0;
     timeout_timer += delta_time;
     if reset_key_state == .RESET_PRESS {
       uci_write_command("stop\n");

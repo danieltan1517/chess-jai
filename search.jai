@@ -8,6 +8,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   memset(__killer_moves.data,  0, size_of(type_of(__killer_moves)));
   memset(__capture_history.data, 0, size_of(type_of(__capture_history)));
   memset(__counter_moves.data, 0, size_of(type_of(__counter_moves)));
+  memset(__butterfly_heuristic.data, 1, size_of(type_of(__butterfly_heuristic)));
   __nodes_searched = 0;
   clear_hash_table();
   reset_temporary_storage();
@@ -26,18 +27,13 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
     time_taken := get_time() - time_begin;
 
     best_move = pv_line.argmove[0];
-    if score <= alpha then {
-      beta = (alpha + beta) / 2;
-      alpha = max(score - delta, -INF);
+    if score <= alpha || score >= beta then {
+      beta =  score + delta;
+      alpha = score - delta;
       delta += (delta/4) + 5;
       print_depth(cur_depth, best_move);
       continue;
-    } else if score >= beta then {
-      beta = min(score + delta, INF);
-      delta += (delta/4) + 5;
-      print_depth(cur_depth, best_move);
-      continue;
-    }
+    } 
 
     alpha = max(score - delta, -INF);
     beta  = min(score + delta,  INF);
@@ -115,7 +111,6 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   for move, moves_searched : move_array {
     c_copy, ep_copy, capture := castling, ep, PieceType.None;
     mflag, from, to := decode_move(move);
-
     make_move(pieces, *c_copy, *ep_copy, *capture, move, whose_turn);
 
     next_fifty := 0;
@@ -130,8 +125,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       // nega-scout
       if moves_searched >= FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && check == 0 && mflag == Move16.Quiet { 
         // do late move reduction when not in check and making "quiet moves" 
-        //ratio := (cast(float) moves_searched) / (cast(float) move_array.count);
-        R := 2*depth/3; 
+        R := ifx pv_node then 1 else depth/3;
         eval = -negamax(pieces, c_copy, ep_copy, depth-R-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty, move);
       } else {
         // do normal search.
@@ -160,6 +154,8 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
         __capture_history[cast(int)whose_turn][cast(int)piece_type][to] += 1 << depth;
       }
       break;
+    } else {
+      __butterfly_heuristic[from][to] += 1;
     }
 
     if eval > alpha {
@@ -229,7 +225,8 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     count := 0;
     reps := 0;
     while count < fifty {
-      if hash == (<<repetitions) [repetitions.count - 1 - count] then {
+      i := repetitions.count-1-count;
+      if (<<repetitions) && hash == (<<repetitions) [i] then {
         reps += 1;
         if reps >= 2 then {
           return true;
@@ -246,9 +243,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     NULL_MOVE_MAX :: 4;
     // check for zugwang before null move pruning && TODO: make sure engine doesn't bug out at en paesant.
     if null_flag && depth >= NULL_MOVE_MAX && check == 0 && !has_zugzwang(pieces) {
-      //R := depth/4; 
-      //ratio := (cast(float) moves_searched) / (cast(float) move_array.count);
-      R := 2*depth/3; 
+      R := ifx pv_node then 2 else depth/3;
       score := -negamax(pieces, castling, 0, depth-R-1, !whose_turn, *line, repetitions, ply+1, false, -beta, -beta + 1, fifty, Move16.Quiet);
       if score >= beta then {
         `return beta;
@@ -507,7 +502,6 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
   order := NewArray(count, int, allocator=__temporary_allocator);
   pawns := pieces.w_pawn | pieces.b_pawn;
   for i: 0..count-1 {
-
     if move_array[i] == pv_line.argmove[0] {
       order[i] = INF;
       continue;
@@ -519,15 +513,17 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
     from := cast(u64) (1 << from_index);
     to   := cast(u64) (1 << to_index);
     piece_type := piece_type_at(from, pieces, whose_turn);
-
     using Move16;
     if flags == Capture {
       piece_to_type := piece_type_at(to, pieces, !whose_turn);
-      order[i] = mvv(piece_to_type) + __capture_history[cast(int)whose_turn][cast(int)piece_type][to_index];
+      ch := __capture_history[cast(int)whose_turn][cast(int)piece_type][to_index];
+      order[i] = (mvv(piece_to_type) + ch);
 
     } else if flags == Ep_Capture {
+      ch := __capture_history[cast(int)whose_turn][cast(int)piece_type][to_index];
       EP_SCORE :: #run mvv(PieceType.Queen);
-      order[i] = EP_SCORE + __capture_history[cast(int)whose_turn][cast(int)piece_type][to_index];
+      order[i] = (EP_SCORE + ch);
+
 
     } else if flags == Knight_Promotion || flags == Knight_Promotion_Capture {
       order[i] = 32500;
@@ -543,7 +539,8 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       } else if __killer_moves[1][ply] == move_array[i] {
         order[i] = 8500;
       } else {
-        order[i] = __history_moves[cast(int)whose_turn][cast(int)piece_type][to_index];
+        bh := __butterfly_heuristic[from_index][to_index];
+        order[i] = __history_moves[cast(int)whose_turn][cast(int)piece_type][to_index] / bh;
       }
     }
     if move_array[i] == __counter_moves[from_index][to_index] then {
@@ -657,6 +654,7 @@ __history_moves:   [2][7][64] int;
 __capture_history: [2][7][64] int;
 __killer_moves:    [2][64] Move16;
 __counter_moves:   [64][64] Move16;
+__butterfly_heuristic: [64][64] s16;
 
 // get something off the ground.
 TSIZE :: 0x200_000;
