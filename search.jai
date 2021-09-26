@@ -17,30 +17,31 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   score : int; best_move : Move16;
   alpha: int = -INF;
   beta:  int = INF;
-  delta: int = 50;
+  delta: int = 100;
   cur_depth := 1;
   while cur_depth <= depth { 
     score = negamax(pieces, castling, ep, cur_depth, whose_turn, *pv_line, repetitions, alpha=alpha, beta=beta, fifty=fifty, prev_move=Move16.Quiet);
     if stop_signal_triggered() then 
       break;
+    time_taken := get_time() - time_begin;
 
+    best_move = pv_line.argmove[0];
     if score <= alpha then {
       beta = (alpha + beta) / 2;
       alpha = max(score - delta, -INF);
       delta += (delta/4) + 5;
+      print_depth(cur_depth, best_move);
       continue;
     } else if score >= beta then {
       beta = min(score + delta, INF);
       delta += (delta/4) + 5;
+      print_depth(cur_depth, best_move);
       continue;
     }
 
     alpha = max(score - delta, -INF);
     beta  = min(score + delta,  INF);
-    delta = 50;
-
-    best_move = pv_line.argmove[0];
-    time_taken := get_time() - time_begin;
+    delta = 100;
     print_stats(cur_depth);
     cur_depth += 1;
   }
@@ -66,6 +67,12 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
       print_to_builder(*builder, "%1%2 ", cast(serialized_bb)from, cast(serialized_bb)to);
     }
   }
+
+  print_depth :: (depth: int, move: Move16) #expand {
+    _, from, to := decode_move(move);
+    print("info depth %1 currmove %2%3\n", depth, cast(serialized_bb)from, cast(serialized_bb)to);
+  }
+
 }
 
 negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, repetitions: *[..]u64, ply: int = 0, $null_flag := true, alpha := -INF, beta := INF, fifty: int, prev_move: Move16) -> int {
@@ -74,6 +81,9 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   if (__nodes_searched & 16384) && stdin_stop_signal()
     return 0;
   auto_release_temp();
+
+  pv_node := (beta-alpha) > 1;
+
   line: PVLine;
 
   __nodes_searched += 1;
@@ -120,7 +130,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       // nega-scout
       if moves_searched >= FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && check == 0 && mflag == Move16.Quiet { 
         // do late move reduction when not in check and making "quiet moves" 
-        R := depth/4;
+        R := ifx pv_node then (depth / 4) else (depth/2);
         eval = -negamax(pieces, c_copy, ep_copy, depth-R-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty, move);
       } else {
         // do normal search.
@@ -235,7 +245,8 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     NULL_MOVE_MAX :: 4;
     // check for zugwang before null move pruning && TODO: make sure engine doesn't bug out at en paesant.
     if null_flag && depth >= NULL_MOVE_MAX && check == 0 && !has_zugzwang(pieces) {
-      R := depth/4;
+      //R := depth/3;
+      R := ifx pv_node then (depth / 3) else (depth/2);
       score := -negamax(pieces, castling, 0, depth-R-1, !whose_turn, *line, repetitions, ply+1, false, -beta, -beta + 1, fifty, Move16.Quiet);
       if score >= beta then {
         `return beta;

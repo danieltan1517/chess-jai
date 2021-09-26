@@ -11,6 +11,7 @@ evaluate :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) -> int {
 
 
 #scope_file
+
 nnue_evaluate :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) -> int {
   pieces  := NewArray(33, s32, allocator=__temporary_allocator);
   squares := NewArray(33, s32, allocator=__temporary_allocator);
