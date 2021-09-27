@@ -106,11 +106,11 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   array_add(repetitions, hash);
   defer pop(repetitions);
 
-  reverse_futility_pruning();
+  //reverse_futility_pruning();
   null_move_pruning();
-  razoring();
+  //razoring();
 
-  move_ordering(pieces, move_array, whose_turn, pv_line, ply, bh_move);
+  move_ordering(pieces, move_array, whose_turn, pv_line, ply, bh_move, prev_move, line.argmove[0]);
   best_pv := true;
   hash_flag := TFLAGS.UPPER;
   for move, moves_searched : move_array {
@@ -130,7 +130,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       // nega-scout
       if moves_searched >= FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && check == 0 && mflag == Move16.Quiet { 
         // do late move reduction when not in check and making "quiet moves" 
-        R := ifx pv_node then 2 else depth/3;
+        R := ifx pv_node then 1 else depth/2;
         eval = -negamax(pieces, c_copy, ep_copy, depth-R-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty, move);
       } else {
         // do normal search.
@@ -148,13 +148,12 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       hash_flag = TFLAGS.LOWER;
       alpha = beta;
       piece_type := piece_type_at(cast(u64)(1 << from), pieces, whose_turn);
-      if prev_move != 0 {
-        __counter_moves[from][to] = prev_move;
-      }
       if !is_capture(mflag) {
         __history_moves[cast(int)whose_turn][cast(int)piece_type][to] += depth*depth;
         __killer_moves[1][ply] = __killer_moves[0][ply];
         __killer_moves[0][ply] = move;
+        _pm_flag, pm_from, pm_to := decode_move(prev_move);
+        __counter_moves[pm_from][pm_to] = prev_move;
       } else {
         __capture_history[cast(int)whose_turn][cast(int)piece_type][to] += 1 << depth;
       }
@@ -172,7 +171,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   }
 
   if is_stalemate then {
-    alpha = 0 + ply;
+    alpha = 0;
     depth = 50;
     hash_flag = TFLAGS.EXACT;
   }
@@ -264,7 +263,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   reverse_futility_pruning :: () #expand {
     // taken from BBC chess engine...
     `static_eval := evaluate(pieces, whose_turn, fifty);
-    if static_eval < WIN_SCORE && depth < 3 && !pv_node && check == 0 && abs(beta-1) > -INF + 100 then {
+    if depth < 3 && !pv_node && check == 0 && abs(beta-1) > -INF + 100 then {
       futility_margin := 214 * depth; // stockfish has its futility_margin at 214 * depth.
       if static_eval - futility_margin >= beta then {
         `return static_eval - futility_margin;
@@ -274,7 +273,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
   razoring :: () #expand {
     // taken from BBC chess engine...
-    if static_eval < WIN_SCORE && !pv_node && check == 0 && depth <= 3 then {
+    if !pv_node && check == 0 && depth <= 3 then {
       score := static_eval + 125;
       if score < beta && depth == 1 {
         new_score := quiescene(pieces, castling, ep, whose_turn, alpha, beta, fifty);
@@ -496,9 +495,12 @@ perft :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, de
   return num_nodes;
 }
 
-move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn: bool, pv_line: *PVLine, ply: int, bh_move: Move16) {
+move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn: bool, pv_line: *PVLine, ply: int, bh_move: Move16, prev_move: Move16, null_line: Move16) {
   // TODO: I don't know if some other function wants to use temporary storage.
   auto_release_temp();
+
+  _, __, null_to := decode_move(null_line);
+
   count := move_array.count;
   order := NewArray(count, int, allocator=__temporary_allocator);
   pawns := pieces.w_pawn | pieces.b_pawn;
@@ -543,8 +545,13 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
         order[i] = __history_moves[cast(int)whose_turn][cast(int)piece_type][to_index];
       }
     }
-    if move_array[i] == __counter_moves[from_index][to_index] then {
-      COUNTER_BONUS :: 512;
+    if to_index == null_to then {
+      order[i] += 50;
+    }
+
+    _pm_flag, pm_from, pm_to := decode_move(prev_move);
+    if move_array[i] == __counter_moves[pm_from][pm_to] then {
+      COUNTER_BONUS :: 128;
       order[i] += COUNTER_BONUS;
     }
     if from & pawns then {
