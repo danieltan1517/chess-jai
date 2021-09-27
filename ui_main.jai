@@ -1191,7 +1191,7 @@ __write_pipe: s32;
 
 font : *Dynamic_Font;
 __engine_name : string;  // name of engine. exists for aesthetic purposes
-__engine_depth_parameter : int = 8; // depth of engine search.
+__engine_depth_parameter : int = 12; // depth of engine search.
 
 get_engine_name :: () => __engine_name;
 
