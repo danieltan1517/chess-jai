@@ -9,6 +9,7 @@ evaluate :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) -> int {
   return nnue_evaluate(p, whose_turn, fifty);
 }
 
+WIN_SCORE :: 0x7FF_FFFF;
 
 #scope_file
 
@@ -98,7 +99,7 @@ trivial_evaluation :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) 
       p &= p-1;
     }
 
-    return push_close + edge + 0x7FF_FFFF + mat + pawn_points;
+    return WIN_SCORE + push_close + edge + mat + pawn_points;
 
     king_endgame :: int.[
       500,400,300,200,200,300,400,500,

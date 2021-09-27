@@ -264,7 +264,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   reverse_futility_pruning :: () #expand {
     // taken from BBC chess engine...
     `static_eval := evaluate(pieces, whose_turn, fifty);
-    if depth < 3 && !pv_node && check == 0 && abs(beta-1) > -INF + 100 then {
+    if static_eval < WIN_SCORE && depth < 3 && !pv_node && check == 0 && abs(beta-1) > -INF + 100 then {
       futility_margin := 214 * depth; // stockfish has its futility_margin at 214 * depth.
       if static_eval - futility_margin >= beta then {
         `return static_eval - futility_margin;
@@ -274,7 +274,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
   razoring :: () #expand {
     // taken from BBC chess engine...
-    if !pv_node && check == 0 && depth <= 3 then {
+    if static_eval < WIN_SCORE && !pv_node && check == 0 && depth <= 3 then {
       score := static_eval + 125;
       if score < beta && depth == 1 {
         new_score := quiescene(pieces, castling, ep, whose_turn, alpha, beta, fifty);
