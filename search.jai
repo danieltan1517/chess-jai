@@ -8,7 +8,6 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   memset(__killer_moves.data,  0, size_of(type_of(__killer_moves)));
   memset(__capture_history.data, 0, size_of(type_of(__capture_history)));
   memset(__counter_moves.data, 0, size_of(type_of(__counter_moves)));
-  memset(__butterfly_heuristic.data, 1, size_of(type_of(__butterfly_heuristic)));
   __nodes_searched = 0;
   clear_hash_table();
   reset_temporary_storage();
@@ -17,8 +16,8 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   pv_line: PVLine;
   score : int; best_move : Move16;
   alpha: int = -INF;
-  beta:  int = INF;
-  delta: int = 100;
+  beta:  int =  INF;
+  delta: int = 50;
   cur_depth := 1;
   while cur_depth <= depth { 
     score = negamax(pieces, castling, ep, cur_depth, whose_turn, *pv_line, repetitions, alpha=alpha, beta=beta, fifty=fifty, prev_move=Move16.Quiet);
@@ -28,12 +27,12 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
 
     best_move = pv_line.argmove[0];
     if score <= alpha || score >= beta then {
-      beta =  score + delta;
-      alpha = score - delta;
-      delta += (delta/4) + 5;
       print_depth(cur_depth, best_move);
+      alpha = score - delta;
+      beta  = score + delta;
+      delta += (delta/4) + 5;
       continue;
-    } 
+    }
 
     alpha = max(score - delta, -INF);
     beta  = min(score + delta,  INF);
@@ -69,7 +68,6 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
     print("info depth %1 score cp %2 alpha %3 beta %4 currmove %5%6\n", depth, score, alpha, beta, cast(serialized_bb)from, cast(serialized_bb)to);
     reset_temporary_storage();
   }
-
 }
 
 negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, repetitions: *[..]u64, ply: int = 0, $null_flag := true, alpha := -INF, beta := INF, fifty: int, prev_move: Move16) -> int {
@@ -100,11 +98,17 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   move_array: [..] Move16;
   array_reserve(*move_array, 40);
   check := generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
-  is_stalemate := check_for_checkmate_stalemate();
+  is_stalemate, is_terminal, score_t := check_for_checkmate_stalemate(move_array, repetitions, ply, check, fifty, hash);
+  if is_terminal then {
+    return score_t;
+  }
 
-  //reverse_futility_pruning();
+  array_add(repetitions, hash);
+  defer pop(repetitions);
+
+  reverse_futility_pruning();
   null_move_pruning();
-  //razoring();
+  razoring();
 
   move_ordering(pieces, move_array, whose_turn, pv_line, ply, bh_move);
   best_pv := true;
@@ -126,7 +130,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       // nega-scout
       if moves_searched >= FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && check == 0 && mflag == Move16.Quiet { 
         // do late move reduction when not in check and making "quiet moves" 
-        R := ifx pv_node then 1 else depth/3;
+        R := ifx pv_node then depth/3 else (2*depth)/3;
         eval = -negamax(pieces, c_copy, ep_copy, depth-R-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty, move);
       } else {
         // do normal search.
@@ -155,9 +159,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
         __capture_history[cast(int)whose_turn][cast(int)piece_type][to] += 1 << depth;
       }
       break;
-    } else {
-      __butterfly_heuristic[from][to] += 1;
-    }
+    } 
 
     if eval > alpha {
       hash_flag = TFLAGS.EXACT;
@@ -200,44 +202,42 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   }
 
   transposition_table_store :: (hash: u64, key: u64, value: int, hash_flag: TFLAGS, depth: int, bmove: Move16, line: PVLine) {
-    if depth >= ttable.entries[key].depth {
-      ttable.hash[key] = hash;
-      ttable.entries[key].score = xx value;
-      ttable.entries[key].flag = hash_flag;
-      ttable.entries[key].depth = xx depth;
-      ttable.entries[key].bmove = bmove;
-    }
+    if ttable.entries[key].depth == 50
+      return;
+    ttable.hash[key] = hash;
+    ttable.entries[key].score = xx value;
+    ttable.entries[key].flag = hash_flag;
+    ttable.entries[key].depth = xx depth;
+    ttable.entries[key].bmove = bmove;
   }
 
-  check_for_checkmate_stalemate :: () -> bool #expand {
+  check_for_checkmate_stalemate :: (move_array: [..] Move16, rep: *[..]u64, ply: int, check: u64, fifty: int, hash: u64) -> is_stalmate: bool, is_terminal: bool, score: int {
     if !move_array then {
       if check != 0 then {
-        `return -INF + ply;
+        return false, true, -INF + ply;
       } else {
-        `return 0 + ply;
+        return false, true, 0 + ply;
       }
     }
 
     // threefold repetition check / fifty move rule.
     if fifty >= 100 then {
-      return true;
+      return false, true, 0 + ply;
     }
 
     count := 0;
     reps := 0;
     while count < fifty {
-      i := repetitions.count-1-count;
-      if (<<repetitions) && hash == (<<repetitions) [i] then {
+      i := min(rep.count-1-count, 0);
+      if (<<rep) && hash == (<<rep) [i] then {
         reps += 1;
         if reps >= 2 then {
-          return true;
+          return true, false, 0 + ply;
         }
       }
       count += 1;
     }
-    array_add(repetitions, hash);
-    `defer pop(repetitions);
-    return false;
+    return false, false, 0;
   }
 
   null_move_pruning :: () #expand {
@@ -540,8 +540,7 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       } else if __killer_moves[1][ply] == move_array[i] {
         order[i] = 8500;
       } else {
-        bh := __butterfly_heuristic[from_index][to_index];
-        order[i] = __history_moves[cast(int)whose_turn][cast(int)piece_type][to_index] / bh;
+        order[i] = __history_moves[cast(int)whose_turn][cast(int)piece_type][to_index];
       }
     }
     if move_array[i] == __counter_moves[from_index][to_index] then {
@@ -655,7 +654,6 @@ __history_moves:   [2][7][64] int;
 __capture_history: [2][7][64] int;
 __killer_moves:    [2][64] Move16;
 __counter_moves:   [64][64] Move16;
-__butterfly_heuristic: [64][64] s16;
 
 // get something off the ground.
 TSIZE :: 0x200_000;
