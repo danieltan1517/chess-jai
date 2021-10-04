@@ -855,32 +855,6 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
       }
     }
   }
- 
-  qr := queen|rook;   // lump queen moves and rook moves into 1 loop
-  while qr {
-    i := bit_scan_forward(qr);
-    from_bb := cast(u64) (1 << i);
-    to_bb   := rook_moves(occupied, i, from_bb, pieces) & check_sqs;
-    generate_normal_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces, captures_only);
-    qr ^= from_bb;
-  }
-
-  qb := queen|bishop;  // lump queen moves and bishop moves into 1 loop
-  while qb {
-    i := bit_scan_forward(qb);
-    from_bb := cast(u64) (1 << i);
-    to_bb   := bishop_moves(occupied, i, from_bb, pieces) & check_sqs;
-    generate_normal_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces, captures_only);
-    qb ^= from_bb;
-  }
-
-  while knight {
-    i := bit_scan_forward(knight);
-    from_bb := cast(u64) (1 << i);
-    to_bb := knight_moves_lookup(i) & (~pieces) & check_sqs;
-    generate_normal_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces, captures_only);
-    knight ^= from_bb;
-  }
 
   while pawn {
     i := bit_scan_forward(pawn);
@@ -960,6 +934,33 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
     }
     pawn ^= from_bb;
   }
+
+  while knight {
+    i := bit_scan_forward(knight);
+    from_bb := cast(u64) (1 << i);
+    to_bb := knight_moves_lookup(i) & (~pieces) & check_sqs;
+    generate_normal_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces, captures_only);
+    knight ^= from_bb;
+  }
+
+  qb := queen|bishop;  // lump queen moves and bishop moves into 1 loop
+  while qb {
+    i := bit_scan_forward(qb);
+    from_bb := cast(u64) (1 << i);
+    to_bb   := bishop_moves(occupied, i, from_bb, pieces) & check_sqs;
+    generate_normal_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces, captures_only);
+    qb ^= from_bb;
+  }
+ 
+  qr := queen|rook;   // lump queen moves and rook moves into 1 loop
+  while qr {
+    i := bit_scan_forward(qr);
+    from_bb := cast(u64) (1 << i);
+    to_bb   := rook_moves(occupied, i, from_bb, pieces) & check_sqs;
+    generate_normal_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces, captures_only);
+    qr ^= from_bb;
+  }
+
   king_moves_bb := king_moves_lookup(i) & (~pieces) & (~attacks);
   generate_normal_moves_from_bitboard(moves_arr, king, king_moves_bb, opp_pieces, captures_only);
   return checks;
