@@ -107,6 +107,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   array_add(repetitions, hash);
   defer pop(repetitions);
 
+  zugzwang := has_zugzwang(pieces);
   reverse_futility_pruning();
   null_move_pruning();
   razoring();
@@ -201,7 +202,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   }
 
   transposition_table_store :: (hash: u64, key: u64, value: int, hash_flag: TFLAGS, depth: int, bmove: Move16, line: PVLine) {
-    if ttable.entries[key].depth == 50
+    if depth < ttable.entries[key].depth then
       return;
     ttable.hash[key] = hash;
     ttable.entries[key].score = xx value;
@@ -242,28 +243,28 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   null_move_pruning :: () #expand {
     NULL_MOVE_MAX :: 4;
     // check for zugwang before null move pruning && TODO: make sure engine doesn't bug out at en paesant.
-    if null_flag && depth >= NULL_MOVE_MAX && check == 0 && !has_zugzwang(pieces) {
+    if null_flag && depth >= NULL_MOVE_MAX && check == 0 && !zugzwang {
       R := ifx pv_node then depth/3 else 2*depth/3;
       score := -negamax(pieces, castling, 0, depth-R-1, !whose_turn, *line, repetitions, ply+1, false, -beta, -beta + 1, fifty, Move16.Quiet);
       if score >= beta then {
         `return beta;
       }
     }
-
-    // zugzwang occurs primarily in King-Pawn endgames
-    // zugzwang in chess is rare otherwise.
-    has_zugzwang :: (pieces: *Piece_Bitboards) -> bool {
-      using pieces;
-      w := w_queen | w_rook | w_bishop | w_knight;
-      b := b_queen | b_rook | b_bishop | b_knight;
-      return w == 0 || b == 0;
-    } 
   }
+
+  // zugzwang occurs primarily in King-Pawn endgames
+  // zugzwang in chess is rare otherwise.
+  has_zugzwang :: (pieces: *Piece_Bitboards) -> bool {
+    using pieces;
+    w := w_queen | w_rook | w_bishop | w_knight;
+    b := b_queen | b_rook | b_bishop | b_knight;
+    return w == 0 || b == 0;
+  } 
 
   reverse_futility_pruning :: () #expand {
     // taken from BBC chess engine...
     `static_eval := evaluate(pieces, whose_turn, fifty);
-    if depth < 3 && !pv_node && check == 0 && abs(beta-1) > -INF + 100 then {
+    if !zugzwang && depth < 3 && !pv_node && check == 0 && abs(beta-1) > -INF + 100 then {
       futility_margin := 214 * depth; // stockfish has its futility_margin at 214 * depth.
       if static_eval - futility_margin >= beta then {
         `return static_eval - futility_margin;
@@ -273,7 +274,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
   razoring :: () #expand {
     // taken from BBC chess engine...
-    if !pv_node && check == 0 && depth <= 3 then {
+    if !zugzwang && !pv_node && check == 0 && depth <= 3 then {
       score := static_eval + 125;
       if score < beta && depth == 1 {
         new_score := quiescene(pieces, castling, ep, whose_turn, alpha, beta, fifty);
@@ -435,7 +436,7 @@ initialize_ai_globals :: () {
   zobrist_init_globals();
 }
 
-INF :: 0x7FFF_FFFF; // Alias
+INF :: 0x7_FFFF; // Alias
 
 #scope_file
 // search capture moves only, we do this to avoid horizon effect
@@ -529,18 +530,18 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
 
 
     } else if flags == Knight_Promotion || flags == Knight_Promotion_Capture {
-      order[i] = 32500;
+      order[i] = 3250;
     } else if flags == Bishop_Promotion || flags == Bishop_Promotion_Capture {
-      order[i] = 35000;
+      order[i] = 3500;
     } else if flags == Rook_Promotion || flags == Rook_Promotion_Capture {
-      order[i] = 50000;
+      order[i] = 5000;
     } else if flags == Queen_Promotion || flags == Queen_Promotion_Capture {
-      order[i] = 90000;
+      order[i] = 9000;
     } else {
       if __killer_moves[0][ply] == move_array[i] {
-        order[i] = 9000;
+        order[i] = 900;
       } else if __killer_moves[1][ply] == move_array[i] {
-        order[i] = 8500;
+        order[i] = 850;
       } else {
         order[i] = __history_moves[cast(int)whose_turn][cast(int)piece_type][to_index];
       }
@@ -548,14 +549,14 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
     if to_index == null_to then {
       order[i] += 50;
     }
+    if from & pawns {
+      order[i] += 25;
+    }
 
     _pm_flag, pm_from, pm_to := decode_move(prev_move);
     if move_array[i] == __counter_moves[pm_from][pm_to] then {
-      COUNTER_BONUS :: 512;
+      COUNTER_BONUS :: 900;
       order[i] += COUNTER_BONUS;
-    }
-    if from & pawns then {
-      order[i] += 3; // prefer pawn moves.
     }
   }
 
@@ -617,13 +618,13 @@ mvv :: (victim: PieceType) -> score: int {
   piece_score :: #run -> [7] int {
     using PieceType;
     array: [7] int;
-    array[cast(int) None]   =       0;
-    array[cast(int) King]   = 5000000;
-    array[cast(int) Queen]  =  900000;
-    array[cast(int) Rook]   =  500000;
-    array[cast(int) Bishop] =  350000;
-    array[cast(int) Knight] =  325000;
-    array[cast(int) Pawn]   =  100000;
+    array[cast(int) None]   =     0;
+    array[cast(int) King]   = 50000;
+    array[cast(int) Queen]  =  9000;
+    array[cast(int) Rook]   =  5000;
+    array[cast(int) Bishop] =  3500;
+    array[cast(int) Knight] =  3250;
+    array[cast(int) Pawn]   =  1000;
     return array;
   }
 }

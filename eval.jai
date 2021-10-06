@@ -9,7 +9,7 @@ evaluate :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) -> int {
   return nnue_evaluate(p, whose_turn, fifty);
 }
 
-WIN_SCORE :: 0x7FF_FFFF;
+WIN_SCORE :: 0x7_FF;
 
 #scope_file
 
