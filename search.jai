@@ -228,7 +228,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     count := 0;
     reps := 0;
     while count < fifty {
-      i := min(rep.count-1-count, 0);
+      i := max(rep.count-1-count, 0);
       if (<<rep) && hash == (<<rep) [i] then {
         reps += 1;
         if reps >= 2 then {
