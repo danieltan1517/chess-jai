@@ -24,21 +24,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
     if stop_signal_triggered() then 
       break;
     time_taken := get_time() - time_begin;
-
     best_move = pv_line.argmove[0];
-    if score <= alpha || score >= beta then {
-      print_depth(cur_depth, best_move);
-      alpha = -INF;
-      beta = INF;
-      continue;
-    }
-    if score <= -WIN_SCORE || score >= WIN_SCORE {
-      alpha = -INF;
-      beta  =  INF;
-    } else {
-      alpha = max(score - delta, -INF);
-      beta  = min(score + delta,  INF);
-    }
     print_stats(cur_depth);
     cur_depth += 1;
   }
@@ -58,8 +44,8 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
     str := builder_to_string(*builder, allocator=__temporary_allocator);
     print("%\n", str);
     reset_temporary_storage();
-    clear_hash_table();
     __nodes_searched = 0;
+    clear_hash_table();
     print_move_to_buffer :: (mv: Move16) #expand {
       _, from, to := decode_move(mv);
       print_to_builder(*builder, "%1%2 ", cast(serialized_bb)from, cast(serialized_bb)to);
@@ -72,6 +58,22 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
     print("info depth %1 score cp %2 currmove %3%4\n", depth, score, cast(serialized_bb)from, cast(serialized_bb)to);
     reset_temporary_storage();
   }
+  /*
+    // TODO: currently the aspiration window is thoroughly broken...
+    if score <= alpha || score >= beta then {
+      print_depth(cur_depth, best_move);
+      alpha = -INF;
+      beta = INF;
+      continue;
+    }
+    if score <= -WIN_SCORE || score >= WIN_SCORE {
+      alpha = -INF;
+      beta  =  INF;
+    } else {
+      alpha = max(score - delta, -INF);
+      beta  = min(score + delta,  INF);
+    }
+  */
 }
 
 negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, repetitions: *[..]u64, ply: int = 0, $null_flag := true, alpha := -INF, beta := INF, fifty: int, prev_move: Move16) -> int {
@@ -91,6 +93,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
   TF, tt_score, bh_move := transposition_table_lookup(alpha, beta, hash, key, depth, ply);
   if TF then {
+    pv_line.cmove = 0;
     return tt_score;
   }
 
