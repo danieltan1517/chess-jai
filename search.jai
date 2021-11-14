@@ -23,20 +23,6 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
     score = negamax(pieces, castling, ep, cur_depth, whose_turn, *pv_line, repetitions, alpha=alpha, beta=beta, fifty=fifty, prev_move=Move16.Quiet);
     if stop_signal_triggered() then 
       break;
-    if score <= alpha || score >= beta then {
-      print_depth(cur_depth, best_move);
-      alpha = -INF;
-      beta = INF;
-      print("info depth %\n", cur_depth);
-      continue;
-    }
-    if score <= -WIN_SCORE || score >= WIN_SCORE {
-      alpha = -INF;
-      beta  =  INF;
-    } else {
-      alpha = max(score - delta, -INF);
-      beta  = min(score + delta,  INF);
-    }
 
     time_taken := get_time() - time_begin;
     best_move = pv_line.argmove[0];
