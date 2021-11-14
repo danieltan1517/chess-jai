@@ -38,6 +38,7 @@ fen_string := "startpos";
 //"8/PPPk4/8/8/8/8/4Kppp/8 b - - 0 1";
 
 main :: () {
+  print(welcome_message);
   white_side := true;
   engine_name := handle_command_line();
 
@@ -114,12 +115,12 @@ main :: () {
 
     im_draw_setup_gl();
     im_set_viewport_transform(2.0/width, 2.0/height, -1, -1);
-    console_input(window);
+    handle_reset(window, *piece_bitboard, *flags, *ep_sq, *moves_arr);
+    console_input(window, *piece_bitboard, *flags, *ep_sq, *moves_arr);
     if !console_on {
       white_side = handle_flip_board(window, white_side);
     }
     handle_undo_move(window, *piece_bitboard, *flags, *ep_sq, *moves_arr);
-    handle_reset(window, *piece_bitboard, *flags, *ep_sq, *moves_arr);
 
     if w_human_turn() || b_human_turn() {
       handle_board_click(xx width, xx height, *piece_bitboard, *flags, *ep_sq, *moves_arr, white_side=white_side);
@@ -144,7 +145,7 @@ main :: () {
 
 timer_on := false;
 delta_time : float32 = 0.0;
-openings_on := false;
+openings_on := true;
 
 handle_command_line :: () -> string #expand {
   // TODO: 
@@ -201,6 +202,7 @@ console_text_buffer: [1024] u8;
 console_text_count := 0;
 console_character : u8;
 console_backspace_timer := 0.0;
+console_paste_key: enum {PASTE_PRESS; PASTE_RELEASE;} = .PASTE_PRESS;
 
 console_text_input :: (window: *GLFWwindow, codepoint: u32) #c_call {
   if console_on {
@@ -212,7 +214,7 @@ console_text_input :: (window: *GLFWwindow, codepoint: u32) #c_call {
   } 
 }
 
-console_input :: (window: *GLFWwindow) {
+console_input :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..]Move16) {
   t_state    := glfwGetKey(window, GLFW_KEY_T);
   l_ctrl_key := glfwGetKey(window, GLFW_KEY_LEFT_CONTROL);
   r_ctrl_key := glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL);
@@ -229,22 +231,39 @@ console_input :: (window: *GLFWwindow) {
   }
 
   if console_on {
+
+    if console_paste_key == {
+    case .PASTE_PRESS; 
+      if glfwGetKey(window, GLFW_KEY_V) == GLFW_PRESS && (l_ctrl_key == GLFW_RELEASE || r_ctrl_key == GLFW_RELEASE) {
+        str: string;
+        str.data  = glfwGetClipboardString(window);
+        str.count = c_style_strlen(str.data);
+        i := console_text_count;
+        console_text_count += str.count;
+        memcpy(*console_text_buffer[i], str.data, str.count * size_of(u8));
+        console_paste_key = .PASTE_RELEASE;
+      }
+    case .PASTE_RELEASE;
+      if glfwGetKey(window, GLFW_KEY_V) == GLFW_RELEASE || (l_ctrl_key == GLFW_RELEASE && r_ctrl_key == GLFW_RELEASE) {
+        console_paste_key = .PASTE_PRESS;
+      }
+    }
+
     if glfwGetKey(window, GLFW_KEY_BACKSPACE) == GLFW_PRESS {
       console_backspace_timer += delta_time;
       if console_backspace_timer > 0.0 {
         console_text_count = max(console_text_count-1, 0);
-        console_backspace_timer = -0.035;
+        console_backspace_timer = -0.10;
       }
     } else {
       console_backspace_timer = 0.0;
     }
     if glfwGetKey(window, GLFW_KEY_ENTER) == GLFW_PRESS {
-
       str : string;
       str.data = console_text_buffer.data;
       str.count = console_text_count;
       if str.count != 0 {
-        console_write_command(str);
+        console_write_command(str, piece_bitboard, flags, ep_sq, moves_arr);
       }
       console_text_count = 0;
     }
@@ -258,10 +277,10 @@ draw_console :: (width: float, height: float, window: *GLFWwindow) {
   str : string;
   str.data = console_text_buffer.data;
   str.count = console_text_count;
-  im_draw_text(font, 5, 5, Vector4.{1,1,1,1}, str);
+  im_draw_text(font, 10, 5, Vector4.{1,1,1,1}, tprint(">%", str));
 }
 
-console_write_command :: (str: string) {
+console_write_command :: (str: string, piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..]Move16) {
   // TODO: This is hard-coded for now.
   if str == {
   case "white=ai";
@@ -298,6 +317,23 @@ console_write_command :: (str: string) {
     if bool {
       timeout_limit = limit;
     }
+  case "fen";
+    reset(piece_bitboard, flags, ep_sq, moves_arr);
+    uci_state = .UCI_NEWGAME;
+    if ! equal(fen_string, "startpos") then {
+      free(fen_string);
+    }
+    while str[0] == #char " " {
+      advance(*str, 1);
+    }
+    fen_string = copy_string(str); 
+    if equal(fen_string, "startpos") then {
+      <<piece_bitboard, whose_turn, <<flags, <<ep_sq = chess_start_pos();
+    } else {
+      <<piece_bitboard, whose_turn, <<flags, <<ep_sq = chess_start_from_fen(fen_string);
+    } 
+    // TODO: too lazy to actually reset it correctly.
+    reset(piece_bitboard, flags, ep_sq, moves_arr);
   }
 }
 
@@ -800,6 +836,36 @@ handle_undo_move :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flag
 
 reset_key_state: enum { RESET_IDLE; RESET_PRESS; } = .RESET_IDLE;
 
+reset :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..]Move16) {
+  timer_on = false;
+  while move_record {
+    board_state := pop(*move_record);
+    <<ep_sq = board_state.en_paesant_sq;
+    <<flags = board_state.flags;
+    whose_turn = !whose_turn;
+    unmake_move(piece_bitboard, board_state.captured, board_state.move, whose_turn);
+    pop(*hash_record);
+  }
+
+  array_reset(moves_arr);
+  check_bb = generate_legal_moves(piece_bitboard, <<flags, <<ep_sq, moves_arr, whose_turn);
+
+  highlight_the_square = 0;
+  possible_moves_bb = 0;
+  promote_move = cast(Move16) 0;
+  if move_record {
+    last_board_state := move_record[move_record.count - 1];
+    type, x, y := decode_move(last_board_state.move);
+    last_move_bb = (cast(u64)(1 << x)) | (cast(u64)(1 << y));
+  } else {
+    last_move_bb = 0;
+  }
+  __game_status_text = "";
+  w_clock_time = 30.0*60.0;
+  b_clock_time = 30.0*60.0;
+}
+
+
 handle_reset :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..] Move16) {
   if piece_select_state != .PIECE_IDLE then
     return;
@@ -811,32 +877,7 @@ handle_reset :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flags: *
   case .RESET_IDLE;
     if n_state == GLFW_PRESS && (l_ctrl_key == GLFW_PRESS || r_ctrl_key == GLFW_PRESS) {
       reset_key_state = .RESET_PRESS;
-      timer_on = false;
-      while move_record {
-        board_state := pop(*move_record);
-        <<ep_sq = board_state.en_paesant_sq;
-        <<flags = board_state.flags;
-        whose_turn = !whose_turn;
-        unmake_move(piece_bitboard, board_state.captured, board_state.move, whose_turn);
-        pop(*hash_record);
-      }
-
-      array_reset(moves_arr);
-      check_bb = generate_legal_moves(piece_bitboard, <<flags, <<ep_sq, moves_arr, whose_turn);
-
-      highlight_the_square = 0;
-      possible_moves_bb = 0;
-      promote_move = cast(Move16) 0;
-      if move_record {
-        last_board_state := move_record[move_record.count - 1];
-        type, x, y := decode_move(last_board_state.move);
-        last_move_bb = (cast(u64)(1 << x)) | (cast(u64)(1 << y));
-      } else {
-        last_move_bb = 0;
-      }
-      __game_status_text = "";
-      w_clock_time = 30.0*60.0;
-      b_clock_time = 30.0*60.0;
+      reset(piece_bitboard, flags, ep_sq, moves_arr);
       uci_state = .UCI_NEWGAME;
     }
   case .RESET_PRESS;
