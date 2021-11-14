@@ -372,14 +372,22 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
       swap(bot_time, top_time);
     }
 
-    bottom_string := tprint("% %:%", bottom, formatInt(cast(int)(bot_time/60.0),      minimum_digits=2), 
-                                             formatInt(cast(int)fmod(bot_time, 60.0), minimum_digits=2));
-    top_string    := tprint("% %:%", top,    formatInt(cast(int)(top_time/60.0),      minimum_digits=2),
-                                             formatInt(cast(int)fmod(top_time, 60.0), minimum_digits=2));
+    bottom_string := tprint("%:%", formatInt(cast(int)(bot_time/60.0),      minimum_digits=2), 
+                                   formatInt(cast(int)fmod(bot_time, 60.0), minimum_digits=2));
+    top_string    := tprint("%:%", formatInt(cast(int)(top_time/60.0),      minimum_digits=2),
+                                   formatInt(cast(int)fmod(top_time, 60.0), minimum_digits=2));
+    im_draw_text(font, x, y - square_len*0.33, bot_col, bottom);
+    im_draw_text(font, x, y + square_len*8.13, top_col, top);
 
 
-    im_draw_text(font, x, y - square_len*0.5,       bot_col, bottom_string);
-    im_draw_text(font, x, y + len + square_len*0.5, top_col, top_string);
+    /*SMALLCAPS      :: 0x1;
+    LINING_FIGURES :: 0x2;
+    NO_KERNING     :: 0x4;
+    LEFT_JUSTIFIED :: 0x8;*/
+    ///Font_Effects :: enum_flags u32 {
+
+    im_draw_text(font, x+square_len*7.25, y - square_len*0.33, bot_col, bottom_string);
+    im_draw_text(font, x+square_len*7.25, y + square_len*8.13, top_col, top_string);
     if __game_status_text {
       im_draw_text(font, 4, 4, BLANK, __game_status_text);
     }
