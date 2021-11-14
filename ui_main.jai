@@ -15,16 +15,11 @@ you can try out this program with chess engines that implement
 UCI, e.g. Stockfish, Lc0, RubiChess, etc.
 
 Command-Line Arguments:
-depth=x      -- sets the search depth of the engine to x
 hh           -- white=human vs black=human
 hc           -- white=human vs black=ai
 ch           -- white=ai vs black=human
 cc           -- white=ai vs black=ai
-r            -- random side, human vs computer
 ai=Lc0       -- sets the ai to that particular ai. Must be in the resources directory.
-fen="x"      -- loads the fen string into the board.
-openings_on  -- turns openings book on
-openings_off -- turns opening book off
 
 Here is a sample command-line calling:
 
@@ -33,6 +28,7 @@ Here is a sample command-line calling:
 Here are the keyboard controls:
 <Ctrl+N> -- new game, reset the board.
 <Ctrl+Z> -- undo move.
+<Ctrl+T> -- opens a terminal for more complex commands
 <X>      -- flip the board.
 -------------------------------
 END
@@ -57,9 +53,10 @@ main :: () {
 
   glfwMakeContextCurrent(window);
   gl_load(*gl, glfwGetProcAddress);
+  glfwSetCharCallback(window, console_text_input);
   im_init_gl();
   path := tprint("%1%2", #filepath, "resources/");
-  font = load_font(path, "AnonymousPro.ttf", 17); // @@ Search system fonts automatically?
+  font = load_font(path, "AnonymousPro.ttf", 20); // @@ Search system fonts automatically?
 
   opening_book = load_opening_book("resources/openings.txt");
   t := New(Texture);
@@ -71,14 +68,10 @@ main :: () {
     return;
   }
 
-  if w_is_human == false || b_is_human == false {
-    ai_chess_engine_path := join(#filepath, "resources/", engine_name);
-    if !uci_init_uci_chess_engine(engine_name, ai_chess_engine_path) {
-      print("Error initializing UCI chess interface\n");
-      return;
-    }
-  } else {
-    print(welcome_message);
+  ai_chess_engine_path := join(#filepath, "resources/", engine_name);
+  if !uci_init_uci_chess_engine(engine_name, ai_chess_engine_path) {
+    print("Error initializing UCI chess interface\n");
+    return;
   }
 
   defer {
@@ -121,7 +114,10 @@ main :: () {
 
     im_draw_setup_gl();
     im_set_viewport_transform(2.0/width, 2.0/height, -1, -1);
-    white_side = handle_flip_board(window, white_side);
+    console_input(window);
+    if !console_on {
+      white_side = handle_flip_board(window, white_side);
+    }
     handle_undo_move(window, *piece_bitboard, *flags, *ep_sq, *moves_arr);
     handle_reset(window, *piece_bitboard, *flags, *ep_sq, *moves_arr);
 
@@ -129,6 +125,9 @@ main :: () {
       handle_board_click(xx width, xx height, *piece_bitboard, *flags, *ep_sq, *moves_arr, white_side=white_side);
     }
     draw_chess(xx width, xx height, *piece_bitboard, t, highlight_the_square, possible_moves_bb, last_move_bb, white_side);
+    draw_console(xx width, xx height, window);
+
+
     im_flush();
 
     glfwSwapBuffers(window);
@@ -173,10 +172,6 @@ handle_command_line :: () -> string #expand {
       w_is_human = false;
       b_is_human = true;
       `white_side = false;
-    case "openings_on";
-      openings_on = true;
-    case "openings_off";
-      openings_on = false;
     case "r";
       // TODO: use rand function????
       w_is_human = xx ((cast(int)(get_time() * 130598103698.923467)) & 1);
@@ -191,11 +186,6 @@ handle_command_line :: () -> string #expand {
         } else {
           print("Invalid ai choice\n");
         }
-      } else if begins_with(arg, "depth=") {
-        __engine_depth_parameter = string_to_int(advance(arg, 6));
-      } else if begins_with(arg, "fen=") {
-        fen := advance(arg, 4);
-        fen_string = fen; // TODO: hacky way of putting fen strings into the ui, figure out a better way.
       }
     }
   }
@@ -203,6 +193,113 @@ handle_command_line :: () -> string #expand {
 }
 
 __game_status_text: string;
+
+
+console_key: enum {CONSOLE_PRESS; CONSOLE_RELEASE;} = .CONSOLE_PRESS;
+console_on := false;
+console_text_buffer: [1024] u8;
+console_text_count := 0;
+console_character : u8;
+console_backspace_timer := 0.0;
+
+console_text_input :: (window: *GLFWwindow, codepoint: u32) #c_call {
+  if console_on {
+    if console_text_count >= 1024 {
+      return;
+    }
+    console_text_buffer[console_text_count] = cast(u8) codepoint;
+    console_text_count += 1;
+  } 
+}
+
+console_input :: (window: *GLFWwindow) {
+  t_state    := glfwGetKey(window, GLFW_KEY_T);
+  l_ctrl_key := glfwGetKey(window, GLFW_KEY_LEFT_CONTROL);
+  r_ctrl_key := glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL);
+  if console_key == {
+  case .CONSOLE_PRESS;
+    if t_state == GLFW_PRESS && (l_ctrl_key == GLFW_PRESS || r_ctrl_key == GLFW_PRESS) {
+      console_key = .CONSOLE_RELEASE;
+      console_on = !console_on;
+    }
+  case .CONSOLE_RELEASE;
+    if t_state == GLFW_RELEASE || (l_ctrl_key == GLFW_RELEASE && r_ctrl_key == GLFW_RELEASE) {
+      console_key = .CONSOLE_PRESS;
+    }
+  }
+
+  if console_on {
+    if glfwGetKey(window, GLFW_KEY_BACKSPACE) == GLFW_PRESS {
+      console_backspace_timer += delta_time;
+      if console_backspace_timer > 0.0 {
+        console_text_count = max(console_text_count-1, 0);
+        console_backspace_timer = -0.035;
+      }
+    } else {
+      console_backspace_timer = 0.0;
+    }
+    if glfwGetKey(window, GLFW_KEY_ENTER) == GLFW_PRESS {
+
+      str : string;
+      str.data = console_text_buffer.data;
+      str.count = console_text_count;
+      if str.count != 0 {
+        console_write_command(str);
+      }
+      console_text_count = 0;
+    }
+  }
+}
+
+draw_console :: (width: float, height: float, window: *GLFWwindow) {
+  if console_on == false return;
+  im_set_texture(null);
+  im_draw_rect(0, 0, width, height, c=Vector4.{0,0,0,0.85});
+  str : string;
+  str.data = console_text_buffer.data;
+  str.count = console_text_count;
+  im_draw_text(font, 5, 5, Vector4.{1,1,1,1}, str);
+}
+
+console_write_command :: (str: string) {
+  // TODO: This is hard-coded for now.
+  if str == {
+  case "white=ai";
+    w_is_human = false;
+    return;
+  case "black=ai";
+    b_is_human = false;
+    return;
+  case "white=human";
+    w_is_human = true;
+    return;
+  case "black=human";
+    b_is_human = true;
+    return;
+  case "opening_book=true";
+    openings_on = true;
+    return;
+  case "opening_book=false";
+    openings_on = false;
+    return;
+  case "stop";
+    timeout_timer = 1000000000.0;
+  }
+
+  token := parse_token(*str);
+  if token == {
+  case "depth";
+    depth, bool := parse_int(*str);
+    if bool {
+      __engine_depth_parameter = depth;
+    }
+  case "timeout";
+    limit, bool := parse_float(*str);
+    if bool {
+      timeout_limit = limit;
+    }
+  }
+}
 
 draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *Texture, highlight_square: u64, possible_moves_bb: u64, last_move_bb: u64, white_side: bool) {
   cen_x := width * 0.5; 
@@ -429,6 +526,7 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
   }
 }
 
+timeout_limit := 20.0;
 mouse_position_x:     float = 0.0;
 mouse_position_y:     float = 0.0;
 mouse_button_1_state: enum {MOUSE_IDLE; MOUSE_PRESSED; MOUSE_HOLD; MOUSE_RELEASE; } = .MOUSE_IDLE;
@@ -975,13 +1073,12 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
     }
 
   case .UCI_GO_TURN;
-    TIMEOUT_LIMIT :: 3.0;
     timeout_timer += delta_time;
     if reset_key_state == .RESET_PRESS {
       uci_write_command("stop\n");
       timeout_timer = 0.0;
       uci_state = .UCI_NEWGAME;
-    } else if timeout_timer >= TIMEOUT_LIMIT {
+    } else if timeout_timer >= timeout_limit {
       uci_write_command("stop\n");
       print("timeout!\n");
       timeout_timer = 0.0;
