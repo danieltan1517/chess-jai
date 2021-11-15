@@ -116,7 +116,7 @@ main :: () {
     im_draw_setup_gl();
     im_set_viewport_transform(2.0/width, 2.0/height, -1, -1);
     handle_reset(window, *piece_bitboard, *flags, *ep_sq, *moves_arr);
-    console_input(engines, window, *piece_bitboard, *flags, *ep_sq, *moves_arr);
+    console_input(*engines, window, *piece_bitboard, *flags, *ep_sq, *moves_arr);
     if !console_on {
       white_side = handle_flip_board(window, white_side);
     }
@@ -196,7 +196,7 @@ console_text_input :: (window: *GLFWwindow, codepoint: u32) #c_call {
   } 
 }
 
-console_input :: (engines: [..] UCI_Engine, window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..]Move16) {
+console_input :: (engines: *[..] UCI_Engine, window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..]Move16) {
   t_state    := glfwGetKey(window, GLFW_KEY_T);
   l_ctrl_key := glfwGetKey(window, GLFW_KEY_LEFT_CONTROL);
   r_ctrl_key := glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL);
@@ -262,7 +262,7 @@ draw_console :: (width: float, height: float, window: *GLFWwindow) {
   im_draw_text(font, 10, 5, Vector4.{1,1,1,1}, tprint(">%", str));
 }
 
-console_write_command :: (engines: [..]UCI_Engine, str: string, piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..]Move16) {
+console_write_command :: (engines: *[..] UCI_Engine, str: string, piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..]Move16) {
   command, success := parse_token(*str);
   if !success return;
   while str && str[0] == #char " " {
@@ -294,7 +294,7 @@ console_write_command :: (engines: [..]UCI_Engine, str: string, piece_bitboard: 
 
   case "white";
     w_is_human = equal(str, "human");
-    for e : engines {
+    for e : (<<engines) {
       if equal(e.name, str) {
         w_engine_name = copy_string(str); // TODO: Leak!
         return;
@@ -306,7 +306,8 @@ console_write_command :: (engines: [..]UCI_Engine, str: string, piece_bitboard: 
 
   case "black";
     b_is_human = equal(str, "human");
-    for e : engines {
+    for e : (<<engines) {
+      print(e.name);
       if equal(e.name, str) {
         b_engine_name = copy_string(str); // TODO: Leak
         return;
@@ -317,7 +318,7 @@ console_write_command :: (engines: [..]UCI_Engine, str: string, piece_bitboard: 
     return;
 
   case "load_engine";
-    for e : engines {
+    for e : (<<engines) {
       if equal(e.name, str) {
         print("***Error. Engine % already has been loaded.\n", str);
         return;
@@ -330,8 +331,7 @@ console_write_command :: (engines: [..]UCI_Engine, str: string, piece_bitboard: 
       print("***Error. Engine % cannot be loaded.\n", str);
       return;
     }
-    print("Added engine: %\n", engine.name);
-    array_add(*engines, engine);
+    array_add(engines, engine);
     return;
 
   case "timeout";
@@ -344,7 +344,7 @@ console_write_command :: (engines: [..]UCI_Engine, str: string, piece_bitboard: 
     return;
   }
 
-  for *eng: engines {
+  for *eng: <<engines {
     if equal(command,eng.name) {
       token, success := parse_token(*str);
       if !success return;
