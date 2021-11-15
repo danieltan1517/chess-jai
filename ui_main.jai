@@ -19,11 +19,6 @@ hh           -- white=human vs black=human
 hc           -- white=human vs black=ai
 ch           -- white=ai vs black=human
 cc           -- white=ai vs black=ai
-ai=Lc0       -- sets the ai to that particular ai. Must be in the resources directory.
-
-Here is a sample command-line calling:
-
-./jai-chess hc ai=stockfish depth=7
 
 Here are the keyboard controls:
 <Ctrl+N> -- new game, reset the board.
@@ -34,13 +29,11 @@ Here are the keyboard controls:
 END
 
 fen_string := "startpos";
-//"r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1";
-//"8/PPPk4/8/8/8/8/4Kppp/8 b - - 0 1";
 
 main :: () {
   print(welcome_message);
   white_side := true;
-  engine_name := handle_command_line();
+  handle_command_line();
 
   if !glfwInit() then return;
   defer glfwTerminate();
@@ -72,6 +65,7 @@ main :: () {
   }
 
   {
+    engine_name := "lion-tulip";
     ai_chess_engine_path := join(#filepath, "resources/", engine_name);
     engine, success := init_uci_engine(engine_name, ai_chess_engine_path);
     if !success then {
@@ -153,15 +147,15 @@ timer_on := false;
 delta_time : float32 = 0.0;
 openings_on := true;
 
-handle_command_line :: () -> string #expand {
+handle_command_line :: () #expand {
   args := get_command_line_arguments();
-  engine_name : string = "lion-tulip";
   for arg : args {
     if arg == {
     case "hc";
       w_is_human = true;
       b_is_human = false;
       `white_side = true;
+      b_engine_name = "lion-tulip";
     case "hh";
       w_is_human = true;
       b_is_human = true;
@@ -170,28 +164,15 @@ handle_command_line :: () -> string #expand {
       w_is_human = false;
       b_is_human = false;
       `white_side = true;
+      w_engine_name = "lion-tulip";
+      b_engine_name = "lion-tulip";
     case "ch";
       w_is_human = false;
       b_is_human = true;
       `white_side = false;
-    case "r";
-      // TODO: use rand function????
-      w_is_human = xx ((cast(int)(get_time() * 130598103698.923467)) & 1);
-      b_is_human = !w_is_human;
-      `white_side = w_is_human;
-    case;
-      if begins_with(arg, "ai=") {
-        cpu_string := advance(arg, 3);
-        // This is not good error checking... could crash the program
-        if cpu_string.count != 0 {
-          engine_name = cpu_string;
-        } else {
-          print("Invalid ai choice\n");
-        }
-      }
+      w_engine_name = "lion-tulip";
     }
   }
-  return engine_name;
 }
 
 __game_status_text: string;
@@ -292,6 +273,24 @@ console_write_command :: (engines: [..]UCI_Engine, str: string, piece_bitboard: 
 
   case "stop";
     timeout_timer = timeout_limit + delta_time;
+    return;
+
+  case "fen";
+    reset(piece_bitboard, flags, ep_sq, moves_arr);
+    if !equal(fen_string, "startpos") then {
+      free(fen_string);
+    }
+    while str[0] == #char " " {
+      advance(*str, 1);
+    }
+    fen_string = copy_string(str);
+    if equal(fen_string, "startpos") then {
+      << piece_bitboard, whose_turn, <<flags, <<ep_sq = chess_start_pos();
+    } else {
+      << piece_bitboard, whose_turn, <<flags, <<ep_sq = chess_start_from_fen(fen_string);
+    }
+    reset(piece_bitboard, flags, ep_sq, moves_arr);
+    return;
 
   case "white";
     w_is_human = equal(str, "human");
@@ -388,8 +387,8 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
 
   // draw text
   if font {
-    bottom : string  = ifx w_is_human then "human" else w_engine_name; // white
-    top    : string  = ifx b_is_human then "human" else b_engine_name;   // black
+    bottom : string  = ifx w_is_human then "human" else w_engine_name;
+    top    : string  = ifx b_is_human then "human" else b_engine_name;
     bot_col: Vector4 = ifx  whose_turn then BLANK else L_BLANK;
     top_col: Vector4 = ifx !whose_turn then BLANK else L_BLANK;
 
@@ -407,13 +406,6 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
                                    formatInt(cast(int)fmod(top_time, 60.0), minimum_digits=2));
     im_draw_text(font, x, y - square_len*0.33, bot_col, bottom);
     im_draw_text(font, x, y + square_len*8.13, top_col, top);
-
-
-    /*SMALLCAPS      :: 0x1;
-    LINING_FIGURES :: 0x2;
-    NO_KERNING     :: 0x4;
-    LEFT_JUSTIFIED :: 0x8;*/
-    ///Font_Effects :: enum_flags u32 {
 
     im_draw_text(font, x+square_len*7.25, y - square_len*0.33, bot_col, bottom_string);
     im_draw_text(font, x+square_len*7.25, y + square_len*8.13, top_col, top_string);
@@ -915,7 +907,14 @@ handle_reset :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flags: *
     if n_state == GLFW_PRESS && (l_ctrl_key == GLFW_PRESS || r_ctrl_key == GLFW_PRESS) {
       reset_key_state = .RESET_PRESS;
       reset(piece_bitboard, flags, ep_sq, moves_arr);
-      //uci_state = .UCI_NEWGAME;
+      if !equal(fen_string, "startpos") then {
+        free(fen_string);
+      }
+      fen_string = "startpos";
+      << piece_bitboard, whose_turn, <<flags, <<ep_sq = chess_start_pos();
+      reset(piece_bitboard, flags, ep_sq, moves_arr);
+
+
     }
   case .RESET_PRESS;
     if n_state == GLFW_RELEASE || (l_ctrl_key == GLFW_RELEASE && r_ctrl_key == GLFW_RELEASE) {
@@ -1144,6 +1143,15 @@ uci_ai_loop :: (using engine: *UCI_Engine, piece_bitboard: *Piece_Bitboards, fla
     }
 
   case .UCI_GO_TURN;
+    can_make_move := true;
+    // need to make sure AI does not transform into human halfway.
+    if !(((equal(w_engine_name, engine.name) && !w_is_human && whose_turn)) || 
+        ((equal(b_engine_name, engine.name) && !b_is_human && !whose_turn))) {
+      uci_write_command(engine, "stop\n");
+      timeout_timer = 0.0;
+      can_make_move = false;
+    }
+
     timeout_timer += delta_time;
     if reset_key_state == .RESET_PRESS {
       uci_write_command(engine, "stop\n");
@@ -1161,20 +1169,21 @@ uci_ai_loop :: (using engine: *UCI_Engine, piece_bitboard: *Piece_Bitboards, fla
         reset_queue();
         continue;
       }
-
+      if !can_make_move
+        continue;
       if starts_with(cmd_string, "bestmove ") {
-        TF, from, to, type := parse_best_move(cmd_string);
-        // TODO: parse best move could fail, what to do if that happens????
-        assert(TF);
-        actual_move := find_move(<<moves_arr, from, to, type);
-        if actual_move {
-          ui_handle_move_made(piece_bitboard, flags, ep_sq, moves_arr, actual_move);
-          last_move_bb = from|to;
-          uci_state = .UCI_IDLE;
-        } else {
-          print("There is a bug.\n");
-          uci_state = .UCI_BUG;
-        }
+          TF, from, to, type := parse_best_move(cmd_string);
+          // TODO: parse best move could fail, what to do if that happens????
+          assert(TF);
+          actual_move := find_move(<<moves_arr, from, to, type);
+          if actual_move {
+            ui_handle_move_made(piece_bitboard, flags, ep_sq, moves_arr, actual_move);
+            last_move_bb = from|to;
+            uci_state = .UCI_IDLE;
+          } else {
+            print("There is a bug.\n");
+            uci_state = .UCI_BUG;
+          }
       }
     }
   case .UCI_BUG;
