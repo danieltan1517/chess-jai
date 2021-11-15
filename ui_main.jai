@@ -23,7 +23,7 @@ cc           -- white=ai vs black=ai
 Here are the keyboard controls:
 <Ctrl+N> -- new game, reset the board.
 <Ctrl+Z> -- undo move.
-<Ctrl+T> -- opens a terminal for more complex commands
+<ESC> -- opens a terminal for more complex commands
 <X>      -- flip the board.
 -------------------------------
 END
@@ -197,17 +197,17 @@ console_text_input :: (window: *GLFWwindow, codepoint: u32) #c_call {
 }
 
 console_input :: (engines: *[..] UCI_Engine, window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..]Move16) {
-  t_state    := glfwGetKey(window, GLFW_KEY_T);
+  esc := glfwGetKey(window, GLFW_KEY_ESCAPE);
   l_ctrl_key := glfwGetKey(window, GLFW_KEY_LEFT_CONTROL);
   r_ctrl_key := glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL);
   if console_key == {
   case .CONSOLE_PRESS;
-    if t_state == GLFW_PRESS && (l_ctrl_key == GLFW_PRESS || r_ctrl_key == GLFW_PRESS) {
+    if esc == GLFW_PRESS {
       console_key = .CONSOLE_RELEASE;
       console_on = !console_on;
     }
   case .CONSOLE_RELEASE;
-    if t_state == GLFW_RELEASE || (l_ctrl_key == GLFW_RELEASE && r_ctrl_key == GLFW_RELEASE) {
+    if esc == GLFW_RELEASE {
       console_key = .CONSOLE_PRESS;
     }
   }
@@ -262,6 +262,11 @@ draw_console :: (width: float, height: float, window: *GLFWwindow) {
   im_draw_text(font, 10, 5, Vector4.{1,1,1,1}, tprint(">%", str));
 }
 
+
+white_sq_color := Vector4.{238.0/255.0, 238.0/255.0, 210.0/255.0, 1.0};
+black_sq_color := Vector4.{118.0/255.0, 150.0/255.0,  86.0/255.0, 1.0};
+coordinates_on := true;
+
 console_write_command :: (engines: *[..] UCI_Engine, str: string, piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..]Move16) {
   command, success := parse_token(*str);
   if !success return;
@@ -270,6 +275,37 @@ console_write_command :: (engines: *[..] UCI_Engine, str: string, piece_bitboard
   }
 
   if command == {
+  case "board_theme";
+    if str == {
+    case "green";
+      white_sq_color = Vector4.{238.0/255.0, 238.0/255.0, 210.0/255.0, 1.0};
+      black_sq_color = Vector4.{118.0/255.0, 150.0/255.0,  86.0/255.0, 1.0};
+
+    case "blue"; 
+      white_sq_color = Vector4.{0.871, 0.890, 0.902, 1.0}; 
+      black_sq_color = Vector4.{0.549, 0.635, 0.678, 1.0};
+
+    case "grey";
+      white_sq_color = Vector4.{0.655, 0.655, 0.655, 1.0};
+      black_sq_color = Vector4.{0.525, 0.525, 0.525, 1.0};
+
+    case "brown";
+      white_sq_color = Vector4.{0.941, 0.851, 0.710, 1.0};
+      black_sq_color = Vector4.{0.710, 0.533, 0.388, 1.0};
+
+    case "purple";
+      white_sq_color = Vector4.{0.902, 0.859, 0.945, 1.0};
+      black_sq_color = Vector4.{0.600, 0.490, 0.710, 1.0};
+    }
+    return;
+  case "coordinates";
+    if str == {
+    case "true";
+      coordinates_on = true;
+    case "false";
+      coordinates_on = false;
+    }
+    return;
 
   case "stop";
     timeout_timer = timeout_limit + delta_time;
@@ -293,27 +329,27 @@ console_write_command :: (engines: *[..] UCI_Engine, str: string, piece_bitboard
     return;
 
   case "white";
-    w_is_human = equal(str, "human");
+    w_is_human = true;
+    if w_engine_name free(w_engine_name);
+    w_engine_name = copy_string(str); // TODO: Leak!
     for e : (<<engines) {
       if equal(e.name, str) {
-        w_engine_name = copy_string(str); // TODO: Leak!
+        w_is_human = false;
         return;
       }
     }
-
-    w_engine_name = "*****";
     return;
 
   case "black";
-    b_is_human = equal(str, "human");
+    b_is_human = true;
+    if b_engine_name free(b_engine_name);
+    b_engine_name = copy_string(str); // TODO: Leak
     for e : (<<engines) {
       if equal(e.name, str) {
-        b_engine_name = copy_string(str); // TODO: Leak
+        b_is_human = false;
         return;
       }
     }
-
-    b_engine_name = "*****";
     return;
 
   case "load_engine";
@@ -365,6 +401,7 @@ console_write_command :: (engines: *[..] UCI_Engine, str: string, piece_bitboard
 
 }
 
+
 draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *Texture, highlight_square: u64, possible_moves_bb: u64, last_move_bb: u64, white_side: bool) {
   cen_x := width * 0.5; 
   cen_y := height * 0.5;
@@ -382,13 +419,10 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
   x := cen_x - len*.5;
   y := cen_y - len*.5;
 
-  white_sq_color :: Vector4.{238.0/255.0, 238.0/255.0, 210.0/255.0, 1.0};
-  black_sq_color :: Vector4.{118.0/255.0, 150.0/255.0,  86.0/255.0, 1.0};
-
   // draw text
   if font {
-    bottom : string  = ifx w_is_human then "human" else w_engine_name;
-    top    : string  = ifx b_is_human then "human" else b_engine_name;
+    bottom : string  = w_engine_name;
+    top    : string  = b_engine_name;
     bot_col: Vector4 = ifx  whose_turn then BLANK else L_BLANK;
     top_col: Vector4 = ifx !whose_turn then BLANK else L_BLANK;
 
@@ -433,7 +467,8 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
 
   draw_bitboard(last_move_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, YELLOW);
   draw_bitboard(possible_moves_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, GREY);
-  if font {
+
+  if coordinates_on == true && font {
     // add board labels.
     letters : string = ifx white_side "abcdefgh" else "hgfedcba";
     numbers : string = ifx white_side "12345678" else "87654321";
@@ -446,6 +481,7 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
       col = ifx TF white_sq_color else black_sq_color;
     }
   }
+
   im_set_texture(texture);
 
   using pieces;
@@ -592,8 +628,8 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
 }
 
 timeout_limit := 20.0;
-mouse_position_x:     float = 0.0;
-mouse_position_y:     float = 0.0;
+mouse_position_x: float = 0.0;
+mouse_position_y: float = 0.0;
 mouse_button_1_state: enum {MOUSE_IDLE; MOUSE_PRESSED; MOUSE_HOLD; MOUSE_RELEASE; } = .MOUSE_IDLE;
 
 read_mouse_input :: (window: *GLFWwindow) {
