@@ -49,6 +49,8 @@ main :: () {
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
   window := glfwCreateWindow(680, 680, "Jai Chess", null, null);
+  engines: [..] UCI_Engine;
+
   if !window then return;
   defer glfwDestroyWindow(window);
 
@@ -69,22 +71,26 @@ main :: () {
     return;
   }
 
-  ai_chess_engine_path := join(#filepath, "resources/", engine_name);
-  if !uci_init_uci_chess_engine(engine_name, ai_chess_engine_path) {
-    print("Error initializing UCI chess interface\n");
-    return;
+  {
+    ai_chess_engine_path := join(#filepath, "resources/", engine_name);
+    engine, success := init_uci_engine(engine_name, ai_chess_engine_path);
+    if !success then {
+      print("Error initializing UCI chess interface\n");
+      return;
+    }
+    array_add(*engines, engine);
   }
 
   defer {
     // send quit command to the chess engine 
     // before closing the uci chess engine.
-    if w_is_human == false || b_is_human == false {
-      print("Application closed\n");
-      uci_write_command("stop\n");
-      uci_write_command("quit\n");
-      uci_close_chess_engine();
+    for *engine: engines {
+      uci_write_command(engine, "stop\n");
+      uci_write_command(engine, "quit\n");
+      uci_close(engine);
     }
   }
+
   zobrist_init_globals();
   init_global_bitboards();
   piece_bitboard: Piece_Bitboards;
@@ -116,7 +122,7 @@ main :: () {
     im_draw_setup_gl();
     im_set_viewport_transform(2.0/width, 2.0/height, -1, -1);
     handle_reset(window, *piece_bitboard, *flags, *ep_sq, *moves_arr);
-    console_input(window, *piece_bitboard, *flags, *ep_sq, *moves_arr);
+    console_input(engines, window, *piece_bitboard, *flags, *ep_sq, *moves_arr);
     if !console_on {
       white_side = handle_flip_board(window, white_side);
     }
@@ -135,8 +141,8 @@ main :: () {
     glfwPollEvents();
 
     reset_temporary_storage();
-    if w_is_human == false || b_is_human == false {
-      uci_ai_game_loop (*piece_bitboard, *flags, *ep_sq, *moves_arr);
+    for *engine: engines {
+      uci_ai_loop(engine, *piece_bitboard, *flags, *ep_sq, *moves_arr);
     }
     ftime = cast(float)get_time() - ftime;
     delta_time = ftime;
@@ -148,11 +154,6 @@ delta_time : float32 = 0.0;
 openings_on := true;
 
 handle_command_line :: () -> string #expand {
-  // TODO: 
-  // NOTE: this is hard-coded. It does not cover general cases
-  // I'm too lazy to create a pretty UI right now, so commandline will have to do
-  // this is ad-hoc, and this is mainly for slapping together something to
-  // get useful functionality.
   args := get_command_line_arguments();
   engine_name : string = "lion-tulip";
   for arg : args {
@@ -214,7 +215,7 @@ console_text_input :: (window: *GLFWwindow, codepoint: u32) #c_call {
   } 
 }
 
-console_input :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..]Move16) {
+console_input :: (engines: [..] UCI_Engine, window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..]Move16) {
   t_state    := glfwGetKey(window, GLFW_KEY_T);
   l_ctrl_key := glfwGetKey(window, GLFW_KEY_LEFT_CONTROL);
   r_ctrl_key := glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL);
@@ -263,7 +264,7 @@ console_input :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flags: 
       str.data = console_text_buffer.data;
       str.count = console_text_count;
       if str.count != 0 {
-        console_write_command(str, piece_bitboard, flags, ep_sq, moves_arr);
+        console_write_command(engines, str, piece_bitboard, flags, ep_sq, moves_arr);
       }
       console_text_count = 0;
     }
@@ -280,61 +281,89 @@ draw_console :: (width: float, height: float, window: *GLFWwindow) {
   im_draw_text(font, 10, 5, Vector4.{1,1,1,1}, tprint(">%", str));
 }
 
-console_write_command :: (str: string, piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..]Move16) {
-  // TODO: This is hard-coded for now.
-  if str == {
-  case "white=ai";
-    w_is_human = false;
-    return;
-  case "black=ai";
-    b_is_human = false;
-    return;
-  case "white=human";
-    w_is_human = true;
-    return;
-  case "black=human";
-    b_is_human = true;
-    return;
-  case "opening_book=true";
-    openings_on = true;
-    return;
-  case "opening_book=false";
-    openings_on = false;
-    return;
-  case "stop";
-    timeout_timer = 1000000000.0;
+console_write_command :: (engines: [..]UCI_Engine, str: string, piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..]Move16) {
+  command, success := parse_token(*str);
+  if !success return;
+  while str && str[0] == #char " " {
+    advance(*str, 1); // eat spaces.
   }
 
-  token := parse_token(*str);
-  if token == {
-  case "depth";
-    depth, bool := parse_int(*str);
-    if bool {
-      __engine_depth_parameter = depth;
+  if command == {
+
+  case "stop";
+    timeout_timer = timeout_limit + delta_time;
+
+  case "white";
+    w_is_human = equal(str, "human");
+    for e : engines {
+      if equal(e.name, str) {
+        w_engine_name = copy_string(str); // TODO: Leak!
+        return;
+      }
     }
+
+    w_engine_name = "*****";
+    return;
+
+  case "black";
+    b_is_human = equal(str, "human");
+    for e : engines {
+      if equal(e.name, str) {
+        b_engine_name = copy_string(str); // TODO: Leak
+        return;
+      }
+    }
+
+    b_engine_name = "*****";
+    return;
+
+  case "load_engine";
+    for e : engines {
+      if equal(e.name, str) {
+        print("***Error. Engine % already has been loaded.\n", str);
+        return;
+      }
+    }
+
+    path := join(#filepath, "resources/", str);
+    engine, success := init_uci_engine(str, path);
+    if !success {
+      print("***Error. Engine % cannot be loaded.\n", str);
+      return;
+    }
+    print("Added engine: %\n", engine.name);
+    array_add(*engines, engine);
+    return;
+
   case "timeout";
-    limit, bool := parse_float(*str);
-    if bool {
-      timeout_limit = limit;
-    }
-  case "fen";
-    reset(piece_bitboard, flags, ep_sq, moves_arr);
-    uci_state = .UCI_NEWGAME;
-    if ! equal(fen_string, "startpos") then {
-      free(fen_string);
-    }
-    while str[0] == #char " " {
-      advance(*str, 1);
-    }
-    fen_string = copy_string(str); 
-    if equal(fen_string, "startpos") then {
-      <<piece_bitboard, whose_turn, <<flags, <<ep_sq = chess_start_pos();
+    value, success := parse_float(*str);
+    if success {
+      timeout_limit = value;
     } else {
-      <<piece_bitboard, whose_turn, <<flags, <<ep_sq = chess_start_from_fen(fen_string);
-    } 
-    // TODO: too lazy to actually reset it correctly.
-    reset(piece_bitboard, flags, ep_sq, moves_arr);
+      print("***Error. Invalid timeout parameter: %\n", str);
+    }
+    return;
   }
+
+  for *eng: engines {
+    if equal(command,eng.name) {
+      token, success := parse_token(*str);
+      if !success return;
+
+      if token == {
+      case "depth";
+        number, success := parse_int(*str);
+        if !success {
+          print("***Error. Invalid depth parameter: %\n", str);
+          return;
+        }
+        eng.depth = number;
+      }
+
+      return;
+    }
+  }
+
 }
 
 draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *Texture, highlight_square: u64, possible_moves_bb: u64, last_move_bb: u64, white_side: bool) {
@@ -359,8 +388,8 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
 
   // draw text
   if font {
-    bottom : string  = ifx w_is_human then "human" else get_engine_name(); // white
-    top    : string  = ifx b_is_human then "human" else get_engine_name();   // black
+    bottom : string  = ifx w_is_human then "human" else w_engine_name; // white
+    top    : string  = ifx b_is_human then "human" else b_engine_name;   // black
     bot_col: Vector4 = ifx  whose_turn then BLANK else L_BLANK;
     top_col: Vector4 = ifx !whose_turn then BLANK else L_BLANK;
 
@@ -886,7 +915,7 @@ handle_reset :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flags: *
     if n_state == GLFW_PRESS && (l_ctrl_key == GLFW_PRESS || r_ctrl_key == GLFW_PRESS) {
       reset_key_state = .RESET_PRESS;
       reset(piece_bitboard, flags, ep_sq, moves_arr);
-      uci_state = .UCI_NEWGAME;
+      //uci_state = .UCI_NEWGAME;
     }
   case .RESET_PRESS;
     if n_state == GLFW_RELEASE || (l_ctrl_key == GLFW_RELEASE && r_ctrl_key == GLFW_RELEASE) {
@@ -970,8 +999,11 @@ highlight_the_square: u64 = 0;
 piece_select_state: enum { PIECE_IDLE; PIECE_SELECTED; PIECE_PROMOTION; } = .PIECE_IDLE;
 possible_moves_bb: u64 = 0;
 check_bb : u64 = 0;
+
 w_is_human : bool = true;
 b_is_human : bool = true;
+w_engine_name: string;
+b_engine_name: string;
 
 w_clock_time : float = 30*60;
 b_clock_time : float = 30*60;
@@ -1043,55 +1075,45 @@ uci_position_command :: () -> string {
   }
 }
 
-uci_state : enum { 
-  UCI_INIT; 
-  UCI_UCIOK; 
-  UCI_ISREADY; 
-  UCI_NEWGAME; 
-  UCI_IDLE;
-  UCI_POS_CMD;
-  UCI_GO_TURN;
-  UCI_BUG;
-} = .UCI_INIT;
-
-uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..]Move16) {
+uci_ai_loop :: (using engine: *UCI_Engine, piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..]Move16) {
   if uci_state == {
   case .UCI_INIT;
-    uci_write_command("uci\n");
+    uci_write_command(engine, "uci\n");
     uci_state = .UCI_UCIOK;
   case .UCI_UCIOK;
     while true {
-      cmd_string := uci_getline();
+      cmd_string := uci_getline(engine);
       if !cmd_string break;
       if equal(cmd_string, "uciok") {
         uci_state = .UCI_ISREADY;
       }
     }
   case .UCI_ISREADY;
-    uci_write_command("isready\n");
+    uci_write_command(engine, "isready\n");
     while true {
-      cmd_string := uci_getline();
+      cmd_string := uci_getline(engine);
       if !cmd_string break;
       if equal(cmd_string, "readyok") {
         uci_state = .UCI_NEWGAME;
       } 
     }
   case .UCI_NEWGAME;
-    uci_write_command("ucinewgame\n");
+    uci_write_command(engine, "ucinewgame\n");
     uci_state = .UCI_IDLE;
   case .UCI_IDLE;
-    uci_getline(); // getline and throw away input.
+    uci_getline(engine); // getline and throw away input.
     reset_queue(); 
 
-
     // make sure there are moves that could be made.
-    if moves_arr.count > 0 && !w_human_turn() && !b_human_turn() {
+    if moves_arr.count > 0 && 
+       ( ((equal(w_engine_name, engine.name) && !w_is_human && whose_turn)) || 
+         ((equal(b_engine_name, engine.name) && !b_is_human && !whose_turn))) {
       
       if reset_key_state == .RESET_PRESS then {
         uci_state = .UCI_NEWGAME;
       } else if openings_on == true && equal(fen_string, "startpos") && (cast(int)(random_get()) % 100) < 90 {
         cmd_str := uci_position_command();
-        uci_write_command(cmd_str);
+        uci_write_command(engine, cmd_str);
         TF, mov := pick_random_opening(move_record, opening_book);
         if TF && mov != 0 {
           ui_handle_move_made(piece_bitboard, flags, ep_sq, moves_arr, mov);
@@ -1101,12 +1123,12 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
           last_move_bb = from|to;
         } else {
           cmd_str := uci_position_command();
-          uci_write_command(cmd_str);
+          uci_write_command(engine, cmd_str);
           uci_state = .UCI_POS_CMD;
         }
       } else {
         cmd_str := uci_position_command();
-        uci_write_command(cmd_str);
+        uci_write_command(engine, cmd_str);
         uci_state = .UCI_POS_CMD;
       }
     }
@@ -1115,8 +1137,8 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
     if reset_key_state == .RESET_PRESS {
       uci_state = .UCI_NEWGAME;
     } else {
-      cmd_string := tprint("go depth %\n", __engine_depth_parameter);
-      uci_write_command(cmd_string);
+      cmd_string := tprint("go depth %\n", engine.depth);
+      uci_write_command(engine, cmd_string);
       uci_state = .UCI_GO_TURN;
       timeout_timer = 0.0;
     }
@@ -1124,16 +1146,16 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
   case .UCI_GO_TURN;
     timeout_timer += delta_time;
     if reset_key_state == .RESET_PRESS {
-      uci_write_command("stop\n");
+      uci_write_command(engine, "stop\n");
       timeout_timer = 0.0;
       uci_state = .UCI_NEWGAME;
     } else if timeout_timer >= timeout_limit {
-      uci_write_command("stop\n");
+      uci_write_command(engine, "stop\n");
       print("timeout!\n");
       timeout_timer = 0.0;
     } 
     while true {
-      cmd_string := uci_getline();
+      cmd_string := uci_getline(engine);
       if !cmd_string break;
       if reset_key_state == .RESET_PRESS {
         reset_queue();
@@ -1195,28 +1217,28 @@ uci_ai_game_loop :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: 
 timeout_timer := 0.0;
 
 #scope_file
-__engine_pid := 0;
 // Universal Chess Interface Protocol
 
-uci_init_uci_chess_engine :: (engine_name: string, ai_path: string) -> bool {
+init_uci_engine :: (engine_name: string, ai_path: string) -> UCI_Engine, bool {
   // I wish there was a high-level library for this in Jai,
   // but the #import "Process"; doesn't do what I want... <sigh>
+  engine: UCI_Engine;
   pipe_1: [2] s32;
   pipe_2: [2] s32;
 
   if pipe(*pipe_1) == -1 {
     print("Error creating pipe.\n");
-    return false;
+    return engine, false;
   }
   if pipe(*pipe_2) == -1 {
     print("Error creating pipe.\n");
-    return false;
+    return engine, false;
   }
 
   child_pid := fork();
   if child_pid == -1 {
     print("Error in fork.\n");
-    return false;
+    return engine, false;
   }
 
   if child_pid == 0 {
@@ -1241,18 +1263,18 @@ uci_init_uci_chess_engine :: (engine_name: string, ai_path: string) -> bool {
     args[1] = null;
     execvp(args[0], args.data);
     exit(-1);
-    return false;  // to shut the compiler up.
+    return engine, false;  // to shut the compiler up.
   } else {
     // parent process
-    __engine_pid = child_pid;
+    engine.pid = child_pid;
     close(pipe_1[1]);
     close(pipe_2[0]);
-    __write_pipe = pipe_2[1];
-    __read_pipe  = pipe_1[0];
-    setup_pipe_nonblock(__read_pipe);
+    engine.__write_pipe = pipe_2[1];
+    engine.__read_pipe  = pipe_1[0];
+    setup_pipe_nonblock(engine.__read_pipe);
 
-    __engine_name = engine_name;
-    return true; 
+    engine.name = copy_string(engine_name);
+    return engine, true; 
   }
 
   setup_pipe_nonblock :: (pipe: s32) #expand {
@@ -1261,7 +1283,7 @@ uci_init_uci_chess_engine :: (engine_name: string, ai_path: string) -> bool {
   }
 }
 
-uci_write_command :: (command: string) {
+uci_write_command :: (using engine: *UCI_Engine, command: string) {
   write(__write_pipe, command.data, xx command.count);
 }
 
@@ -1298,12 +1320,12 @@ reset_queue :: () #expand {
   __count = 0;
 }
 
-uci_getline :: () -> string {
+uci_getline :: (using engine: *UCI_Engine) -> string {
   // TODO: create a queue. then pop from the queue. this way of doing it is unreliable
   // for "stop".
   if has_elements_to_dequeue() {
     s := dequeue();
-    print("Engine [%]: %\n", __engine_name, s);
+    print("Engine [%]: %\n", engine.name, s);
     return s; 
   }
   bytes_read := read(__read_pipe, __buffer.data, __buffer.count-1);
@@ -1317,29 +1339,41 @@ uci_getline :: () -> string {
   }
 
   s := dequeue();
-  print("Engine [%]: %\n", __engine_name, s);
+  print("Engine [%]: %\n", engine.name, s);
   return s;
 }
 
-uci_close_chess_engine :: () {
-  // NOTE: this function does NOT call "uci_write_command("quit")",
+uci_close :: (using engine: *UCI_Engine) {
+  // NOTE: this function does NOT call "uci_write_command(engine, "quit")",
   // that needs to be called explicitly
-  value: s32;
-  wait(*value);
-  print("exit code: %\n" , value);
+  status: s32;
+  waitpid(pid, *status, 0);
+  print("Engine [%] quits with return code: %\n" , engine.name, status);
   close(__write_pipe);
   close(__read_pipe);
 }
 
-__read_pipe:  s32;
-__write_pipe: s32;
+UCI_Engine :: struct {
+  uci_state : enum { 
+    UCI_INIT; 
+    UCI_UCIOK; 
+    UCI_ISREADY; 
+    UCI_NEWGAME; 
+    UCI_IDLE;
+    UCI_POS_CMD;
+    UCI_GO_TURN;
+    UCI_BUG;
+  } = .UCI_INIT;
+
+  name: string;
+  pid: pid_t;
+  __read_pipe:  s32;
+  __write_pipe: s32;
+  depth: int = 12;
+}
 
 
 font : *Dynamic_Font;
-__engine_name : string;  // name of engine. exists for aesthetic purposes
-__engine_depth_parameter : int = 12; // depth of engine search.
-
-get_engine_name :: () => __engine_name;
 
 BookNode :: struct {
   name : string;
