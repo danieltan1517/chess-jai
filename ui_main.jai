@@ -307,7 +307,6 @@ console_write_command :: (engines: *[..] UCI_Engine, str: string, piece_bitboard
   case "black";
     b_is_human = equal(str, "human");
     for e : (<<engines) {
-      print(e.name);
       if equal(e.name, str) {
         b_engine_name = copy_string(str); // TODO: Leak
         return;
@@ -356,7 +355,8 @@ console_write_command :: (engines: *[..] UCI_Engine, str: string, piece_bitboard
           print("***Error. Invalid depth parameter: %\n", str);
           return;
         }
-        eng.depth = number;
+        number = max(1, number);
+        eng.depth = min(number, 40);
       }
 
       return;
@@ -1079,6 +1079,13 @@ uci_ai_loop :: (using engine: *UCI_Engine, piece_bitboard: *Piece_Bitboards, fla
   case .UCI_INIT;
     uci_write_command(engine, "uci\n");
     uci_state = .UCI_UCIOK;
+    while true {
+      cmd_string := uci_getline(engine);
+      if !cmd_string break;
+      if equal(cmd_string, "uciok") {
+        uci_state = .UCI_ISREADY;
+      }
+    }
   case .UCI_UCIOK;
     while true {
       cmd_string := uci_getline(engine);
@@ -1089,6 +1096,8 @@ uci_ai_loop :: (using engine: *UCI_Engine, piece_bitboard: *Piece_Bitboards, fla
     }
   case .UCI_ISREADY;
     uci_write_command(engine, "isready\n");
+    uci_state = .UCI_READYOK;
+  case .UCI_READYOK;
     while true {
       cmd_string := uci_getline(engine);
       if !cmd_string break;
@@ -1101,7 +1110,7 @@ uci_ai_loop :: (using engine: *UCI_Engine, piece_bitboard: *Piece_Bitboards, fla
     uci_state = .UCI_IDLE;
   case .UCI_IDLE;
     uci_getline(engine); // getline and throw away input.
-    reset_queue(); 
+    reset_queue(engine); 
 
     // make sure there are moves that could be made.
     if moves_arr.count > 0 && 
@@ -1166,7 +1175,7 @@ uci_ai_loop :: (using engine: *UCI_Engine, piece_bitboard: *Piece_Bitboards, fla
       cmd_string := uci_getline(engine);
       if !cmd_string break;
       if reset_key_state == .RESET_PRESS {
-        reset_queue();
+        reset_queue(engine);
         continue;
       }
       if !can_make_move
@@ -1302,29 +1311,24 @@ swap :: (a: Code, b: Code) #expand {
   (#insert b) = t;
 }
 
-__stop_signal := false;
-__buffer: [16384] u8;
-__array: [100] string;
-__mark  := 0;
-__count := 0;
 
-enqueue :: (s: string) #expand {
+enqueue :: (using engine: *UCI_Engine, s: string) #expand {
   __array[__count] = s;
   __count += 1;
 }
 
-dequeue :: () -> string #expand {
+dequeue :: (using engine: *UCI_Engine) -> string #expand {
   assert(__mark <= __count, "Error.\n");
   s := __array[__mark];
   __mark += 1;
   return s;
 }
 
-has_elements_to_dequeue :: () -> bool #expand {
+has_elements_to_dequeue :: (using engine: *UCI_Engine) -> bool #expand {
   return __mark < __count;
 }
 
-reset_queue :: () #expand {
+reset_queue :: (using engine: *UCI_Engine) #expand {
   __mark  = 0;
   __count = 0;
 }
@@ -1332,8 +1336,8 @@ reset_queue :: () #expand {
 uci_getline :: (using engine: *UCI_Engine) -> string {
   // TODO: create a queue. then pop from the queue. this way of doing it is unreliable
   // for "stop".
-  if has_elements_to_dequeue() {
-    s := dequeue();
+  if has_elements_to_dequeue(engine) {
+    s := dequeue(engine);
     print("Engine [%]: %\n", engine.name, s);
     return s; 
   }
@@ -1341,13 +1345,13 @@ uci_getline :: (using engine: *UCI_Engine) -> string {
   if bytes_read <= 0
     return "";
 
-  reset_queue();
+  reset_queue(engine);
   str := to_string(__buffer.data, bytes_read-1); // -1 the '\n' char
   for line: split(str, "\n") {
-    enqueue(line);
+    enqueue(engine, line);
   }
 
-  s := dequeue();
+  s := dequeue(engine);
   print("Engine [%]: %\n", engine.name, s);
   return s;
 }
@@ -1367,6 +1371,7 @@ UCI_Engine :: struct {
     UCI_INIT; 
     UCI_UCIOK; 
     UCI_ISREADY; 
+    UCI_READYOK;
     UCI_NEWGAME; 
     UCI_IDLE;
     UCI_POS_CMD;
@@ -1379,6 +1384,11 @@ UCI_Engine :: struct {
   __read_pipe:  s32;
   __write_pipe: s32;
   depth: int = 12;
+  __stop_signal := false;
+  __buffer: [16384] u8;
+  __array: [300] string;
+  __mark  := 0;
+  __count := 0;
 }
 
 

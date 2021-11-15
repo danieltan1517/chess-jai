@@ -119,7 +119,7 @@ main :: () {
     if token == {
     case "depth";
       depth, TF := parse_int(*input);
-      if !TF return;
+      if !TF || depth < 1 return;
       mov := search(*pieces, castling, ep, *repetitions, depth, whose_turn, fifty);
       print_best_move(mov, whose_turn);
 
