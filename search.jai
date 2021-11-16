@@ -150,7 +150,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
         __killer_moves[1][ply] = __killer_moves[0][ply];
         __killer_moves[0][ply] = move;
         _pm_flag, pm_from, pm_to := decode_move(prev_move);
-        __counter_moves[pm_from][pm_to] = prev_move;
+        __counter_moves[pm_from][pm_to] = move;
       } else {
         __capture_history[cast(int)whose_turn][cast(int)piece_type][to] += 1 << depth;
       }

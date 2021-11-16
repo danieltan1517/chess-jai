@@ -244,9 +244,11 @@ console_input :: (engines: *[..] UCI_Engine, window: *GLFWwindow, piece_bitboard
       str : string;
       str.data = console_text_buffer.data;
       str.count = console_text_count;
-      if str.count != 0 {
-        console_write_command(engines, str, piece_bitboard, flags, ep_sq, moves_arr);
+
+      for tokens: split(str, ", ") {
+        console_write_command(engines, tokens, piece_bitboard, flags, ep_sq, moves_arr);
       }
+
       console_text_count = 0;
     }
   }
@@ -391,12 +393,11 @@ console_write_command :: (engines: *[..] UCI_Engine, str: string, piece_bitboard
       if token == {
       case "depth";
         number, success := parse_int(*str);
-        if !success {
+        if !success || number < 1 {
           print("***Error. Invalid depth parameter: %\n", str);
           return;
         }
-        number = max(1, number);
-        eng.depth = min(number, 40);
+        eng.depth = number;
       }
 
       return;
@@ -404,7 +405,6 @@ console_write_command :: (engines: *[..] UCI_Engine, str: string, piece_bitboard
   }
 
 }
-
 
 draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *Texture, highlight_square: u64, possible_moves_bb: u64, last_move_bb: u64, white_side: bool) {
   cen_x := width * 0.5; 
@@ -1119,38 +1119,29 @@ uci_ai_loop :: (using engine: *UCI_Engine, piece_bitboard: *Piece_Bitboards, fla
   case .UCI_INIT;
     uci_write_command(engine, "uci\n");
     uci_state = .UCI_UCIOK;
-    while true {
-      cmd_string := uci_getline(engine);
-      if !cmd_string break;
-      if equal(cmd_string, "uciok") {
-        uci_state = .UCI_ISREADY;
-      }
-    }
+
   case .UCI_UCIOK;
-    while true {
-      cmd_string := uci_getline(engine);
-      if !cmd_string break;
-      if equal(cmd_string, "uciok") {
+    for message: uci_messages(engine) {
+      if equal(message, "uciok") {
         uci_state = .UCI_ISREADY;
       }
     }
+
   case .UCI_ISREADY;
     uci_write_command(engine, "isready\n");
     uci_state = .UCI_READYOK;
   case .UCI_READYOK;
-    while true {
-      cmd_string := uci_getline(engine);
-      if !cmd_string break;
-      if equal(cmd_string, "readyok") {
+    for message: uci_messages(engine) {
+      if equal(message, "readyok") {
         uci_state = .UCI_NEWGAME;
       } 
     }
+
   case .UCI_NEWGAME;
     uci_write_command(engine, "ucinewgame\n");
     uci_state = .UCI_IDLE;
   case .UCI_IDLE;
-    uci_getline(engine); // getline and throw away input.
-    reset_queue(engine); 
+    for message: uci_messages(engine) { } // getline and throw away input.
 
     // make sure there are moves that could be made.
     if moves_arr.count > 0 && 
@@ -1211,30 +1202,30 @@ uci_ai_loop :: (using engine: *UCI_Engine, piece_bitboard: *Piece_Bitboards, fla
       print("timeout!\n");
       timeout_timer = 0.0;
     } 
-    while true {
-      cmd_string := uci_getline(engine);
-      if !cmd_string break;
+
+    for message: uci_messages(engine) {
       if reset_key_state == .RESET_PRESS {
-        reset_queue(engine);
         continue;
       }
       if !can_make_move
         continue;
-      if starts_with(cmd_string, "bestmove ") {
-          TF, from, to, type := parse_best_move(cmd_string);
-          // TODO: parse best move could fail, what to do if that happens????
-          assert(TF);
-          actual_move := find_move(<<moves_arr, from, to, type);
-          if actual_move {
-            ui_handle_move_made(piece_bitboard, flags, ep_sq, moves_arr, actual_move);
-            last_move_bb = from|to;
-            uci_state = .UCI_IDLE;
-          } else {
-            print("There is a bug.\n");
-            uci_state = .UCI_BUG;
-          }
+
+      if starts_with(message, "bestmove ") {
+        TF, from, to, type := parse_best_move(message);
+        // TODO: parse best move could fail, what to do if that happens????
+        assert(TF);
+        actual_move := find_move(<<moves_arr, from, to, type);
+        if actual_move {
+          ui_handle_move_made(piece_bitboard, flags, ep_sq, moves_arr, actual_move);
+          last_move_bb = from|to;
+          uci_state = .UCI_IDLE;
+        } else {
+          print("There is a bug.\n");
+          uci_state = .UCI_BUG;
+        }
       }
     }
+
   case .UCI_BUG;
 
   }
@@ -1327,9 +1318,9 @@ init_uci_engine :: (engine_name: string, ai_path: string) -> UCI_Engine, bool {
     engine.pid = child_pid;
     close(pipe_1[1]);
     close(pipe_2[0]);
-    engine.__write_pipe = pipe_2[1];
-    engine.__read_pipe  = pipe_1[0];
-    setup_pipe_nonblock(engine.__read_pipe);
+    engine.write_pipe = pipe_2[1];
+    engine.read_pipe  = pipe_1[0];
+    setup_pipe_nonblock(engine.read_pipe);
 
     engine.name = copy_string(engine_name);
     return engine, true; 
@@ -1342,7 +1333,7 @@ init_uci_engine :: (engine_name: string, ai_path: string) -> UCI_Engine, bool {
 }
 
 uci_write_command :: (using engine: *UCI_Engine, command: string) {
-  write(__write_pipe, command.data, xx command.count);
+  write(write_pipe, command.data, xx command.count);
 }
 
 swap :: (a: Code, b: Code) #expand {
@@ -1351,49 +1342,34 @@ swap :: (a: Code, b: Code) #expand {
   (#insert b) = t;
 }
 
-
-enqueue :: (using engine: *UCI_Engine, s: string) #expand {
-  __array[__count] = s;
-  __count += 1;
+UCI_Message_Loop :: struct {
+  using engine: *UCI_Engine;
 }
 
-dequeue :: (using engine: *UCI_Engine) -> string #expand {
-  assert(__mark <= __count, "Error.\n");
-  s := __array[__mark];
-  __mark += 1;
-  return s;
+uci_messages :: (engine : *UCI_Engine) -> UCI_Message_Loop {
+  uci_message_loop: UCI_Message_Loop;
+  uci_message_loop.engine = engine;
+  return uci_message_loop;
 }
 
-has_elements_to_dequeue :: (using engine: *UCI_Engine) -> bool #expand {
-  return __mark < __count;
-}
+for_expansion :: (loop: *UCI_Message_Loop, loop_body: Code, flags: For_Flags) #expand {
+  using loop.engine;
+  buffer := NewArray(2048, u8, allocator=__temporary_allocator);
+  while true {
+    bytes_read := read(read_pipe, buffer.data, xx (buffer.count-1));
+    if bytes_read <= 0 then {
+      break;
+    }
 
-reset_queue :: (using engine: *UCI_Engine) #expand {
-  __mark  = 0;
-  __count = 0;
-}
-
-uci_getline :: (using engine: *UCI_Engine) -> string {
-  // TODO: create a queue. then pop from the queue. this way of doing it is unreliable
-  // for "stop".
-  if has_elements_to_dequeue(engine) {
-    s := dequeue(engine);
-    print("Engine [%]: %\n", engine.name, s);
-    return s; 
+    auto_release_temp();
+    messages := to_string(buffer.data, bytes_read-1); // -1 the '\n' char
+    for message, i: split(messages, "\n") {
+      print("[%]: %\n", name, message);
+      `it := message;
+      `it_index := i;
+      #insert (break={return;}) loop_body;
+    }
   }
-  bytes_read := read(__read_pipe, __buffer.data, __buffer.count-1);
-  if bytes_read <= 0
-    return "";
-
-  reset_queue(engine);
-  str := to_string(__buffer.data, bytes_read-1); // -1 the '\n' char
-  for line: split(str, "\n") {
-    enqueue(engine, line);
-  }
-
-  s := dequeue(engine);
-  print("Engine [%]: %\n", engine.name, s);
-  return s;
 }
 
 uci_close :: (using engine: *UCI_Engine) {
@@ -1401,9 +1377,9 @@ uci_close :: (using engine: *UCI_Engine) {
   // that needs to be called explicitly
   status: s32;
   waitpid(pid, *status, 0);
-  print("Engine [%] quits with return code: %\n" , engine.name, status);
-  close(__write_pipe);
-  close(__read_pipe);
+  print("[%] quits with return code: %\n" , name, status);
+  close(write_pipe);
+  close(read_pipe);
 }
 
 UCI_Engine :: struct {
@@ -1421,14 +1397,9 @@ UCI_Engine :: struct {
 
   name: string;
   pid: pid_t;
-  __read_pipe:  s32;
-  __write_pipe: s32;
+  read_pipe:  s32;
+  write_pipe: s32;
   depth: int = 12;
-  __stop_signal := false;
-  __buffer: [16384] u8;
-  __array: [300] string;
-  __mark  := 0;
-  __count := 0;
 }
 
 

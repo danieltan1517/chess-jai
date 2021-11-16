@@ -26,6 +26,9 @@ The chess GUI uses the glfw3 and gl libraries.
 * Parse and load FEN strings
 * Uses https://github.com/Destaq/chess_graph/blob/master/elo_reading/openings_sheet.csv for opening book
 * Opening Book (need to clean up memory usage)
+* Engine vs. Engine Implemented (e.g. Stockfish vs Komodo)
+* Multi-engine support
+* Console command-line
 
 ## AI Chess Engine Features
 * AI Estimated Rating: 2700 (based on playing chess.com bots)
