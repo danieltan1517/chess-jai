@@ -296,6 +296,10 @@ console_write_command :: (engines: *[..] UCI_Engine, str: string, piece_bitboard
     case "purple";
       white_sq_color = Vector4.{0.902, 0.859, 0.945, 1.0};
       black_sq_color = Vector4.{0.600, 0.490, 0.710, 1.0};
+
+    case "red";
+      white_sq_color = Vector4.{0.936, 0.540, 0.550, 1.0};
+      black_sq_color = Vector4.{0.746, 0.362, 0.382, 1.0};
     }
     return;
   case "coordinates";
@@ -473,7 +477,7 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
     letters : string = ifx white_side "abcdefgh" else "hgfedcba";
     numbers : string = ifx white_side "12345678" else "87654321";
     TF := true;
-    col := BLANK;
+    col := white_sq_color;
     for i: 0..7 {
       im_draw_text(font, x + square_len*(i+1) - 10, y + 2, col, slice(letters, i, 1));
       im_draw_text(font, x + 2, y + square_len*(i+1) - 18, col, slice(numbers, i, 1));
