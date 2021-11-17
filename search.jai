@@ -14,7 +14,8 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   Push_Temporary();
 
   pv_line: PVLine;
-  score : int; best_move : Move16;
+  score : int; 
+  best_move : Move16;
   alpha: int = -INF;
   beta:  int =  INF;
   delta: int = 50;
@@ -45,7 +46,6 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
     str := builder_to_string(*builder, allocator=__temporary_allocator);
     print("%\n", str);
     reset_temporary_storage();
-    __nodes_searched = 0;
     clear_hash_table();
     print_move_to_buffer :: (mv: Move16) #expand {
       _, from, to := decode_move(mv);
@@ -61,6 +61,8 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   }
 }
 
+
+
 negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, repetitions: *[..]u64, ply: int = 0, $null_flag := true, alpha := -INF, beta := INF, fifty: int, prev_move: Move16) -> int {
   FULL_DEPTH_MOVES :: 4;
   REDUCTION_LIMIT  :: 3;
@@ -68,7 +70,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     return 0;
   auto_release_temp();
 
-  pv_node := (beta-alpha) > 1;
+  pv_node := alpha != beta-1;
 
   line: PVLine;
 
@@ -86,6 +88,10 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   if depth <= 0 then {
     pv_line.cmove = 0;
     return quiescene(pieces, castling, ep, whose_turn, alpha, beta, fifty);
+  }
+
+  if depth >= 8 && pv_node && pv_line.argmove[0] == 0 && bh_move == 0 {
+    internal_iterative_deepening(pieces, castling, ep, depth-4, whose_turn, pv_line, repetitions, ply, null_flag, alpha, beta, fifty, prev_move);
   }
 
   move_array: [..] Move16;
@@ -119,10 +125,10 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
     eval := 0;
     if moves_searched == 0 {
-      eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -beta-1, -alpha, next_fifty, move);
+      eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -beta, -alpha, next_fifty, move);
     } else {
       // nega-scout
-      if moves_searched >= FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && check == 0 && mflag == Move16.Quiet { 
+      if moves_searched >= FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && check == 0 && mflag == Move16.Quiet {
         // do late move reduction when not in check and making "quiet moves" 
         //move_number := cast(float)moves_searched;
         //total_moves := cast(float)move_array.count;
@@ -137,7 +143,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       // re-search the move that has failed to be proved to be bad with normal alpha beta score bounds
       if eval > alpha && eval < beta then {
         eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -beta, -alpha, next_fifty, move);
-      }
+      } 
     }
     unmake_move(pieces, capture, move, whose_turn);
 
@@ -147,12 +153,12 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       piece_type := piece_type_at(cast(u64)(1 << from), pieces, whose_turn);
       if !is_capture(mflag) {
         __history_moves[cast(int)whose_turn][cast(int)piece_type][to] += (depth*depth) >> cast(int)pv_node;
-        __killer_moves[1][ply] = __killer_moves[0][ply];
-        __killer_moves[0][ply] = move;
         _pm_flag, pm_from, pm_to := decode_move(prev_move);
         __counter_moves[pm_from][pm_to] = move;
+        __killer_moves[1][ply] = __killer_moves[0][ply];
+        __killer_moves[0][ply] = move;
       } else {
-        __capture_history[cast(int)whose_turn][cast(int)piece_type][to] += 1 << depth;
+        __capture_history[cast(int)whose_turn][cast(int)piece_type][to] += depth*depth;
       }
       break;
     } 
@@ -467,6 +473,16 @@ quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn:
   return alpha;
 }
 
+internal_iterative_deepening:: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, repetitions: *[..]u64, ply: int = 0, $null_flag := true, alpha := -INF, beta := INF, fifty: int, prev_move: Move16) {
+  cur_depth := 1;
+  while cur_depth <= depth { 
+    negamax(pieces, castling, ep, cur_depth, whose_turn, pv_line, repetitions, alpha=alpha, beta=beta, fifty=fifty, prev_move=prev_move);
+    if stop_signal_triggered() then 
+      break;
+    cur_depth += 1;
+  }
+}
+
 PVLine :: struct {
   cmove: u8;
   argmove: [64] Move16;  // TODO: WTF, THIS is the thing that is taking up SOO much time?!?!
@@ -534,9 +550,9 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       order[i] = 9000;
     } else {
       if __killer_moves[0][ply] == move_array[i] {
-        order[i] = 900;
+        order[i] = 2000;
       } else if __killer_moves[1][ply] == move_array[i] {
-        order[i] = 850;
+        order[i] = 1850;
       } else {
         order[i] = __history_moves[cast(int)whose_turn][cast(int)piece_type][to_index];
       }
@@ -614,12 +630,12 @@ mvv :: (victim: PieceType) -> score: int {
     using PieceType;
     array: [7] int;
     array[cast(int) None]   =     0;
-    array[cast(int) King]   = 50000;
-    array[cast(int) Queen]  =  9000;
-    array[cast(int) Rook]   =  5000;
-    array[cast(int) Bishop] =  3500;
-    array[cast(int) Knight] =  3250;
-    array[cast(int) Pawn]   =  1000;
+    array[cast(int) King]   = 500000;
+    array[cast(int) Queen]  =  90000;
+    array[cast(int) Rook]   =  50000;
+    array[cast(int) Bishop] =  35000;
+    array[cast(int) Knight] =  32500;
+    array[cast(int) Pawn]   =  10000;
     return array;
   }
 }
