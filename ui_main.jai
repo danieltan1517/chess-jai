@@ -345,6 +345,14 @@ console_write_command :: (engines: *[..] UCI_Engine, str: string, piece_bitboard
       }
     }
     return;
+  case "opening_book";
+    if str == {
+    case "true";
+      openings_on = true;
+    case "false";
+      openings_on = false;
+    }
+    return;
 
   case "black";
     b_is_human = true;
