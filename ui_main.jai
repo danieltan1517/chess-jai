@@ -508,6 +508,13 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
     draw_promotion_ui(promotion_sq);
   }
 
+
+  // DRAW ARROWS
+  //im_set_texture(null);
+  //im_draw_line(10, 10, width-10, 10, c=RED);
+  //im_draw_line(width-10, 10, width-10-5, 10-5, c=RED);
+  //im_draw_line(width-10, 10, width-10-5, 10+5, c=RED);
+
   // inner functions used...
   // chess.com uses yellow, so we follow their example...
   BLANK    :: Vector4.{1,1,1,1}; 
