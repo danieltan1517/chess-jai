@@ -1149,7 +1149,9 @@ uci_ai_loop :: (using engine: *UCI_Engine, piece_bitboard: *Piece_Bitboards, fla
     uci_write_command(engine, "ucinewgame\n");
     uci_state = .UCI_IDLE;
   case .UCI_IDLE;
-    for message: uci_messages(engine) { } // getline and throw away input.
+    for message: uci_messages(engine) {
+      // getline and throw away input.
+    } 
 
     // make sure there are moves that could be made.
     if moves_arr.count > 0 && 
@@ -1363,6 +1365,7 @@ uci_messages :: (engine : *UCI_Engine) -> UCI_Message_Loop {
 for_expansion :: (loop: *UCI_Message_Loop, loop_body: Code, flags: For_Flags) #expand {
   using loop.engine;
   buffer := NewArray(2048, u8, allocator=__temporary_allocator);
+  prefix := NewArray(2048, u8, allocator=__temporary_allocator);
   while true {
     bytes_read := read(read_pipe, buffer.data, xx (buffer.count-1));
     if bytes_read <= 0 then {
@@ -1370,7 +1373,13 @@ for_expansion :: (loop: *UCI_Message_Loop, loop_body: Code, flags: For_Flags) #e
     }
 
     auto_release_temp();
-    messages := to_string(buffer.data, bytes_read-1); // -1 the '\n' char
+    messages := to_string(buffer.data, bytes_read); // -1 the '\n' char
+    if messages[bytes_read - 1] == #char "\n" then {
+      messages.count -= 1;
+    } else {
+
+    }
+
     for message, i: split(messages, "\n") {
       print("[%]: %\n", name, message);
       `it := message;

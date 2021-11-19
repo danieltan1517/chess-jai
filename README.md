@@ -35,6 +35,7 @@ The chess GUI uses the glfw3 and gl libraries.
 * Aspiration Window Search
 * Parse and load FEN strings
 * Iterative Deepening
+* Internal Iterative Deepening
 * Implements UCI (Universal Chess Interface) Protocol to communicate with a UI
 * Legal move generation and detection
 * Passes all perft tests
