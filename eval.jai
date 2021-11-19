@@ -5,11 +5,13 @@ nnue_init :: () {
 }
 
 evaluate :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) -> int {
-  trivial_evaluation(p, whose_turn, fifty); // attempt trivial eval. else use NNUE.
+  // attempt trivial eval. else use NNUE.
+  TF, score := trivial_evaluation(p, whose_turn, fifty); 
+  if TF return score;
   return nnue_evaluate(p, whose_turn, fifty);
 }
 
-WIN_SCORE :: 0x7_FFFF;
+WIN_SCORE :: 200_000;
 
 #scope_file
 
@@ -46,37 +48,38 @@ nnue_evaluate :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) -> in
 }
 
 // We use trivial evaluation to deal with endgame positions.
-trivial_evaluation :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) #expand {
+trivial_evaluation :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) -> bool, int {
   // used for trivial checkmates/draws.
   w_pieces := w_queen|w_rook|w_bishop|w_knight|w_pawn;
   b_pieces := b_queen|b_rook|b_bishop|b_knight|b_pawn;
 
   if w_pieces == 0 && b_pieces == 0 {
-    `return 0;  // K v K.
+    return true, 0;  // K v K.
   }
   if b_pieces == 0 {
 
     if w_bishop|w_knight == w_pieces && popcount(w_pieces) == 1
-      `return 0;
+      return true, 0;
 
 
     if w_pieces & (~(w_pawn|w_knight)) {
       side := ifx whose_turn then 1 else -1; 
       eval := eval_winning_position(w_king, q=w_queen, r=w_rook, b=w_bishop, n=w_knight, p=bit_reverse64(w_pawn), b_king) * side;
-      `return (eval * (100 - fifty)) / 100;
+      return true, (eval * (100 - fifty)) / 100;
     } 
   }
 
   if w_pieces == 0 {
     if b_bishop|b_knight == b_pieces && popcount(b_pieces) == 1
-      `return 0;
+      return true, 0;
 
     if b_pieces & (~(b_pawn|b_knight)) {
       side := ifx whose_turn then -1 else 1;
       eval := eval_winning_position(b_king, q=b_queen, r=b_rook, b=b_bishop, n=b_knight, p=b_pawn, w_king) * side;
-      `return (eval * (100 - fifty)) / 100;
+      return true, (eval * (100 - fifty)) / 100;
     } 
   }
+  return false, 0;
 
   eval_winning_position :: (strong_king: u64, q: u64, r: u64, b: u64, n: u64, p: u64, weak_king: u64) -> int {
     win := bit_scan_forward(strong_king);

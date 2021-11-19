@@ -22,10 +22,23 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   cur_depth := 1;
   while cur_depth <= depth { 
     score = negamax(pieces, castling, ep, cur_depth, whose_turn, *pv_line, repetitions, alpha=alpha, beta=beta, fifty=fifty, prev_move=Move16.Quiet);
+    time_taken := get_time() - time_begin;
     if stop_signal_triggered() then 
       break;
 
-    time_taken := get_time() - time_begin;
+    if score <= alpha || score >= beta {
+      print("info depth % score cp % lowerbound % upperbound %\n", cur_depth, score, alpha, beta);
+      reset_temporary_storage();
+      clear_hash_table();  // Need to do this, since hash table is filled with values previous windows
+      alpha = max(-INF, score - delta);
+      beta  = min(+INF, score + delta);
+      delta += delta + delta / 2;
+      continue;
+    } 
+
+    delta = 50;
+    alpha = score - delta;
+    beta  = score + delta;
     best_move = pv_line.argmove[0];
     print_stats(cur_depth);
     cur_depth += 1;
@@ -47,6 +60,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
     print("%\n", str);
     reset_temporary_storage();
     clear_hash_table();
+
     print_move_to_buffer :: (mv: Move16) #expand {
       _, from, to := decode_move(mv);
       print_to_builder(*builder, "%1%2 ", cast(serialized_bb)from, cast(serialized_bb)to);
@@ -192,9 +206,9 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
         flag  := ttable.entries[key].flag;
         if flag == TFLAGS.EXACT then {
           return true, value, bh_move;
-        } else if flag == TFLAGS.LOWER && value < alpha then {
+        } else if flag == TFLAGS.LOWER && value <= alpha then {
           return true, alpha, bh_move;
-        } else if flag == TFLAGS.UPPER && value > beta then {
+        } else if flag == TFLAGS.UPPER && value >= beta then {
           return true, beta, bh_move;
         }
       }
@@ -449,6 +463,13 @@ quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn:
   eval := evaluate(pieces, whose_turn, fifty);
   if eval >= beta then
     return beta;
+
+  // delta pruning:
+  DELTA :: 1950;
+  if eval < alpha - DELTA then {
+    return alpha; // TODO: Delta pruning is very conservative right now.
+  }
+
   if alpha < eval then
     alpha = eval; 
 
