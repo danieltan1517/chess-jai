@@ -30,15 +30,15 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
       print("info depth % score cp % lowerbound % upperbound %\n", cur_depth, score, alpha, beta);
       reset_temporary_storage();
       clear_hash_table();  // Need to do this, since hash table is filled with values previous windows
-      alpha = max(-INF, score - delta);
-      beta  = min(+INF, score + delta);
-      delta += delta + delta / 2;
+      alpha = max(-INF, score-delta);
+      beta  = min(+INF, score+delta);
+      delta += delta + delta/2;
       continue;
-    } 
+    }
 
-    delta = 50;
     alpha = score - delta;
     beta  = score + delta;
+    delta = 50;
     best_move = pv_line.argmove[0];
     print_stats(cur_depth);
     cur_depth += 1;
@@ -66,16 +66,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
       print_to_builder(*builder, "%1%2 ", cast(serialized_bb)from, cast(serialized_bb)to);
     }
   }
-
-  print_depth :: (depth: int, move: Move16) #expand {
-    _, from, to := decode_move(move);
-    print("info alpha %1 beta %2\n", alpha, beta);
-    print("info depth %1 score cp %2 currmove %3%4\n", depth, score, cast(serialized_bb)from, cast(serialized_bb)to);
-    reset_temporary_storage();
-  }
 }
-
-
 
 negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, repetitions: *[..]u64, ply: int = 0, $null_flag := true, alpha := -INF, beta := INF, fifty: int, prev_move: Move16) -> int {
   FULL_DEPTH_MOVES :: 4;
@@ -142,12 +133,10 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -beta, -alpha, next_fifty, move);
     } else {
       // nega-scout
-      if moves_searched >= FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && check == 0 && mflag == Move16.Quiet {
+      if ply && moves_searched >= FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && check == 0 && mflag == Move16.Quiet {
         // do late move reduction when not in check and making "quiet moves" 
-        //move_number := cast(float)moves_searched;
-        //total_moves := cast(float)move_array.count;
-        //R := cast(int)(((total_moves - move_number) / total_moves) * depth);
-        R := ifx pv_node then 2 else 2*depth/3;
+        F := cast(int)pv_node;
+        R := 2 + F * 2*depth / 3;
         eval = -negamax(pieces, c_copy, ep_copy, depth-R-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty, move);
       } else {
         // do normal search.
@@ -259,7 +248,8 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     NULL_MOVE_MAX :: 4;
     // check for zugwang before null move pruning && TODO: make sure engine doesn't bug out at en paesant.
     if ply && null_flag && depth >= NULL_MOVE_MAX && check == 0 && !zugzwang {
-      R := ifx pv_node then 3 else 2*depth/3;
+      F := cast(int)pv_node;
+      R := 2 + F * 2*depth / 3;
       score := -negamax(pieces, castling, 0, depth-R-1, !whose_turn, *line, repetitions, ply+1, false, -beta, -beta + 1, fifty, Move16.Quiet);
       if score >= beta then {
         `return beta;
@@ -451,7 +441,7 @@ initialize_ai_globals :: () {
   zobrist_init_globals();
 }
 
-INF :: 0x7F_FFFF; // Alias
+INF :: 0x7FF_FFFF; // Alias
 
 #scope_file
 // search capture moves only, we do this to avoid horizon effect
@@ -466,9 +456,8 @@ quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn:
 
   // delta pruning:
   DELTA :: 1950;
-  if eval < alpha - DELTA then {
+  if eval < (alpha - DELTA) then
     return alpha; // TODO: Delta pruning is very conservative right now.
-  }
 
   if alpha < eval then
     alpha = eval; 
