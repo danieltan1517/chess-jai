@@ -26,13 +26,22 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
     if stop_signal_triggered() then 
       break;
 
-    if score <= alpha || score >= beta {
-      print("info depth % score cp % lowerbound % upperbound %\n", cur_depth, score, alpha, beta);
+    if score <= alpha then {
+      print("info depth % lowerbound % upperbound %\n", cur_depth, alpha, beta); 
       reset_temporary_storage();
-      clear_hash_table();  // Need to do this, since hash table is filled with values previous windows
-      alpha = max(-INF, score-delta);
-      beta  = min(+INF, score+delta);
-      delta += delta + delta/2;
+      clear_hash_table();
+
+      beta = (alpha + beta) / 2;
+      alpha = max(score-delta, -INF);
+      delta += 2*delta + delta/2;
+      continue;
+    } else if score >= beta then {
+      print("info depth % lowerbound % upperbound %\n", cur_depth, alpha, beta); 
+      reset_temporary_storage();
+      clear_hash_table();
+
+      beta = min(score+delta,  INF);
+      delta += 2*delta + delta/2;
       continue;
     }
 
@@ -133,10 +142,10 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -beta, -alpha, next_fifty, move);
     } else {
       // nega-scout
-      if ply && moves_searched >= FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && check == 0 && mflag == Move16.Quiet {
+      if ply && moves_searched > 1 + 2 * ply && depth >= REDUCTION_LIMIT && check == 0 && mflag == Move16.Quiet {
         // do late move reduction when not in check and making "quiet moves" 
         F := cast(int)pv_node;
-        R := 2 + F * 2*depth / 3;
+        R := 2 + F * depth / 3;
         eval = -negamax(pieces, c_copy, ep_copy, depth-R-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty, move);
       } else {
         // do normal search.
@@ -249,7 +258,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     // check for zugwang before null move pruning && TODO: make sure engine doesn't bug out at en paesant.
     if ply && null_flag && depth >= NULL_MOVE_MAX && check == 0 && !zugzwang {
       F := cast(int)pv_node;
-      R := 2 + F * 2*depth / 3;
+      R := 2 + F * depth / 3;
       score := -negamax(pieces, castling, 0, depth-R-1, !whose_turn, *line, repetitions, ply+1, false, -beta, -beta + 1, fifty, Move16.Quiet);
       if score >= beta then {
         `return beta;
