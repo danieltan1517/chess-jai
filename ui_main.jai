@@ -277,6 +277,15 @@ console_write_command :: (engines: *[..] UCI_Engine, str: string, piece_bitboard
   }
 
   if command == {
+  case "engine_lines";
+    if str == {
+    case "true";
+      engine_lines_bool = true;
+    case "false";
+      engine_lines_bool = false;
+    }
+    return;
+
   case "board_theme";
     if str == {
     case "green";
@@ -510,10 +519,46 @@ draw_chess :: (width: float, height: float, pieces: *Piece_Bitboards, texture: *
 
 
   // DRAW ARROWS
-  //im_set_texture(null);
-  //im_draw_line(10, 10, width-10, 10, c=RED);
-  //im_draw_line(width-10, 10, width-10-5, 10-5, c=RED);
-  //im_draw_line(width-10, 10, width-10-5, 10+5, c=RED);
+  if engine_lines_bool == true then {
+    white_color := Vector4.{1.0, 1.0, 1.0, 1};
+    black_color := Vector4.{0.0, 0.0, 0.0, 1};
+    im_set_texture(null);
+    if whose_turn {
+      for i: 0..engine_line_count[0]-1 {
+        draw_move(engine_line[0][i], white_color);
+        white_color.w *= 0.90;
+      }
+      for i: 0..engine_line_count[1]-1 {
+        draw_move(engine_line[1][i], black_color);
+        black_color.w *= 0.90;
+      }
+    } else {
+      for i: 0..engine_line_count[1]-1 {
+        draw_move(engine_line[1][i], black_color);
+        black_color.w *= 0.90;
+      }
+      for i: 0..engine_line_count[0]-1 {
+        draw_move(engine_line[0][i], white_color);
+        white_color.w *= 0.90;
+      }
+    }
+  }
+
+  draw_move :: (move: Move16, c: Vector4) #expand {
+    _, from, to := decode_move(move);
+    i0, j0, i1, j1 := 0;
+    if white_side {
+      i0, j0 = from & 7, from >> 3;
+      i1, j1 = to &  7, to >> 3;
+    } else {
+      i0, j0 = 7 - from & 7, 7 - from >> 3;
+      i1, j1 = 7 - to & 7, 7 - to >> 3;
+    }
+ 
+    im_draw_rect(x + square_len*(0.4+i0), y + square_len*(0.4+j0), x + square_len*(0.6+i0), y + square_len*(0.6+j0), c=c);
+    im_draw_line(x + square_len*(0.5+i0), y + square_len*(0.5+j0), x + square_len*(0.5+i1), y + square_len*(0.5+j1), c=c);
+    im_draw_rect(x + square_len*(0.4+i1), y + square_len*(0.4+j1), x + square_len*(0.6+i1), y + square_len*(0.6+j1), c=c);
+  }
 
   // inner functions used...
   // chess.com uses yellow, so we follow their example...
@@ -680,6 +725,22 @@ read_mouse_input :: (window: *GLFWwindow) {
       mouse_button_1_state = .MOUSE_IDLE;
     }
   }
+}
+
+engine_lines_bool: bool = false;
+engine_line: [2][128] Move16;
+engine_line_count_w := 0;
+engine_line_count: [2] int;
+
+reset_lines :: (turn: bool) {
+  turn = !turn;
+  engine_line_count[cast(int)turn] = 0;
+}
+
+add_move :: (move: Move16, turn: bool) {
+  turn = !turn;
+  engine_line[cast(int)turn][engine_line_count[cast(int)turn]] = move;
+  engine_line_count[cast(int)turn] += 1;
 }
 
 handle_board_click :: (width: float, height: float, piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves_arr: *[..] Move16, white_side := true) {
@@ -1226,9 +1287,13 @@ uci_ai_loop :: (using engine: *UCI_Engine, piece_bitboard: *Piece_Bitboards, fla
       }
       if !can_make_move
         continue;
+      if starts_with(message, "info ") {
+        handle_engine_info(engine, message);
+      }
 
       if starts_with(message, "bestmove ") {
-        TF, from, to, type := parse_best_move(message);
+        parse_token(*message);
+        TF, from, to, type := parse_move(message);
         // TODO: parse best move could fail, what to do if that happens????
         assert(TF);
         actual_move := find_move(<<moves_arr, from, to, type);
@@ -1247,38 +1312,39 @@ uci_ai_loop :: (using engine: *UCI_Engine, piece_bitboard: *Piece_Bitboards, fla
 
   }
 
-  parse_best_move :: (best_move_string: string) -> TF: bool, from: u64, to: u64, type: Move16 {
-    parse_token(*best_move_string);
-    move_sq_string := parse_token(*best_move_string);
-    if move_sq_string.count < 4 {
-      return false, 0, 0, Move16.Quiet;
-    }
-
-    // move string is like "a8h8q" or "d2d4". 
-    a := cast(int)(move_sq_string[0] - #char "a");
-    b := cast(int)(move_sq_string[1] - #char "1");
-    c := cast(int)(move_sq_string[2] - #char "a");
-    d := cast(int)(move_sq_string[3] - #char "1");
-    move := Move16.Quiet;
-    from : u64 = cast(u64) (1 << (b*8 + a));
-    to   : u64 = cast(u64) (1 << (d*8 + c));
-    // if move is a promotion
-    if move_sq_string.count >= 5 && move_sq_string[4] != #char " " {
-      character := to_lower(move_sq_string[4]);
-      if character == #char "q" {
-        move = Move16.Queen_Promotion;
-      } else if character == #char "r" {
-        move = Move16.Rook_Promotion;
-      } else if character == #char "b" {
-        move = Move16.Bishop_Promotion;
-      } else if character == #char "n" {
-        move = Move16.Knight_Promotion;
-      }
-    }
-
-    return true, from, to, move;
-  }
 }
+
+parse_move :: (best_move_string: string) -> TF: bool, from: u64, to: u64, type: Move16 {
+  move_sq_string := parse_token(*best_move_string);
+  if move_sq_string.count < 4 {
+    return false, 0, 0, Move16.Quiet;
+  }
+
+  // move string is like "a8h8q" or "d2d4". 
+  a := cast(int)(move_sq_string[0] - #char "a");
+  b := cast(int)(move_sq_string[1] - #char "1");
+  c := cast(int)(move_sq_string[2] - #char "a");
+  d := cast(int)(move_sq_string[3] - #char "1");
+  move := Move16.Quiet;
+  from : u64 = cast(u64) (1 << (b*8 + a));
+  to   : u64 = cast(u64) (1 << (d*8 + c));
+  // if move is a promotion
+  if move_sq_string.count >= 5 && move_sq_string[4] != #char " " {
+    character := to_lower(move_sq_string[4]);
+    if character == #char "q" {
+      move = Move16.Queen_Promotion;
+    } else if character == #char "r" {
+      move = Move16.Rook_Promotion;
+    } else if character == #char "b" {
+      move = Move16.Bishop_Promotion;
+    } else if character == #char "n" {
+      move = Move16.Knight_Promotion;
+    }
+  }
+
+  return true, from, to, move;
+}
+
 
 timeout_timer := 0.0;
 
@@ -1470,6 +1536,22 @@ get_opening_name :: (move_record: [..] Board_States, opening_book: *BookNode) ->
   }
 
   return true, ret;
+}
+
+handle_engine_info :: (engine: *UCI_Engine, message: string) {
+  while message {
+    tok, success := parse_token(*message);
+    if !success break;
+    if equal(tok, "pv") {
+      reset_lines(whose_turn);
+      while message {
+        tok, success := parse_token(*message);
+        if !success break;
+        TF, from, to, type := parse_move(tok);
+        add_move(encode_move_bb(from, to, type), whose_turn);
+      }
+    }
+  }
 }
 
 // TODO: This function leaks memory!
