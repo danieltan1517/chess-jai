@@ -1437,8 +1437,7 @@ uci_messages :: (engine : *UCI_Engine) -> UCI_Message_Loop {
 
 for_expansion :: (loop: *UCI_Message_Loop, loop_body: Code, flags: For_Flags) #expand {
   using loop.engine;
-  buffer := NewArray(2048, u8, allocator=__temporary_allocator);
-  prefix := NewArray(2048, u8, allocator=__temporary_allocator);
+  buffer := NewArray(16384, u8, allocator=__temporary_allocator);
   while true {
     bytes_read := read(read_pipe, buffer.data, xx (buffer.count-1));
     if bytes_read <= 0 then {
