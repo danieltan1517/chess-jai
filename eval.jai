@@ -91,7 +91,7 @@ trivial_evaluation :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) 
     losx := los / 8;
     losy := los % 8;
 
-    distance   := abs(winx - losx) + abs(winy - losy);
+    distance   := math.abs(winx - losx) + math.abs(winy - losy);
     push_close := 140 - 20 * distance;
     edge       := king_endgame[los];
     mat        := popcount(q)*90000 + popcount(r)*50000 + popcount(b)*35000 + popcount(n)*30000;

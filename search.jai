@@ -1,4 +1,4 @@
-#import "Math";
+math :: #import "Math";
 #import "Basic";
 
 search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *[..] u64, depth: int, whose_turn: bool, fifty: int) -> Move16 {
@@ -29,7 +29,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
     if score <= alpha then {
       print("info depth % lowerbound % upperbound %\n", cur_depth, alpha, beta); 
       reset_temporary_storage();
-      clear_hash_table();
+      //clear_hash_table();
 
       beta = (alpha + beta) / 2;
       alpha = max(score-delta, -INF);
@@ -38,7 +38,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
     } else if score >= beta then {
       print("info depth % lowerbound % upperbound %\n", cur_depth, alpha, beta); 
       reset_temporary_storage();
-      clear_hash_table();
+      //clear_hash_table();
 
       beta = min(score+delta,  INF);
       delta += 2*delta + delta/2;
@@ -144,8 +144,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       // nega-scout
       if ply && moves_searched > 1 + 2 * ply && depth >= REDUCTION_LIMIT && check == 0 && mflag == Move16.Quiet {
         // do late move reduction when not in check and making "quiet moves" 
-        F := cast(int)pv_node;
-        R := 2 + F * depth / 3;
+        R := LateMoveReduction[min(depth,63)][min(moves_searched,63)];
         eval = -negamax(pieces, c_copy, ep_copy, depth-R-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty, move);
       } else {
         // do normal search.
@@ -196,9 +195,9 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
   transposition_table_lookup :: (alpha: int, beta: int, hash: u64, key: u64, depth: int, ply: int) -> bool, int, Move16 {
     bh_move := Move16.Quiet;
-    if ply == 0 then return false, 0, bh_move;
     if ttable.hash[key] == hash {
       bh_move = ttable.entries[key].bmove;
+      if ply == 0 then return false, 0, bh_move;
       if ttable.entries[key].depth >= depth then {
         value := ttable.entries[key].score;
         flag  := ttable.entries[key].flag;
@@ -259,7 +258,8 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     if ply && null_flag && depth >= NULL_MOVE_MAX && check == 0 && !zugzwang {
       F := cast(int)pv_node;
       R := 2 + F * depth / 3;
-      score := -negamax(pieces, castling, 0, depth-R-1, !whose_turn, *line, repetitions, ply+1, false, -beta, -beta + 1, fifty, Move16.Quiet);
+      //R := 4 + depth / 6 + min(3, (static_eval - beta)/ 200);
+      score := -negamax(pieces, castling, 0, depth-R-1, !whose_turn, *line, repetitions, ply+1, true, -beta, -beta + 1, fifty, Move16.Quiet);
       if score >= beta then {
         `return beta;
       }
@@ -278,7 +278,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   reverse_futility_pruning :: () #expand {
     // taken from BBC chess engine...
     `static_eval := evaluate(pieces, whose_turn, fifty);
-    if !zugzwang && depth < 3 && !pv_node && check == 0 && abs(beta-1) > -INF + 100 then {
+    if !zugzwang && depth < 3 && !pv_node && check == 0 && math.abs(beta-1) > -INF + 100 then {
       futility_margin := 214 * depth; // stockfish has its futility_margin at 214 * depth.
       if static_eval - futility_margin >= beta then {
         `return static_eval - futility_margin;
@@ -638,6 +638,16 @@ bubble_sort :: (order: [] int, move_array: [] Move16, count: int) {
     (#insert b) = t;
   }
 }
+
+#no_reset LateMoveReduction: [64][64] int;
+#run {
+  for i: 1..63 {
+    for j: 1..63 {
+      LateMoveReduction[i][j] = cast(int) (0.75 + math.log(cast(float)i) * math.log(cast(float)j) / 2.25);
+    }
+  }
+}
+
 
 // most valuable victim, least valuable attacker.
 // see: https://www.chessprogramming.org/MVV-LVA
