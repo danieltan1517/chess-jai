@@ -6,7 +6,6 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   time_begin := get_time();
   memset(__history_moves.data, 0, size_of(type_of(__history_moves)));
   memset(__killer_moves.data,  0, size_of(type_of(__killer_moves)));
-  memset(__capture_history.data, 0, size_of(type_of(__capture_history)));
   memset(__counter_moves.data, 0, size_of(type_of(__counter_moves)));
   __nodes_searched = 0;
   clear_hash_table();
@@ -153,9 +152,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
         __counter_moves[pm_from][pm_to] = move;
         __killer_moves[1][ply] = __killer_moves[0][ply];
         __killer_moves[0][ply] = move;
-      } else {
-        __capture_history[cast(int)whose_turn][cast(int)piece_type][to] += depth*depth;
-      }
+      } 
       break;
     } 
 
@@ -182,38 +179,24 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     `key  := hash % TSIZE;
 
     `h_move := ttable.entries[key].bmove;
-    if ttable.hash[key] == hash {
-      if ttable.entries[key].depth >= depth then {
-        value := ttable.entries[key].score;
-        flag  := ttable.entries[key].flag;
+    if ttable.hash[key] == hash && ttable.entries[key].depth >= depth then {
+      value := ttable.entries[key].score;
+      flag  := ttable.entries[key].flag;
 
-        if flag == TFLAGS.EXACT then {
-          pv_line.cmove = 1;
-          pv_line.argmove[0] = h_move;
-          `return value;
+      if flag == TFLAGS.EXACT then {
+        pv_line.cmove = 1;
+        pv_line.argmove[0] = h_move;
+        `return value;
 
-        } else if flag == TFLAGS.LOWER then {
-          alpha = max(alpha, value);
-          if value <= alpha {
-            pv_line.cmove = 1;
-            pv_line.argmove[0] = h_move;
-            `return value;
-          }
+      } else if flag == TFLAGS.LOWER && value <= alpha then {
+        pv_line.cmove = 1;
+        pv_line.argmove[0] = h_move;
+        `return value;
 
-        } else if flag == TFLAGS.UPPER then {
-          beta = min(beta, value);
-          if value >= beta {
-            pv_line.cmove = 1;
-            pv_line.argmove[0] = h_move;
-            `return value;
-          }
-        }
-
-        if alpha >= beta then {
-          pv_line.cmove = 1;
-          pv_line.argmove[0] = h_move;
-          `return value;
-        }
+      } else if flag == TFLAGS.UPPER && value >= beta then {
+        pv_line.cmove = 1;
+        pv_line.argmove[0] = h_move;
+        `return value;
       }
     }
   }
@@ -553,14 +536,10 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
     using Move16;
     if flags == Capture {
       piece_to_type := piece_type_at(to, pieces, !whose_turn);
-      ch := __capture_history[cast(int)whose_turn][cast(int)piece_type][to_index];
-      order[i] = (mvv(piece_to_type) + ch);
+      order[i] = mvv_lva(piece_to_type, piece_type);
 
     } else if flags == Ep_Capture {
-      ch := __capture_history[cast(int)whose_turn][cast(int)piece_type][to_index];
-      EP_SCORE :: #run mvv(PieceType.Queen);
-      order[i] = (EP_SCORE + ch);
-
+      order[i] = mvv_lva(PieceType.Pawn, PieceType.Pawn);
 
     } else if flags == Knight_Promotion || flags == Knight_Promotion_Capture {
       order[i] = 3250;
@@ -608,11 +587,11 @@ capture_order :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
     using Move16;
     if flags == Capture {
       piece_to_type := piece_type_at(to, pieces, !whose_turn);
-      order[i] = mvv(piece_to_type) + __capture_history[cast(int)whose_turn][cast(int)piece_type][to_index];
+      order[i] = mvv_lva(piece_to_type, piece_type);
     } else if flags == Ep_Capture {
-      order[i] = mvv(PieceType.Queen) + __capture_history[cast(int)whose_turn][cast(int)piece_type][to_index];
+      order[i] = mvv_lva(PieceType.Pawn, PieceType.Pawn);
     } else if Knight_Promotion <= flags && flags <= Queen_Promotion_Capture {
-      order[i] = mvv(PieceType.Queen) + __capture_history[cast(int)whose_turn][cast(int)piece_type][to_index];
+      order[i] = mvv_lva(PieceType.Queen, PieceType.Pawn);
     }
   }
   bubble_sort(order, move_array, count);
@@ -652,8 +631,8 @@ bubble_sort :: (order: [] int, move_array: [] Move16, count: int) {
 
 // most valuable victim, least valuable attacker.
 // see: https://www.chessprogramming.org/MVV-LVA
-mvv :: (victim: PieceType) -> score: int {
-  vs := piece_score[cast(int) victim];
+mvv_lva :: (victim: PieceType, attacker: PieceType) -> score: int {
+  vs := piece_score[cast(int) victim] - piece_score[cast(int) attacker]/1000;
   return vs;
 
   piece_score :: #run -> [7] int {
@@ -700,7 +679,6 @@ piece_type_at :: (bit: u64, using p: *Piece_Bitboards, whose_turn: bool) -> Piec
 
 __nodes_searched := 0;
 __history_moves:   [2][7][64] int;
-__capture_history: [2][7][64] int;
 __killer_moves:    [2][64] Move16;
 __counter_moves:   [64][64] Move16;
 
