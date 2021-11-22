@@ -20,7 +20,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   delta: int = 50;
   cur_depth := 1;
   while cur_depth <= depth { 
-    clear_hash_table();
+    //clear_hash_table();
     reset_temporary_storage();
     score = negamax(pieces, castling, ep, cur_depth, whose_turn, *pv_line, repetitions, alpha=alpha, beta=beta, fifty=fifty, prev_move=Move16.Quiet);
     time_taken := get_time() - time_begin;
@@ -542,13 +542,13 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       order[i] = mvv_lva(PieceType.Pawn, PieceType.Pawn);
 
     } else if flags == Knight_Promotion || flags == Knight_Promotion_Capture {
-      order[i] = 3250;
+      order[i] = 32500;
     } else if flags == Bishop_Promotion || flags == Bishop_Promotion_Capture {
-      order[i] = 3500;
+      order[i] = 35000;
     } else if flags == Rook_Promotion || flags == Rook_Promotion_Capture {
-      order[i] = 5000;
+      order[i] = 50000;
     } else if flags == Queen_Promotion || flags == Queen_Promotion_Capture {
-      order[i] = 9000;
+      order[i] = 90000;
     } else {
       if __killer_moves[0][ply] == move_array[i] {
         order[i] = 9000;
@@ -562,7 +562,7 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       order[i] += 50;
     }
     if from & pawns {
-      order[i] += 25;
+      order[i] += 50;
     }
 
     _pm_flag, pm_from, pm_to := decode_move(prev_move);
