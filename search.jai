@@ -29,7 +29,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
     if score <= alpha then {
       print("info depth % lowerbound % upperbound %\n", cur_depth, alpha, beta); 
       reset_temporary_storage();
-      //clear_hash_table();
+      clear_hash_table();
 
       beta = (alpha + beta) / 2;
       alpha = max(score-delta, -INF);
@@ -38,7 +38,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
     } else if score >= beta then {
       print("info depth % lowerbound % upperbound %\n", cur_depth, alpha, beta); 
       reset_temporary_storage();
-      //clear_hash_table();
+      clear_hash_table();
 
       beta = min(score+delta,  INF);
       delta += 2*delta + delta/2;
@@ -144,8 +144,8 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       // nega-scout
       if ply && moves_searched > 1 + 2 * ply && depth >= REDUCTION_LIMIT && check == 0 && mflag == Move16.Quiet {
         // do late move reduction when not in check and making "quiet moves" 
-        R := LateMoveReduction[min(depth,63)][min(moves_searched,63)];
-        eval = -negamax(pieces, c_copy, ep_copy, depth-R-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty, move);
+        R := LateMoveReduction[min(depth,63)][min(moves_searched,63)] << cast(int)pv_node;
+        eval = -negamax(pieces, c_copy, ep_copy, depth-R, !whose_turn, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty, move);
       } else {
         // do normal search.
         eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty, move);
@@ -256,10 +256,8 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     NULL_MOVE_MAX :: 4;
     // check for zugwang before null move pruning && TODO: make sure engine doesn't bug out at en paesant.
     if ply && null_flag && depth >= NULL_MOVE_MAX && check == 0 && !zugzwang {
-      F := cast(int)pv_node;
-      R := 2 + F * depth / 3;
-      //R := 4 + depth / 6 + min(3, (static_eval - beta)/ 200);
-      score := -negamax(pieces, castling, 0, depth-R-1, !whose_turn, *line, repetitions, ply+1, true, -beta, -beta + 1, fifty, Move16.Quiet);
+      R := 3 << cast(int)pv_node;
+      score := -negamax(pieces, castling, 0, depth-R, !whose_turn, *line, repetitions, ply+1, false, -beta, -beta + 1, fifty, Move16.Quiet);
       if score >= beta then {
         `return beta;
       }
