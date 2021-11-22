@@ -21,6 +21,8 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   delta: int = 50;
   cur_depth := 1;
   while cur_depth <= depth { 
+    clear_hash_table();
+    reset_temporary_storage();
     score = negamax(pieces, castling, ep, cur_depth, whose_turn, *pv_line, repetitions, alpha=alpha, beta=beta, fifty=fifty, prev_move=Move16.Quiet);
     time_taken := get_time() - time_begin;
     if stop_signal_triggered() then 
@@ -28,19 +30,13 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
 
     if score <= alpha then {
       print("info depth % lowerbound % upperbound %\n", cur_depth, alpha, beta); 
-      reset_temporary_storage();
-      clear_hash_table();
-
       beta = (alpha + beta) / 2;
-      alpha = max(score-delta, -INF);
+      alpha = max(score - delta, -INF);
       delta += 2*delta + delta/2;
       continue;
     } else if score >= beta then {
       print("info depth % lowerbound % upperbound %\n", cur_depth, alpha, beta); 
-      reset_temporary_storage();
-      clear_hash_table();
-
-      beta = min(score+delta,  INF);
+      beta = min(score + delta,  INF);
       delta += 2*delta + delta/2;
       continue;
     }
@@ -67,8 +63,6 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
     }
     str := builder_to_string(*builder, allocator=__temporary_allocator);
     print("%\n", str);
-    reset_temporary_storage();
-    clear_hash_table();
 
     print_move_to_buffer :: (mv: Move16) #expand {
       _, from, to := decode_move(mv);
@@ -89,22 +83,14 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   line: PVLine;
 
   __nodes_searched += 1;
-  hash := zobrist_hash(pieces, castling, ep, whose_turn);
-  key  := hash % TSIZE;
-
-  TF, tt_score, bh_move := transposition_table_lookup(alpha, beta, hash, key, depth, ply);
-  if TF then {
-    pv_line.cmove = 1;
-    pv_line.argmove[0] = bh_move;
-    return tt_score;
-  }
+  transposition_table_lookup();
 
   if depth <= 0 then {
     pv_line.cmove = 0;
     return quiescene(pieces, castling, ep, whose_turn, alpha, beta, fifty);
   }
 
-  if depth >= 8 && pv_node && pv_line.argmove[0] == 0 && bh_move == 0 {
+  if depth >= 8 && pv_node && pv_line.argmove[0] == 0 && h_move == 0 {
     internal_iterative_deepening(pieces, castling, ep, depth-4, whose_turn, pv_line, repetitions, ply, null_flag, alpha, beta, fifty, prev_move);
   }
 
@@ -123,9 +109,8 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   reverse_futility_pruning();
   null_move_pruning();
   razoring();
+  move_ordering(pieces, move_array, whose_turn, pv_line, ply, h_move, prev_move, line.argmove[0]);
 
-  move_ordering(pieces, move_array, whose_turn, pv_line, ply, bh_move, prev_move, line.argmove[0]);
-  best_pv := true;
   hash_flag := TFLAGS.LOWER;
   for move, moves_searched : move_array {
     c_copy, ep_copy, capture := castling, ep, PieceType.None;
@@ -142,9 +127,9 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -beta, -alpha, next_fifty, move);
     } else {
       // nega-scout
-      if ply && moves_searched > 1 + 2 * ply && depth >= REDUCTION_LIMIT && check == 0 && mflag == Move16.Quiet {
+      if ply && moves_searched > FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && check == 0 && mflag == Move16.Quiet {
         // do late move reduction when not in check and making "quiet moves" 
-        R := LateMoveReduction[min(depth,63)][min(moves_searched,63)] << cast(int)pv_node;
+        R := LateMoveReduction[min(depth,63)][min(moves_searched,63)];
         eval = -negamax(pieces, c_copy, ep_copy, depth-R, !whose_turn, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty, move);
       } else {
         // do normal search.
@@ -163,7 +148,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       alpha = beta;
       piece_type := piece_type_at(cast(u64)(1 << from), pieces, whose_turn);
       if !is_capture(mflag) {
-        __history_moves[cast(int)whose_turn][cast(int)piece_type][to] += (depth*depth) >> cast(int)pv_node;
+        __history_moves[cast(int)whose_turn][cast(int)piece_type][to] += (depth*depth) / (1+cast(int)pv_node);
         _pm_flag, pm_from, pm_to := decode_move(prev_move);
         __counter_moves[pm_from][pm_to] = move;
         __killer_moves[1][ply] = __killer_moves[0][ply];
@@ -176,9 +161,8 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
     if eval > alpha {
       hash_flag = TFLAGS.EXACT;
-      best_pv = false;
       alpha = eval;
-      pv_line.argmove[0], bh_move = move;
+      pv_line.argmove[0], h_move = move;
       memcpy(*pv_line.argmove[1], *line.argmove[0], line.cmove * size_of(Move16));
       pv_line.cmove = line.cmove + 1;
     } 
@@ -190,37 +174,58 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     hash_flag = TFLAGS.EXACT;
   }
 
-  transposition_table_store(hash, key, alpha, hash_flag, depth, bh_move, line);
+  transposition_table_store();
   return alpha;
 
-  transposition_table_lookup :: (alpha: int, beta: int, hash: u64, key: u64, depth: int, ply: int) -> bool, int, Move16 {
-    bh_move := Move16.Quiet;
+  transposition_table_lookup :: () #expand {
+    `hash := zobrist_hash(pieces, castling, ep, whose_turn);
+    `key  := hash % TSIZE;
+
+    `h_move := ttable.entries[key].bmove;
     if ttable.hash[key] == hash {
-      bh_move = ttable.entries[key].bmove;
-      if ply == 0 then return false, 0, bh_move;
       if ttable.entries[key].depth >= depth then {
         value := ttable.entries[key].score;
         flag  := ttable.entries[key].flag;
+
         if flag == TFLAGS.EXACT then {
-          return true, value, bh_move;
-        } else if flag == TFLAGS.LOWER && value <= alpha then {
-          return true, alpha, bh_move;
-        } else if flag == TFLAGS.UPPER && value >= beta then {
-          return true, beta, bh_move;
+          pv_line.cmove = 1;
+          pv_line.argmove[0] = h_move;
+          `return value;
+
+        } else if flag == TFLAGS.LOWER then {
+          alpha = max(alpha, value);
+          if value <= alpha {
+            pv_line.cmove = 1;
+            pv_line.argmove[0] = h_move;
+            `return value;
+          }
+
+        } else if flag == TFLAGS.UPPER then {
+          beta = min(beta, value);
+          if value >= beta {
+            pv_line.cmove = 1;
+            pv_line.argmove[0] = h_move;
+            `return value;
+          }
+        }
+
+        if alpha >= beta then {
+          pv_line.cmove = 1;
+          pv_line.argmove[0] = h_move;
+          `return value;
         }
       }
     }
-    return false, 0, bh_move;
   }
 
-  transposition_table_store :: (hash: u64, key: u64, value: int, hash_flag: TFLAGS, depth: int, bmove: Move16, line: PVLine) {
+  transposition_table_store :: () #expand {
     if depth < ttable.entries[key].depth then
       return;
     ttable.hash[key] = hash;
-    ttable.entries[key].score = xx value;
+    ttable.entries[key].score = xx alpha;
     ttable.entries[key].flag = hash_flag;
     ttable.entries[key].depth = xx depth;
-    ttable.entries[key].bmove = bmove;
+    ttable.entries[key].bmove = h_move;
   }
 
   check_for_checkmate_stalemate :: (move_array: [..] Move16, rep: *[..]u64, ply: int, check: u64, fifty: int, hash: u64) -> is_stalmate: bool, is_terminal: bool, score: int {
@@ -567,9 +572,9 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       order[i] = 9000;
     } else {
       if __killer_moves[0][ply] == move_array[i] {
-        order[i] = 2000;
+        order[i] = 9000;
       } else if __killer_moves[1][ply] == move_array[i] {
-        order[i] = 1850;
+        order[i] = 8850;
       } else {
         order[i] = __history_moves[cast(int)whose_turn][cast(int)piece_type][to_index];
       }
@@ -639,11 +644,9 @@ bubble_sort :: (order: [] int, move_array: [] Move16, count: int) {
 
 #no_reset LateMoveReduction: [64][64] int;
 #run {
-  for i: 1..63 {
-    for j: 1..63 {
-      LateMoveReduction[i][j] = cast(int) (0.75 + math.log(cast(float)i) * math.log(cast(float)j) / 2.25);
-    }
-  }
+  for i: 1..63
+    for j: 1..63
+      LateMoveReduction[i][j] = cast(int) (0.75 + ((math.log(cast(float)i) * math.log(cast(float)j)) / 2.25));
 }
 
 
@@ -702,7 +705,7 @@ __killer_moves:    [2][64] Move16;
 __counter_moves:   [64][64] Move16;
 
 // get something off the ground.
-TSIZE :: 0x200_000;
+TSIZE :: 0x400_000;
 
 ttable : struct {
   hash:     [TSIZE] u64;

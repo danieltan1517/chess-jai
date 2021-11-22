@@ -17,6 +17,9 @@ rnbqkb1r/pppp1pp1/4pn1p/6B1/3P4/5N2/PPP1PPPP/RN1QKB1R w KQkq - 0 4
 
 8/8/8/5bQ1/8/7k/1K6/8 w - - 2 72  ### WTF???!?!?! Just take the stupid bishop?!?!
 
+8/2p2pk1/5p1p/5B2/R4PPK/2r4n/8/8 b - - 3 40   ### Mate in 5.
+
+
 CHECK THESE POSITIONS FOUND ON CHESS PROGRAMMING WIKI:
 
 1k1r4/pp1b1R2/3q2pp/4p3/2B5/4Q3/PPP2B2/2K5 b - - bm Qd1+; id "BK.01";
