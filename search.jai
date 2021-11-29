@@ -452,7 +452,10 @@ quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn:
     return beta;
 
   // delta pruning:
-  delta := ifx is_promoting_pawn(pieces) then 975+775 else 975;
+  delta := 975;
+  if is_promoting_pawn(pieces) then {
+    delta += 775;
+  }
   if eval < (alpha - delta) then {
     return alpha; 
   }
