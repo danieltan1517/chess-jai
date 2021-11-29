@@ -10,7 +10,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   __nodes_searched = 0;
   clear_hash_table();
   reset_temporary_storage();
-  Push_Temporary();
+  push_allocator(temp);
 
   pv_line: PVLine;
   score : int; 
@@ -20,7 +20,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   delta: int = 50;
   cur_depth := 1;
   while cur_depth <= depth { 
-    //clear_hash_table();
+    clear_hash_table();
     reset_temporary_storage();
     score = negamax(pieces, castling, ep, cur_depth, whose_turn, *pv_line, repetitions, alpha=alpha, beta=beta, fifty=fifty, prev_move=Move16.Quiet);
     time_taken := get_time() - time_begin;
@@ -94,7 +94,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   }
 
   move_array: [..] Move16;
-  array_reserve(*move_array, 40);
+  array_reserve(*move_array, 60);
   check := generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
   is_stalemate, is_terminal, score_t := check_for_checkmate_stalemate(move_array, repetitions, ply, check, fifty, hash);
   if is_terminal then {
@@ -110,7 +110,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   razoring();
   move_ordering(pieces, move_array, whose_turn, pv_line, ply, h_move, prev_move, line.argmove[0]);
 
-  hash_flag := TFLAGS.LOWER;
+  hash_flag := TFLAGS.ALPHA;
   for move, moves_searched : move_array {
     c_copy, ep_copy, capture := castling, ep, PieceType.None;
     mflag, from, to := decode_move(move);
@@ -126,7 +126,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -beta, -alpha, next_fifty, move);
     } else {
       // nega-scout
-      if ply && moves_searched > FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && check == 0 && mflag == Move16.Quiet {
+      if ply && moves_searched > FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && check == 0 && mflag <= Move16.Double_Pawn_Push {
         // do late move reduction when not in check and making "quiet moves" 
         R := LateMoveReduction[min(depth,63)][min(moves_searched,63)];
         eval = -negamax(pieces, c_copy, ep_copy, depth-R, !whose_turn, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty, move);
@@ -143,13 +143,15 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     unmake_move(pieces, capture, move, whose_turn);
 
     if eval >= beta then {
-      hash_flag = TFLAGS.UPPER;
+      hash_flag = TFLAGS.BETA;
       alpha = beta;
       piece_type := piece_type_at(cast(u64)(1 << from), pieces, whose_turn);
       if !is_capture(mflag) {
-        __history_moves[cast(int)whose_turn][cast(int)piece_type][to] += (depth*depth) / (1+cast(int)pv_node);
+        __history_moves[cast(int)whose_turn][cast(int)piece_type][to] += depth*depth;
         _pm_flag, pm_from, pm_to := decode_move(prev_move);
-        __counter_moves[pm_from][pm_to] = move;
+
+        prev_type := piece_type_at( cast(u64) (1 << pm_to), pieces, !whose_turn);
+        __counter_moves[cast(int)!whose_turn][prev_type][pm_to] = move;
         __killer_moves[1][ply] = __killer_moves[0][ply];
         __killer_moves[0][ply] = move;
       } 
@@ -178,7 +180,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     `hash := zobrist_hash(pieces, castling, ep, whose_turn);
     `key  := hash % TSIZE;
 
-    `h_move := ttable.entries[key].bmove;
+    `h_move := ifx ttable.hash[key] == hash then ttable.entries[key].bmove else Move16.Quiet;
     if ttable.hash[key] == hash && ttable.entries[key].depth >= depth then {
       value := ttable.entries[key].score;
       flag  := ttable.entries[key].flag;
@@ -188,12 +190,12 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
         pv_line.argmove[0] = h_move;
         `return value;
 
-      } else if flag == TFLAGS.LOWER && value <= alpha then {
+      } else if flag == TFLAGS.ALPHA && value <= alpha then {
         pv_line.cmove = 1;
         pv_line.argmove[0] = h_move;
         `return value;
 
-      } else if flag == TFLAGS.UPPER && value >= beta then {
+      } else if flag == TFLAGS.BETA && value >= beta then {
         pv_line.cmove = 1;
         pv_line.argmove[0] = h_move;
         `return value;
@@ -405,7 +407,7 @@ perft_all :: () {
 }
 
 perft_divide :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, depth: int) -> int {
-  Push_Temporary();
+  push_allocator(temp);
   auto_release_temp();
   taken := get_time();
   if depth <= 0 then return 1;
@@ -562,11 +564,12 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       order[i] += 50;
     }
     if from & pawns {
-      order[i] += 50;
+      order[i] += 10;
     }
 
     _pm_flag, pm_from, pm_to := decode_move(prev_move);
-    if move_array[i] == __counter_moves[pm_from][pm_to] then {
+    prev_type := piece_type_at( cast(u64) (1 << pm_to), pieces, !whose_turn);
+    if move_array[i] == __counter_moves[cast(int)!whose_turn][prev_type][pm_to] then {
       COUNTER_BONUS :: 900;
       order[i] += COUNTER_BONUS;
     }
@@ -680,7 +683,7 @@ piece_type_at :: (bit: u64, using p: *Piece_Bitboards, whose_turn: bool) -> Piec
 __nodes_searched := 0;
 __history_moves:   [2][7][64] int;
 __killer_moves:    [2][64] Move16;
-__counter_moves:   [64][64] Move16;
+__counter_moves:   [2][7][64] Move16;
 
 // get something off the ground.
 TSIZE :: 0x400_000;
@@ -697,7 +700,7 @@ ttable : struct {
   }
 }
 
-TFLAGS :: enum s8 { EXACT; LOWER; UPPER; }
+TFLAGS :: enum s8 { EXACT; ALPHA; BETA; }
 
 clear_hash_table :: () {
   memset(*ttable, 0, size_of(type_of(ttable)));

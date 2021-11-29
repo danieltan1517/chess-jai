@@ -941,6 +941,7 @@ handle_undo_move :: (window: *GLFWwindow, piece_bitboard: *Piece_Bitboards, flag
           board_state := pop(*move_record);
           <<ep_sq = board_state.en_paesant_sq;
           <<flags = board_state.flags;
+          reset_lines(whose_turn);
           whose_turn = !whose_turn;
           unmake_move(piece_bitboard, board_state.captured, board_state.move, whose_turn);
           pop(*hash_record);
@@ -1008,6 +1009,8 @@ reset :: (piece_bitboard: *Piece_Bitboards, flags: *Castling, ep_sq: *u64, moves
   __game_status_text = "";
   w_clock_time = 30.0*60.0;
   b_clock_time = 30.0*60.0;
+  engine_line_count[0] = 0;
+  engine_line_count[1] = 0;
 }
 
 
