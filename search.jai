@@ -30,12 +30,12 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
     if score <= alpha then {
       print("info depth % lowerbound % upperbound %\n", cur_depth, alpha, beta); 
       beta = (alpha + beta) / 2;
-      alpha = max(score - delta, -INF);
+      alpha = -INF; //max(score - delta, -INF);
       delta += 2*delta + delta/2;
       continue;
     } else if score >= beta then {
       print("info depth % lowerbound % upperbound %\n", cur_depth, alpha, beta); 
-      beta = min(score + delta,  INF);
+      beta = INF; //min(score + delta,  INF);
       delta += 2*delta + delta/2;
       continue;
     }
@@ -452,9 +452,10 @@ quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn:
     return beta;
 
   // delta pruning:
-  DELTA :: 1950;
-  if eval < (alpha - DELTA) then
-    return alpha; // TODO: Delta pruning is very conservative right now.
+  delta := ifx is_promoting_pawn(pieces) then 975+775 else 975;
+  if eval < (alpha - delta) then {
+    return alpha; 
+  }
 
   if alpha < eval then
     alpha = eval; 
@@ -478,6 +479,11 @@ quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn:
   }
 
   return alpha;
+
+
+  is_promoting_pawn :: inline (using pieces: *Piece_Bitboards) -> bool {
+    return ((w_pawn|b_pawn) & xx (rank_7|rank_2)) != 0;
+  }
 }
 
 internal_iterative_deepening:: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, repetitions: *[..]u64, ply: int = 0, $null_flag := true, alpha := -INF, beta := INF, fifty: int, prev_move: Move16) {
