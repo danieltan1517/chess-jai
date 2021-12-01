@@ -30,6 +30,8 @@ rnb1k2r/ppp2ppp/5n2/2b5/2P5/1NN5/PP3PPP/R1B1KB1R b KQkq - 2 9   ### blundering t
 8/p7/1p4p1/2P1k1Pp/8/P2K4/2P4P/8 b - - 0 43  ### Another stupid pawn endgame blundering..
 8/1k6/8/8/5Q2/7P/2r3PK/8 w - - 2 54  ### Misses an obvious fork to win the Rook against Nelson bot...
 
+8/p5Rp/8/1kp5/3p4/1P1Kn3/6P1/8 b - - 2 40 ### WTF??? The AI COMPLETELY BUGS OUT!
+
 CHECK THESE POSITIONS FOUND ON CHESS PROGRAMMING WIKI:
 
 1k1r4/pp1b1R2/3q2pp/4p3/2B5/4Q3/PPP2B2/2K5 b - - bm Qd1+; id "BK.01";
