@@ -277,12 +277,12 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   razoring :: () #expand {
     // taken from BBC chess engine...
     if !zugzwang && !pv_node && check == 0 && depth <= 3 then {
-      score := static_eval + 125;
+      score := static_eval + 250;
       if score < beta && depth == 1 {
         new_score := quiescene(pieces, castling, ep, whose_turn, alpha, beta, fifty);
         `return ifx new_score > score then new_score else score;
       }
-      score += 175;
+      score += 350;
       if score < beta && depth <= 2 {
         new_score := quiescene(pieces, castling, ep, whose_turn, alpha, beta, fifty);
         if new_score < beta {
