@@ -20,7 +20,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   delta: int = 50;
   cur_depth := 1;
   while cur_depth <= depth { 
-    clear_hash_table();
+    //clear_hash_table();
     reset_temporary_storage();
     score = negamax(pieces, castling, ep, cur_depth, whose_turn, *pv_line, repetitions, alpha=alpha, beta=beta, fifty=fifty, prev_move=Move16.Quiet);
     time_taken := get_time() - time_begin;
@@ -204,7 +204,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   }
 
   transposition_table_store :: () #expand {
-    if depth < ttable.entries[key].depth then
+    if depth == 50 then
       return;
     ttable.hash[key] = hash;
     ttable.entries[key].score = xx alpha;
@@ -212,6 +212,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     ttable.entries[key].depth = xx depth;
     ttable.entries[key].bmove = h_move;
   }
+  //if depth == ttable.entries[key].depth then
 
   check_for_checkmate_stalemate :: (move_array: [..] Move16, rep: *[..]u64, ply: int, check: u64, fifty: int, hash: u64) -> is_stalmate: bool, is_terminal: bool, score: int {
     if !move_array then {
