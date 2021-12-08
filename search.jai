@@ -20,7 +20,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   delta: int = 50;
   cur_depth := 1;
   while cur_depth <= depth { 
-    //clear_hash_table();
+    clear_hash_table();
     reset_temporary_storage();
     score = negamax(pieces, castling, ep, cur_depth, whose_turn, *pv_line, repetitions, alpha=alpha, beta=beta, fifty=fifty, prev_move=Move16.Quiet);
     time_taken := get_time() - time_begin;
@@ -181,7 +181,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     `key  := hash % TSIZE;
 
     `h_move := ifx ttable.hash[key] == hash then ttable.entries[key].bmove else Move16.Quiet;
-    if ttable.hash[key] == hash && ttable.entries[key].depth >= depth then {
+    if ply && ttable.hash[key] == hash && ttable.entries[key].depth >= depth then {
       value := ttable.entries[key].score;
       flag  := ttable.entries[key].flag;
 
@@ -637,8 +637,10 @@ bubble_sort :: (order: [] int, move_array: [] Move16, count: int) {
 #no_reset LateMoveReduction: [64][64] int;
 #run {
   for i: 1..63
-    for j: 1..63
-      LateMoveReduction[i][j] = cast(int) (0.75 + ((math.log(cast(float)i) * math.log(cast(float)j)) / 2.25));
+    for j: 1..63 {
+      LMR := math.log(cast(float)i) * math.log(cast(float)j) * 0.5;
+      LateMoveReduction[i][j] = cast (int) LMR;
+    }
 }
 
 
