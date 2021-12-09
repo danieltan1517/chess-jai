@@ -129,7 +129,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       if ply && moves_searched > FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && check == 0 && mflag <= Move16.Double_Pawn_Push {
         // do late move reduction when not in check and making "quiet moves" 
         R := LateMoveReduction[min(depth,63)][min(moves_searched,63)];
-        eval = -negamax(pieces, c_copy, ep_copy, depth-R, !whose_turn, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty, move);
+        eval = -negamax(pieces, c_copy, ep_copy, depth-R-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty, move);
       } else {
         // do normal search.
         eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty, move);
@@ -212,7 +212,6 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     ttable.entries[key].depth = xx depth;
     ttable.entries[key].bmove = h_move;
   }
-  //if depth == ttable.entries[key].depth then
 
   check_for_checkmate_stalemate :: (move_array: [..] Move16, rep: *[..]u64, ply: int, check: u64, fifty: int, hash: u64) -> is_stalmate: bool, is_terminal: bool, score: int {
     if !move_array then {
@@ -247,7 +246,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     NULL_MOVE_MAX :: 4;
     // check for zugwang before null move pruning && TODO: make sure engine doesn't bug out at en paesant.
     if ply && null_flag && depth >= NULL_MOVE_MAX && check == 0 && !zugzwang {
-      R := 3 << cast(int)pv_node;
+      R := 3 << cast(int)(!pv_node);
       score := -negamax(pieces, castling, 0, depth-R, !whose_turn, *line, repetitions, ply+1, false, -beta, -beta + 1, fifty, Move16.Quiet);
       if score >= beta then {
         `return beta;
@@ -694,7 +693,7 @@ piece_type_at :: (bit: u64, using p: *Piece_Bitboards, whose_turn: bool) -> Piec
 
 __nodes_searched := 0;
 __history_moves:   [2][7][64] int;
-__killer_moves:    [2][64] Move16;
+__killer_moves:    [2][128] Move16;
 __counter_moves:   [2][7][64] Move16;
 
 // get something off the ground.
