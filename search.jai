@@ -246,8 +246,8 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     NULL_MOVE_MAX :: 4;
     // check for zugwang before null move pruning && TODO: make sure engine doesn't bug out at en paesant.
     if ply && null_flag && depth >= NULL_MOVE_MAX && check == 0 && !zugzwang {
-      R := 3 << cast(int)(!pv_node);
-      score := -negamax(pieces, castling, 0, depth-R, !whose_turn, *line, repetitions, ply+1, false, -beta, -beta + 1, fifty, Move16.Quiet);
+      R := min( math.abs(static_eval - beta) / 205, 2) + depth / 3 + 3;
+      score := -negamax(pieces, castling, 0, depth-R-1, !whose_turn, *line, repetitions, ply+1, false, -beta, -beta + 1, fifty, Move16.Quiet);
       if score >= beta then {
         `return beta;
       }
