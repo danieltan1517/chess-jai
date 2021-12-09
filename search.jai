@@ -89,6 +89,8 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     return quiescene(pieces, castling, ep, whose_turn, alpha, beta, fifty);
   }
 
+  mate_distance_pruning();
+
   if depth >= 8 && pv_node && pv_line.argmove[0] == 0 && h_move == 0 {
     internal_iterative_deepening(pieces, castling, ep, depth-4, whose_turn, pv_line, repetitions, ply, null_flag, alpha, beta, fifty, prev_move);
   }
@@ -136,7 +138,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       }
 
       // re-search the move that has failed to be proved to be bad with normal alpha beta score bounds
-      if eval > alpha && eval < beta then {
+      if eval > alpha then {
         eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -beta, -alpha, next_fifty, move);
       } 
     }
@@ -175,6 +177,18 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
   transposition_table_store();
   return alpha;
+
+
+  mate_distance_pruning :: () #expand {
+    // mate distance pruning
+    if ply > 0 then {
+      alpha = max(alpha,-INF+ply);
+      beta  = min(beta,  INF-ply);
+      if alpha >= beta then {
+        `return alpha;
+      }
+    }
+  }
 
   transposition_table_lookup :: () #expand {
     `hash := zobrist_hash(pieces, castling, ep, whose_turn);

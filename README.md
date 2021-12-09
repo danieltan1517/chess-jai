@@ -59,6 +59,8 @@ The chess GUI uses the glfw3 and gl libraries.
 * Razoring
 * Simple Mop-Up Endgame Evaluation.
 * Countermove Heuristic
+* Mate Distance Pruning
 
 ## Still needs to be implemented
 * Better optimization for movegen 
+* NNUE Incremental Update: https://www.talkchess.com/forum3/viewtopic.php?f=7&t=75415&start=3
