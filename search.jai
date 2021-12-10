@@ -20,21 +20,21 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   delta: int = 50;
   cur_depth := 1;
   while cur_depth <= depth { 
-    clear_hash_table();
     reset_temporary_storage();
     score = negamax(pieces, castling, ep, cur_depth, whose_turn, *pv_line, repetitions, alpha=alpha, beta=beta, fifty=fifty, prev_move=Move16.Quiet);
+    __search_counter = (__search_counter + 1) & 64;
     time_taken := get_time() - time_begin;
     if stop_signal_triggered() then 
       break;
 
     if score <= alpha then {
-      print("info depth % lowerbound % upperbound %\n", cur_depth, alpha, beta); 
+      print("info depth % lowerbound %\n", cur_depth, alpha); 
       beta = (alpha + beta) / 2;
       alpha = -INF; //max(score - delta, -INF);
       delta += 2*delta + delta/2;
       continue;
     } else if score >= beta then {
-      print("info depth % lowerbound % upperbound %\n", cur_depth, alpha, beta); 
+      print("info depth % upperbound %\n", cur_depth, beta); 
       beta = INF; //min(score + delta,  INF);
       delta += 2*delta + delta/2;
       continue;
@@ -193,38 +193,42 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   transposition_table_lookup :: () #expand {
     `hash := zobrist_hash(pieces, castling, ep, whose_turn);
     `key  := hash % TSIZE;
+    `h_move := Move16.Quiet;
 
-    `h_move := ifx ttable.hash[key] == hash then ttable.entries[key].bmove else Move16.Quiet;
-    if ply && ttable.hash[key] == hash && ttable.entries[key].depth >= depth then {
-      value := ttable.entries[key].score;
-      flag  := ttable.entries[key].flag;
+    if ttable.hash[key] == hash then {
+      entry := *ttable.entries[key];
+      h_move = entry.bmove;
+      counter := cast(int) (entry.flag >> 2);
+      if counter != __search_counter then {
+        return;
+      }
 
-      if flag == TFLAGS.EXACT then {
-        pv_line.cmove = 1;
-        pv_line.argmove[0] = h_move;
-        `return value;
-
-      } else if flag == TFLAGS.ALPHA && value <= alpha then {
-        pv_line.cmove = 1;
-        pv_line.argmove[0] = h_move;
-        `return value;
-
-      } else if flag == TFLAGS.BETA && value >= beta then {
-        pv_line.cmove = 1;
-        pv_line.argmove[0] = h_move;
-        `return value;
+      if ply > 0 && entry.depth >= depth {
+        value := entry.score;
+        flag  := entry.flag & 0x3;
+        if flag == TFLAGS.EXACT then {
+          `return value;
+ 
+        } else if flag == TFLAGS.ALPHA && value <= alpha then {
+          `return value;
+ 
+        } else if flag == TFLAGS.BETA && value >= beta then {
+          `return value;
+        }
       }
     }
   }
 
   transposition_table_store :: () #expand {
-    if depth == 50 then
+    if ttable.entries[key].depth == 50 then 
       return;
+    
     ttable.hash[key] = hash;
-    ttable.entries[key].score = xx alpha;
-    ttable.entries[key].flag = hash_flag;
-    ttable.entries[key].depth = xx depth;
-    ttable.entries[key].bmove = h_move;
+    entry := *ttable.entries[key];
+    entry.score = xx alpha;
+    entry.flag = (xx (__search_counter<<2)) | hash_flag;
+    entry.depth = xx depth;
+    entry.bmove = h_move;
   }
 
   check_for_checkmate_stalemate :: (move_array: [..] Move16, rep: *[..]u64, ply: int, check: u64, fifty: int, hash: u64) -> is_stalmate: bool, is_terminal: bool, score: int {
@@ -503,6 +507,8 @@ quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn:
   }
 }
 
+__search_counter := 0;
+
 internal_iterative_deepening:: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, repetitions: *[..]u64, ply: int = 0, $null_flag := true, alpha := -INF, beta := INF, fifty: int, prev_move: Move16) {
   cur_depth := 1;
   while cur_depth <= depth { 
@@ -707,7 +713,7 @@ piece_type_at :: (bit: u64, using p: *Piece_Bitboards, whose_turn: bool) -> Piec
 
 __nodes_searched := 0;
 __history_moves:   [2][7][64] int;
-__killer_moves:    [2][128] Move16;
+__killer_moves:    [2][64] Move16;
 __counter_moves:   [2][7][64] Move16;
 
 // get something off the ground.
@@ -719,13 +725,13 @@ ttable : struct {
 
   TTEntry :: struct {
     flag : TFLAGS;
-    depth: s8;
+    depth: u8;
     bmove: Move16;
     score: s32;
   }
 }
 
-TFLAGS :: enum s8 { EXACT; ALPHA; BETA; }
+TFLAGS :: enum u8 { EXACT; ALPHA; BETA; }
 
 clear_hash_table :: () {
   memset(*ttable, 0, size_of(type_of(ttable)));
