@@ -306,7 +306,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   }
 
   internal_iterative_deepening :: () #expand {
-    if pv_node && depth >= 8 && pv_line.argmove[0] == 0 && h_move == 0 {
+    if pv_node && depth >= 7 && pv_line.argmove[0] == 0 && h_move == 0 {
       for cur_depth: 1..depth-2 {
         negamax(pieces, castling, ep, cur_depth, whose_turn, pv_line, repetitions, alpha=alpha, beta=beta, fifty=fifty, prev_move=prev_move);
         if stop_signal_triggered() then 
