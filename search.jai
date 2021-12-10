@@ -224,8 +224,12 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   }
 
   transposition_table_store :: () #expand {
-    ttable.hash[key] = hash;
     entry := *ttable.entries[key];
+    counter := cast(int) (entry.flag >> 2);
+    if entry.depth == 50 && counter == __search_counter
+      return;
+
+    ttable.hash[key] = hash;
     entry.score = xx alpha;
     entry.flag = (xx (__search_counter<<2)) | hash_flag;
     entry.depth = xx depth;
