@@ -31,12 +31,12 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
     if score <= alpha then {
       print("info depth % lowerbound %\n", cur_depth, alpha); 
       beta = (alpha + beta) / 2;
-      alpha = -INF; //max(score - delta, -INF);
+      alpha = max(score - delta, -INF);
       delta += 2*delta + delta/2;
       continue;
     } else if score >= beta then {
       print("info depth % upperbound %\n", cur_depth, beta); 
-      beta = INF; //min(score + delta,  INF);
+      beta =  min(score + delta,  INF);
       delta += 2*delta + delta/2;
       continue;
     }
@@ -77,24 +77,17 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   if (__nodes_searched & 16384) && stdin_stop_signal()
     return 0;
   auto_release_temp();
-
   pv_node := alpha != beta-1;
-
   line: PVLine;
-
   __nodes_searched += 1;
   transposition_table_lookup();
-
   if depth <= 0 then {
     pv_line.cmove = 0;
     return quiescene(pieces, castling, ep, whose_turn, alpha, beta, fifty);
   }
 
   mate_distance_pruning();
-
-  if depth >= 8 && pv_node && pv_line.argmove[0] == 0 && h_move == 0 {
-    internal_iterative_deepening(pieces, castling, ep, depth-4, whose_turn, pv_line, repetitions, ply, null_flag, alpha, beta, fifty, prev_move);
-  }
+  internal_iterative_deepening();
 
   move_array: [..] Move16;
   array_reserve(*move_array, 60);
@@ -179,7 +172,6 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   transposition_table_store();
   return alpha;
 
-
   mate_distance_pruning :: () #expand {
     // mate distance pruning
     if ply > 0 then {
@@ -195,14 +187,12 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     `hash := zobrist_hash(pieces, castling, ep, whose_turn);
     `key  := hash % TSIZE;
     `h_move := Move16.Quiet;
-
     if ttable.hash[key] == hash then {
       entry := *ttable.entries[key];
       h_move = entry.bmove;
       value := entry.score;
       flag  := entry.flag & 0x3;
       counter := cast(int) (entry.flag >> 2);
-
       if counter == __search_counter && ply > 0 && entry.depth >= depth {
         if flag == {
         case TFLAGS.EXACT;
@@ -314,6 +304,18 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       }
     }
   }
+
+  internal_iterative_deepening :: () #expand {
+    if pv_node && depth >= 8 && pv_line.argmove[0] == 0 && h_move == 0 {
+      for cur_depth: 1..depth-2 {
+        negamax(pieces, castling, ep, cur_depth, whose_turn, pv_line, repetitions, alpha=alpha, beta=beta, fifty=fifty, prev_move=prev_move);
+        if stop_signal_triggered() then 
+          break;
+      }
+    }
+  }
+
+
 }
 
 // perft results are found here: https://www.chessprogramming.org/Perft_Results
@@ -514,15 +516,6 @@ quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn:
 
 __search_counter := 0;
 
-internal_iterative_deepening:: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, repetitions: *[..]u64, ply: int = 0, $null_flag := true, alpha := -INF, beta := INF, fifty: int, prev_move: Move16) {
-  cur_depth := 1;
-  while cur_depth <= depth { 
-    negamax(pieces, castling, ep, cur_depth, whose_turn, pv_line, repetitions, alpha=alpha, beta=beta, fifty=fifty, prev_move=prev_move);
-    if stop_signal_triggered() then 
-      break;
-    cur_depth += 1;
-  }
-}
 
 PVLine :: struct {
   cmove: u8;
