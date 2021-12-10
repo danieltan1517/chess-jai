@@ -22,7 +22,8 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   while cur_depth <= depth { 
     reset_temporary_storage();
     score = negamax(pieces, castling, ep, cur_depth, whose_turn, *pv_line, repetitions, alpha=alpha, beta=beta, fifty=fifty, prev_move=Move16.Quiet);
-    __search_counter = (__search_counter + 1) & 64;
+    __search_counter = (__search_counter + 1) % 64;
+
     time_taken := get_time() - time_begin;
     if stop_signal_triggered() then 
       break;
@@ -198,31 +199,31 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     if ttable.hash[key] == hash then {
       entry := *ttable.entries[key];
       h_move = entry.bmove;
+      value := entry.score;
+      flag  := entry.flag & 0x3;
       counter := cast(int) (entry.flag >> 2);
-      if counter != __search_counter then {
-        return;
-      }
 
-      if ply > 0 && entry.depth >= depth {
-        value := entry.score;
-        flag  := entry.flag & 0x3;
-        if flag == TFLAGS.EXACT then {
-          `return value;
- 
-        } else if flag == TFLAGS.ALPHA && value <= alpha then {
-          `return value;
- 
-        } else if flag == TFLAGS.BETA && value >= beta then {
-          `return value;
+      if counter == __search_counter && ply > 0 && entry.depth >= depth {
+        if flag == {
+        case TFLAGS.EXACT;
+        `return value;
+
+        case TFLAGS.ALPHA;
+        if value <= alpha then {
+          `return value; 
+        }
+
+        case TFLAGS.BETA;
+        if value >= beta then {
+          `return value; 
+        }
+
         }
       }
     }
   }
 
   transposition_table_store :: () #expand {
-    if ttable.entries[key].depth == 50 then 
-      return;
-    
     ttable.hash[key] = hash;
     entry := *ttable.entries[key];
     entry.score = xx alpha;
@@ -557,7 +558,7 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       order[i] = INF;
       continue;
     } else if move_array[i] == bh_move {
-      order[i] = INF - 100;
+      order[i] = INF - 1;
       continue;
     }
     flags, from_index, to_index := decode_move(move_array[i]);
@@ -588,12 +589,6 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       } else {
         order[i] = __history_moves[cast(int)whose_turn][cast(int)piece_type][to_index];
       }
-    }
-    if to_index == null_to then {
-      order[i] += 50;
-    }
-    if from & pawns {
-      order[i] += 10;
     }
 
     _pm_flag, pm_from, pm_to := decode_move(prev_move);
@@ -733,7 +728,7 @@ ttable : struct {
 
 TFLAGS :: enum u8 { EXACT; ALPHA; BETA; }
 
-clear_hash_table :: () {
+clear_hash_table :: () #expand {
   memset(*ttable, 0, size_of(type_of(ttable)));
 }
 
