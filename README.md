@@ -38,9 +38,11 @@ The chess GUI uses the glfw3 and gl libraries.
 * Internal Iterative Deepening
 * Implements UCI (Universal Chess Interface) Protocol to communicate with a UI
 * Legal move generation and detection
+* Magic Bitboards
+* Kogge-Stone Algorithm
 * Passes all perft tests
 * Implements Bitboards for fast move generation
-* Move generator can generate approximately 31 million positions per second
+* Move generator can generate approximately 46 million positions per second
 * Uses https://github.com/dshawul/nnue-probe for NNUE (Efficiently Updatable Neural Networks) for chess evaluation function
 * Negamax search with Alpha-Beta Pruning
 * Encodes Moves as 16-bit integers

@@ -719,7 +719,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
                        whose_turn: bool, $captures_only : bool) -> u64 {
   // NOTE: we do (occupied & (~king)) so that if    R - - - K - - -,
   // then the sliding will go through the king to cover other the unsafe squares
-  attacks := generate_attacks(occ=occupied, opp_king=king,
+  attacks := generate_attacks(occ=occupied & ~king,
                king=opp_king, queen=opp_queen, rook=opp_rook, bishop=opp_bishop, knight=opp_knight, pawn=opp_pawn,
                whose_turn=!whose_turn);
   checks: u64 = 0;
@@ -737,7 +737,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
   }
 
   // knight checks
-  checks = checks | (knight_moves(0, 0, king) & opp_knight);
+  checks = checks | (knight_moves(king) & opp_knight);
 
   xray_rook, king_r_ray := xray_rook_attacks(occupied, pieces, i, king);
   xray_bishop, king_b_ray := xray_bishop_attacks(occupied, pieces, i, king);
@@ -751,7 +751,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
   // handle double-check.
   if num_checks == 2 {
     // we only need to generate king moves during a double-check
-    king_moves_bb := king_moves_lookup(i) & (~pieces) & (~attacks);
+    king_moves_bb := king_moves(king) & ~pieces & ~attacks;
     generate_normal_moves_from_bitboard(moves_arr, king, king_moves_bb, opp_pieces, captures_only);
     return checks;
   }
@@ -938,7 +938,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
   while knight {
     i := bit_scan_forward(knight);
     from_bb := cast(u64) (1 << i);
-    to_bb := knight_moves_lookup(i) & (~pieces) & check_sqs;
+    to_bb := knight_moves(from_bb) & (~pieces) & check_sqs;
     generate_normal_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces, captures_only);
     knight ^= from_bb;
   }
@@ -947,7 +947,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
   while qb {
     i := bit_scan_forward(qb);
     from_bb := cast(u64) (1 << i);
-    to_bb   := (magic_bishop_moves(i, occupied) & ~pieces) & check_sqs;
+    to_bb   := (bishop_moves(i, occupied) & ~pieces) & check_sqs;
     generate_normal_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces, captures_only);
     qb ^= from_bb;
   }
@@ -956,12 +956,12 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
   while qr {
     i := bit_scan_forward(qr);
     from_bb := cast(u64) (1 << i);
-    to_bb   := (magic_rook_moves(i, occupied) & ~pieces) & check_sqs;
+    to_bb   := (rook_moves(i, occupied) & ~pieces) & check_sqs;
     generate_normal_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces, captures_only);
     qr ^= from_bb;
   }
 
-  king_moves_bb := king_moves_lookup(i) & (~pieces) & (~attacks);
+  king_moves_bb := king_moves(king) & (~pieces) & (~attacks);
   generate_normal_moves_from_bitboard(moves_arr, king, king_moves_bb, opp_pieces, captures_only);
   return checks;
 }
@@ -973,25 +973,25 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
 //    return black attacks,
 // generate attacks deals with king safe squares.
 
-generate_attacks :: (occ: u64, opp_king: u64, king: u64, queen: u64, rook: u64, bishop: u64, knight: u64, pawn: u64, whose_turn: bool) -> u64 {
+generate_attacks :: (occ: u64, king: u64, queen: u64, rook: u64, bishop: u64, knight: u64, pawn: u64, whose_turn: bool) -> u64 {
   attacks : u64 = 0;
-  attacks |= king_moves_lookup(bit_scan_forward(king));
+  attacks |= king_moves(king);
 
   qr := queen|rook;
   while qr {
     sq := bit_scan_forward(qr);
-    attacks |= magic_rook_moves(sq, occ & ~opp_king);
+    attacks |= rook_moves(sq, occ);
     qr &= qr-1;
   }
 
   qb := queen|bishop;
   while qb {
     sq := bit_scan_forward(qb);
-    attacks |= magic_bishop_moves(sq, occ & ~opp_king);
+    attacks |= bishop_moves(sq, occ);
     qb &= qb-1;
   }
 
-  attacks |= knight_moves(occ, 0, knight);
+  attacks |= knight_moves(knight);
   attacks |= ifx whose_turn white_pawn_captures(pawn) else black_pawn_captures(pawn);
   return attacks;
 }
@@ -1010,16 +1010,15 @@ possible_moves_for :: (moves: [..] Move16, from: u64) -> u64 {
 }
 
 xray_rook_attacks :: (occ: u64, blockers: u64, i: int, rook_sq: u64) -> u64, u64 {
-  attacks := magic_rook_moves(i, occ);
+  attacks := rook_moves(i, occ);
   blockers &= attacks;
-  return attacks ^ magic_rook_moves(i, occ ^ blockers), attacks;
+  return attacks ^ rook_moves(i, occ ^ blockers), attacks;
 }
 
 xray_bishop_attacks :: (occ: u64, blockers: u64, i: int, bishop_sq: u64) -> u64, u64 {
-  attacks := magic_bishop_moves(i, occ);
-  blockers &= attacks & 0x007E7E7E7E7E7E00;
-  if blockers == 0 return 0, attacks;
-  return attacks ^ magic_bishop_moves(i, occ ^ blockers), attacks;
+  attacks := bishop_moves(i, occ);
+  blockers &= attacks;
+  return attacks ^ bishop_moves(i, occ ^ blockers), attacks;
 }
 
 white_pawn_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
@@ -1036,37 +1035,12 @@ black_pawn_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 =
   return up1 | captures | pawn_power;
 }
 
-
-knight_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
-  east1 := (slider << 1) & xx (~file_a);
-  west1 := (slider >> 1) & xx (~file_h);
-  east2 := (east1  << 1) & xx (~file_a);
-  west2 := (west1  >> 1) & xx (~file_h);
-  sqs1 := east1 | west1;
-  sqs2 := east2 | west2;
-  return ((sqs2 << 8) | (sqs2 >> 8) | (sqs1 << 16) | (sqs1 >> 16)) & (~friends);
-}
-
-king_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
-  k := slider | ((slider << 1) & xx (~file_a)) | ((slider >> 1) & xx (~file_h));
-  neighbors := (k | (k << 8) | (k >> 8)) & (~slider);
-  return neighbors & (~friends);
-}
-
 white_pawn_captures :: inline (slider: u64) -> u64 {
   return ((slider << 9) & xx (~file_a)) | ((slider << 7) & xx (~file_h));
 }
 
 black_pawn_captures :: inline (slider: u64) -> u64 {
   return ((slider >> 7) & xx (~file_a)) | ((slider >> 9) & xx (~file_h));
-}
-
-knight_moves_lookup :: inline (i: int) -> u64 #expand {
-  return knight_look_up_table[i];
-}
-
-king_moves_lookup :: inline (i: int) -> u64 #expand {
-  return king_look_up_table[i];
 }
 
 wpawn_cap_lookup :: inline (i: int) -> u64 #expand {
@@ -1182,8 +1156,6 @@ init_global_bitboards :: () {
   init_lines(h6, f8, f8|g7|h6, 7);
 
   for i: 0..63 {
-    king_look_up_table     [i] = king_moves(0, i, cast(u64) (1<<i));
-    knight_look_up_table   [i] = knight_moves(0, i, cast(u64) (1<<i));
     wpawn_cap_look_up_table[i] = white_pawn_captures(cast(u64) (1<<i));
     bpawn_cap_look_up_table[i] = black_pawn_captures(cast(u64) (1<<i));
   }
@@ -1384,8 +1356,6 @@ between_look_up_table: [64][64] u64;
 
 
 // magic bit boards for king/knight/pawn look up.
-king_look_up_table:   [64] u64;
-knight_look_up_table: [64] u64;
 wpawn_cap_look_up_table: [64] u64;
 bpawn_cap_look_up_table: [64] u64;
 
