@@ -20,6 +20,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   delta: int = 50;
   cur_depth := 1;
   while cur_depth <= depth { 
+    clear_hash_table();
     reset_temporary_storage();
     score = negamax(pieces, castling, ep, cur_depth, whose_turn, *pv_line, repetitions, alpha=alpha, beta=beta, fifty=fifty, prev_move=Move16.Quiet);
     __search_counter = (__search_counter + 1) % 64;
@@ -477,12 +478,14 @@ quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn:
     return beta;
 
   // delta pruning:
-  delta := 975;
-  if is_promoting_pawn(pieces) then {
-    delta += 775;
-  }
-  if eval < (alpha - delta) then {
-    return alpha; 
+  if can_delta_prune(pieces) {
+    delta := 975;
+    if is_promoting_pawn(pieces) then {
+      delta += 775;
+    }
+    if eval < (alpha - delta) then {
+      return alpha; 
+    }
   }
 
   if alpha < eval then
@@ -508,6 +511,11 @@ quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn:
 
   return alpha;
 
+  can_delta_prune :: (using pieces: *Piece_Bitboards) -> bool #expand {
+    w := w_queen | w_rook | w_bishop | w_knight;
+    b := b_queen | b_rook | b_bishop | b_knight;
+    return w != 0 || b != 0;
+  }
 
   is_promoting_pawn :: inline (using pieces: *Piece_Bitboards) -> bool {
     return ((w_pawn|b_pawn) & xx (rank_7|rank_2)) != 0;

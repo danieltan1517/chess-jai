@@ -309,8 +309,8 @@ console_write_command :: (engines: *[..] UCI_Engine, str: string, piece_bitboard
       black_sq_color = Vector4.{0.600, 0.490, 0.710, 1.0};
 
     case "red";
-      white_sq_color = Vector4.{0.936, 0.540, 0.550, 1.0};
-      black_sq_color = Vector4.{0.746, 0.362, 0.382, 1.0};
+      white_sq_color = Vector4.{0.941, 0.847, 0.749, 1.0};
+      black_sq_color = Vector4.{0.729, 0.333, 0.275, 1.0};
     }
     return;
   case "coordinates";
