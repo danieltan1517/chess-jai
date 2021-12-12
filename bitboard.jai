@@ -719,7 +719,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
                        whose_turn: bool, $captures_only : bool) -> u64 {
   // NOTE: we do (occupied & (~king)) so that if    R - - - K - - -,
   // then the sliding will go through the king to cover other the unsafe squares
-  attacks := generate_attacks(occ=occupied & (~king), 
+  attacks := generate_attacks(occ=occupied, opp_king=king,
                king=opp_king, queen=opp_queen, rook=opp_rook, bishop=opp_bishop, knight=opp_knight, pawn=opp_pawn,
                whose_turn=!whose_turn);
   checks: u64 = 0;
@@ -947,7 +947,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
   while qb {
     i := bit_scan_forward(qb);
     from_bb := cast(u64) (1 << i);
-    to_bb   := bishop_moves(occupied, i, from_bb, pieces) & check_sqs;
+    to_bb   := (magic_bishop_moves(i, occupied) & ~pieces) & check_sqs;
     generate_normal_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces, captures_only);
     qb ^= from_bb;
   }
@@ -956,7 +956,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
   while qr {
     i := bit_scan_forward(qr);
     from_bb := cast(u64) (1 << i);
-    to_bb   := rook_moves(occupied, i, from_bb, pieces) & check_sqs;
+    to_bb   := (magic_rook_moves(i, occupied) & ~pieces) & check_sqs;
     generate_normal_moves_from_bitboard(moves_arr, from_bb, to_bb, opp_pieces, captures_only);
     qr ^= from_bb;
   }
@@ -973,14 +973,27 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
 //    return black attacks,
 // generate attacks deals with king safe squares.
 
-generate_attacks :: (occ: u64, king: u64, queen: u64, rook: u64, bishop: u64, knight: u64, pawn: u64, whose_turn: bool) -> u64 {
-  king_attacks := king_moves_lookup(bit_scan_forward(king));
-  opp_pieces := occ & ~(king|queen|rook|bishop|knight|pawn);
-  vertical_attacks := h_and_v_attacks(king, queen, rook, bishop, knight, pawn, opp_pieces);
-  diag_attacks :=     diagonal_attacks(king, queen, rook, bishop, knight, pawn, opp_pieces);
-  knight_attacks := knight_moves(occ, 0, knight);
-  pawn_attacks := ifx whose_turn white_pawn_captures(pawn) else black_pawn_captures(pawn);
-  return king_attacks | vertical_attacks | diag_attacks | knight_attacks | pawn_attacks;
+generate_attacks :: (occ: u64, opp_king: u64, king: u64, queen: u64, rook: u64, bishop: u64, knight: u64, pawn: u64, whose_turn: bool) -> u64 {
+  attacks : u64 = 0;
+  attacks |= king_moves_lookup(bit_scan_forward(king));
+
+  qr := queen|rook;
+  while qr {
+    sq := bit_scan_forward(qr);
+    attacks |= magic_rook_moves(sq, occ & ~opp_king);
+    qr &= qr-1;
+  }
+
+  qb := queen|bishop;
+  while qb {
+    sq := bit_scan_forward(qb);
+    attacks |= magic_bishop_moves(sq, occ & ~opp_king);
+    qb &= qb-1;
+  }
+
+  attacks |= knight_moves(occ, 0, knight);
+  attacks |= ifx whose_turn white_pawn_captures(pawn) else black_pawn_captures(pawn);
+  return attacks;
 }
 
 possible_moves_for :: (moves: [..] Move16, from: u64) -> u64 {
@@ -997,16 +1010,16 @@ possible_moves_for :: (moves: [..] Move16, from: u64) -> u64 {
 }
 
 xray_rook_attacks :: (occ: u64, blockers: u64, i: int, rook_sq: u64) -> u64, u64 {
-  attacks := rook_moves(occ, i, rook_sq);
+  attacks := magic_rook_moves(i, occ);
   blockers &= attacks;
-  return attacks ^ rook_moves(occ ^ blockers, i, rook_sq), attacks;
+  return attacks ^ magic_rook_moves(i, occ ^ blockers), attacks;
 }
 
 xray_bishop_attacks :: (occ: u64, blockers: u64, i: int, bishop_sq: u64) -> u64, u64 {
-  attacks := bishop_moves(occ, i, bishop_sq);
+  attacks := magic_bishop_moves(i, occ);
   blockers &= attacks & 0x007E7E7E7E7E7E00;
   if blockers == 0 return 0, attacks;
-  return attacks ^ bishop_moves(occ ^ blockers, i, bishop_sq), attacks;
+  return attacks ^ magic_bishop_moves(i, occ ^ blockers), attacks;
 }
 
 white_pawn_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
@@ -1124,6 +1137,8 @@ print_bitboard :: (b: u64) {
 // TODO: This function is WAY to slow...
 // Actually, I don't know whether this is okay or too slow...can't tell....
 init_global_bitboards :: () {
+  #load "movegen.jai";
+  init_magic_bitboards();
   init_lines(a1, a8, file_a, 8);
   init_lines(b1, b8, file_b, 8);
   init_lines(c1, c8, file_c, 8);
@@ -1354,126 +1369,7 @@ bit_reverse64  :: (x: u64) -> u64 #expand {
   return rax;
 }
 
-h_and_v_attacks :: (king: u64, queen: u64, rook: u64, bishop: u64, knight: u64, pawn: u64, opp: u64) -> u64 {
-  // NOTE: We do it in a loop since queens/rooks can form a battery.
-  g := queen|rook;
-  o := king|bishop|knight|pawn;
-  bits : u64 = 0;
-  while g {
-    lsb := cast(u64)(1 << bit_scan_forward(g));
-    up := smear_upwards(lsb, ~((o<<8)|opp));
-    down := smear_downwards(lsb, ~((o>>8)|opp));
-    right := smear_eastwards(lsb, ~(((o<<1) & (xx ~ file_a))|opp));
-    left  := smear_westwards(lsb, ~(((o>>1) & (xx ~ file_h))|opp));
-    bits |= up ^ down ^ right ^ left;
-    g ^= lsb;
-  }
-  return bits;
-}
-
-diagonal_attacks :: (king: u64, queen: u64, rook: u64, bishop: u64, knight: u64, pawn: u64, opp: u64) -> u64 {
-  g := queen|bishop;
-  o := king|rook|knight|pawn;
-  bits : u64 = 0;
-  while g {
-    lsb := cast(u64)(1 << bit_scan_forward(g));
-    ne := smear_northeast(lsb, ~(((o<<9) & (xx ~ file_a))|opp));
-    se := smear_southeast(lsb, ~(((o>>7) & (xx ~ file_a))|opp));
-    sw := smear_southwest(lsb, ~(((o>>9) & (xx ~ file_h))|opp));
-    nw := smear_northwest(lsb, ~(((o<<7) & (xx ~ file_h))|opp));
-    bits |= ne ^ se ^ sw ^ nw;
-    g ^= lsb;
-  }
-  return bits;
-}
-
 #scope_file
-
-//https://www.chessprogramming.org/Kogge-Stone_Algorithm
-smear_upwards :: (g: u64, p: u64) -> u64 {
-  g |= p & (g <<  8);
-  p &=     (p <<  8);
-  g |= p & (g << 16);
-  p &=     (p << 16);
-  g |= p & (g << 32);
-  return g;
-}
-
-smear_downwards :: (g: u64, p: u64) -> u64 {
-  g |= p & (g >>  8);
-  p &=     (p >>  8);
-  g |= p & (g >> 16);
-  p &=     (p >> 16);
-  g |= p & (g >> 32);
-  return g;
-}
-
-smear_eastwards :: (g: u64, p: u64) -> u64 {
-  NOT_A :: cast(u64) ~ file_a;
-  p &= NOT_A;
-  g |= p & (g << 1);
-  p &=     (p << 1);
-  g |= p & (g << 2);
-  p &=     (p << 2);
-  g |= p & (g << 4);
-  return g;
-}
-
-smear_westwards :: (g: u64, p: u64) -> u64 {
-  NOT_H :: cast(u64) ~ file_h;
-  p &= NOT_H;
-  g |= p & (g >> 1);
-  p &=     (p >> 1);
-  g |= p & (g >> 2);
-  p &=     (p >> 2);
-  g |= p & (g >> 4);
-  return g;
-}
-
-smear_northeast :: (g: u64, p: u64) -> u64 {
-  NOT_A :: cast(u64) ~ file_a;
-  p &= NOT_A;
-  g |= p & (g << 9);
-  p &=     (p << 9);
-  g |= p & (g << 18);
-  p &=     (p << 18);
-  g |= p & (g << 36);
-  return g;
-}
-
-smear_southeast :: (g: u64, p: u64) -> u64 {
-  NOT_A :: cast(u64) ~ file_a;
-  p &= NOT_A;
-  g |= p & (g >> 7);
-  p &=     (p >> 7);
-  g |= p & (g >> 14);
-  p &=     (p >> 14);
-  g |= p & (g >> 28);
-  return g;
-}
-
-smear_southwest :: (g: u64, p: u64) -> u64 {
-  NOT_H :: cast(u64) ~ file_h;
-  p &= NOT_H;
-  g |= p & (g >> 9);
-  p &=     (p >> 9);
-  g |= p & (g >> 18);
-  p &=     (p >> 18);
-  g |= p & (g >> 36);
-  return g;
-}
-
-smear_northwest :: (g: u64, p: u64) -> u64 {
-  NOT_H :: cast(u64) ~ file_h;
-  p &= NOT_H;
-  g |= p & (g << 7);
-  p &=     (p << 7);
-  g |= p & (g << 14);
-  p &=     (p << 14);
-  g |= p & (g << 28);
-  return g;
-}
-
 
 between_bitboard :: inline (i: u64, j: u64) -> u64 {
   ii := bit_scan_forward(i);
@@ -1607,20 +1503,3 @@ __zhash_turn: u64;
 
 __zhash_castling: [16]  u64;
 
-rook_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
-  o     := occupied & (~friends) & (~slider);
-  up    := smear_upwards(slider, ~((o<<8)|friends));
-  down  := smear_downwards(slider, ~((o>>8)|friends));
-  right := smear_eastwards(slider, ~(((o<<1) & (xx ~ file_a))|friends));
-  left  := smear_westwards(slider, ~(((o>>1) & (xx ~ file_h))|friends));
-  return up ^ down ^ right ^ left;
-} 
-
-bishop_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
-  o := occupied & (~friends) & (~slider);
-  ne := smear_northeast(slider, ~(((o<<9) & (xx ~ file_a))|friends));
-  se := smear_southeast(slider, ~(((o>>7) & (xx ~ file_a))|friends));
-  sw := smear_southwest(slider, ~(((o>>9) & (xx ~ file_h))|friends));
-  nw := smear_northwest(slider, ~(((o<<7) & (xx ~ file_h))|friends));
-  return ne ^ se ^ sw ^ nw;
-}

@@ -1,4 +1,3 @@
-
 magic_bishop_moves :: (sq: int, occ: u64) -> u64 {
   using magic_bishop[sq];
   occ &= mask;
@@ -13,6 +12,12 @@ magic_rook_moves :: (sq: int, occ: u64) -> u64 {
   occ *= magic;
   occ >>= 64 - relevant_bit;
   return rook_attacks[sq][occ];
+}
+
+init_magic_bitboards :: () {
+  print("initializing magic bitboards.\n");
+  init_magic_bitboard();
+  print("magic bitboards initialied :)\n");
 }
 
 #scope_file
@@ -57,7 +62,7 @@ Chess :: struct {
   }
 }
 
-using Bitboard :: enum_flags u64 {
+Bitboard :: enum_flags u64 {
   a1; b1; c1; d1; e1; f1; g1; h1;
   a2; b2; c2; d2; e2; f2; g2; h2;
   a3; b3; c3; d3; e3; f3; g3; h3;
