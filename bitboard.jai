@@ -1023,14 +1023,6 @@ black_pawn_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 =
   return up1 | captures | pawn_power;
 }
 
-bishop_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
-  o := occupied & (~friends) & (~slider);
-  ne := smear_northeast(slider, ~(((o<<9) & (xx ~ file_a))|friends));
-  se := smear_southeast(slider, ~(((o>>7) & (xx ~ file_a))|friends));
-  sw := smear_southwest(slider, ~(((o>>9) & (xx ~ file_h))|friends));
-  nw := smear_northwest(slider, ~(((o<<7) & (xx ~ file_h))|friends));
-  return ne ^ se ^ sw ^ nw;
-}
 
 knight_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
   east1 := (slider << 1) & xx (~file_a);
@@ -1041,15 +1033,6 @@ knight_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) 
   sqs2 := east2 | west2;
   return ((sqs2 << 8) | (sqs2 >> 8) | (sqs1 << 16) | (sqs1 >> 16)) & (~friends);
 }
-
-rook_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
-  o     := occupied & (~friends) & (~slider);
-  up    := smear_upwards(slider, ~((o<<8)|friends));
-  down  := smear_downwards(slider, ~((o>>8)|friends));
-  right := smear_eastwards(slider, ~(((o<<1) & (xx ~ file_a))|friends));
-  left  := smear_westwards(slider, ~(((o>>1) & (xx ~ file_h))|friends));
-  return up ^ down ^ right ^ left;
-} 
 
 king_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
   k := slider | ((slider << 1) & xx (~file_a)) | ((slider >> 1) & xx (~file_h));
@@ -1624,3 +1607,20 @@ __zhash_turn: u64;
 
 __zhash_castling: [16]  u64;
 
+rook_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
+  o     := occupied & (~friends) & (~slider);
+  up    := smear_upwards(slider, ~((o<<8)|friends));
+  down  := smear_downwards(slider, ~((o>>8)|friends));
+  right := smear_eastwards(slider, ~(((o<<1) & (xx ~ file_a))|friends));
+  left  := smear_westwards(slider, ~(((o>>1) & (xx ~ file_h))|friends));
+  return up ^ down ^ right ^ left;
+} 
+
+bishop_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
+  o := occupied & (~friends) & (~slider);
+  ne := smear_northeast(slider, ~(((o<<9) & (xx ~ file_a))|friends));
+  se := smear_southeast(slider, ~(((o>>7) & (xx ~ file_a))|friends));
+  sw := smear_southwest(slider, ~(((o>>9) & (xx ~ file_h))|friends));
+  nw := smear_northwest(slider, ~(((o<<7) & (xx ~ file_h))|friends));
+  return ne ^ se ^ sw ^ nw;
+}

@@ -1,15 +1,21 @@
-#import "Basic";
 
-main :: () {
-  init_magic_bitboard();
-  print("Chess: %\n", size_of(Chess));
-  for i: 0..63 {
-    print_bitboard(magic_rook[i].mask);
-    print("square: %\n", cast(Bitboard) (1<<i));
-    print("-----------\n");
-  }
-
+magic_bishop_moves :: (sq: int, occ: u64) -> u64 {
+  using magic_bishop[sq];
+  occ &= mask;
+  occ *= magic;
+  occ >>= 64 - relevant_bit;
+  return bishop_attacks[sq][occ];
 }
+
+magic_rook_moves :: (sq: int, occ: u64) -> u64 {
+  using magic_rook[sq];
+  occ &= mask;
+  occ *= magic;
+  occ >>= 64 - relevant_bit;
+  return rook_attacks[sq][occ];
+}
+
+#scope_file
 
 Chess :: struct {
   pieces: [64] Piece;
@@ -50,8 +56,6 @@ Chess :: struct {
     All :: W_KS|W_QS|B_KS|B_QS;
   }
 }
-
-#scope_file
 
 using Bitboard :: enum_flags u64 {
   a1; b1; c1; d1; e1; f1; g1; h1;
@@ -107,11 +111,16 @@ Piece :: enum u8 {
 Magics :: struct {
   mask: u64;
   magic: u64;
-  relevant_bit: int;
+  relevant_bit: u64;
 }
 
-#no_reset magic_bishop: [64] Magics;
-#no_reset magic_rook  : [64] Magics;
+// magics
+magic_bishop: [64] Magics;
+magic_rook  : [64] Magics;
+
+// attacks
+bishop_attacks: [64][512]  u64;
+rook_attacks:   [64][4096] u64;
 
 init_magic_bitboard :: () {
 
@@ -121,18 +130,44 @@ init_magic_bitboard :: () {
       using magic_bishop[i];
       mask         = bishop_mask(sq);
       relevant_bit = bishop_relevant_bits[i];
-      magic        = find_bishop_magic_number(mask, i, relevant_bit);
+      magic        = find_magic_number(mask, i, relevant_bit, bishop_moves);
     }
 
     {
       using magic_rook[i];
       mask           = rook_mask(sq);
       relevant_bit   = rook_relevant_bits[i];
-      magic          = find_rook_magic_number(mask, i, relevant_bit);
+      magic          = find_magic_number(mask, i, relevant_bit, rook_moves);
     }
   }
 
-  bishop_relevant_bits :: int.[
+  for sq: 0..63 {
+    bitboard := cast(u64) (1 << sq);
+    calc_bishop_attacks(*magic_bishop[sq]);
+    calc_rook_attacks(*magic_rook[sq]);
+
+    calc_bishop_attacks :: (using m: *Magics) #expand {
+      count := cast(u64) popcount(mask);
+      occ_indices := 1 << count;
+      for i: 0..occ_indices-1 {
+        occ := set_occ(i, count, mask);
+        magic_index := (occ * magic) >> (64 - relevant_bit);
+        bishop_attacks[sq][magic_index] = bishop_moves(bitboard, occ);
+      }
+    }
+
+    calc_rook_attacks :: (using m: *Magics) #expand {
+      count := cast(u64) popcount(mask);
+      occ_indices := 1 << count;
+      for i: 0..occ_indices-1 {
+        occ := set_occ(i, count, mask);
+        magic_index := (occ * magic) >> (64 - relevant_bit);
+        rook_attacks[sq][magic_index] = rook_moves(bitboard, occ);
+      }
+    }
+  }
+
+  bishop_relevant_bits :: u64.[
     6, 5, 5, 5, 5, 5, 5, 6, 
     5, 5, 5, 5, 5, 5, 5, 5, 
     5, 5, 7, 7, 7, 7, 5, 5, 
@@ -143,7 +178,7 @@ init_magic_bitboard :: () {
     6, 5, 5, 5, 5, 5, 5, 6
   ];
 
-  rook_relevant_bits :: int.[
+  rook_relevant_bits :: u64.[
     12, 11, 11, 11, 11, 11, 11, 12, 
     11, 10, 10, 10, 10, 10, 10, 11, 
     11, 10, 10, 10, 10, 10, 10, 11, 
@@ -156,7 +191,7 @@ init_magic_bitboard :: () {
 
 }
 
-find_bishop_magic_number :: (attack_mask: u64, sq: int, relevant_bits: int) -> u64 {
+find_magic_number :: (attack_mask: u64, sq: int, relevant_bits: u64, $moves: (u64,u64)->u64) -> u64 {
   occ:     [4096] u64;
   attacks: [4096] u64;
   used:    [4096] u64;
@@ -164,26 +199,49 @@ find_bishop_magic_number :: (attack_mask: u64, sq: int, relevant_bits: int) -> u
   for i: 0..occ_indices-1 {
     bitboard := cast(u64) (1<<sq);
     occ[i] = set_occ(i, relevant_bits, attack_mask);
-    attacks[i] = rook_moves(bitboard, occ[i]);
+    attacks[i] = moves(bitboard, occ[i]);
   }
 
   while true {
+    magic_number := generate_magic_number();
+    if popcount((attack_mask*magic_number) & 0xFF00000000000000) < 6 then
+      continue;
 
+    memset(used.data, 0, size_of(type_of(used)));
+    fail := false;
+    for i: 0..occ_indices-1 {
+      magic_index := (occ[i] * magic_number) >> (64 - relevant_bits);
+      // if magic index works.
+      if used[magic_index] == 0 then {
+        // magic index works.
+        used[magic_index] = attacks[i];
 
+      } else if used[magic_index] != attacks[i] then {
+        // magic index fails.
+        fail = true;
+        break;
+      }
+    }
+
+    if !fail then {
+      return magic_number;
+    }
   }
+
+  print("magic_number generation failed.\n");
   return 0;
+
+  // TODO: speed this up!
+  generate_magic_number :: () -> u64 #expand {
+    return random_u64() & random_u64() & random_u64();
+  }
 }
 
-find_rook_magic_number :: (attack_mask: u64, sq: int, relevant_bits: int) -> u64 {
-
-  return 0;
-}
-
-set_occ :: (index: int, bits_in_mask: int, attack_mask: u64) -> u64 {
+set_occ :: (index: int, bits_in_mask: u64, attack_mask: u64) -> u64 {
   occ : u64 = 0;
   for count: 0..bits_in_mask-1 {
     sq := bit_scan_forward(attack_mask);
-    attack_mask &= attack_mask - 1;
+    attack_mask &= cast(u64) (~(1 << sq));
 
     if index & (1 << count)
       occ |= xx (1 << sq);
@@ -197,8 +255,13 @@ bit_scan_forward :: (input: u64)->int #expand {
   return result;
 }
 
-bishop_mask :: (sq: u64) -> u64 {
+popcount :: (value: u64) -> int #expand {
+  result: int;
+  #asm { popcnt.q  result, value; }
+  return result;
+}
 
+bishop_mask :: (sq: u64) -> u64 {
   ne := smear_northeast(sq, xx ~(file_h|rank_8));
   se := smear_southeast(sq, xx ~(file_h|rank_1));
   sw := smear_southwest(sq, xx ~(file_a|rank_1));
@@ -208,7 +271,6 @@ bishop_mask :: (sq: u64) -> u64 {
 }
 
 rook_mask :: (sq: u64) -> u64 {
-
   n := smear_north(sq, xx ~rank_8);
   s := smear_south(sq, xx ~rank_1);
   w := smear_west (sq, xx ~file_a);
@@ -302,12 +364,20 @@ smear_northwest :: (g: u64, p: u64) -> u64 {
 }
 
 rook_moves :: (sq: u64, occ: u64) -> u64 {
-  up    := smear_north(sq, ~(occ<<8));
-  down  := smear_south(sq, ~(occ>>8));
-  right := smear_east (sq, ~(occ<<1));
-  left  := smear_west (sq, ~(occ>>1));
-  return up ^ down ^ right ^ left;
+  n := smear_north(sq, ~(occ<<8));
+  s := smear_south(sq, ~(occ>>8));
+  e := smear_east (sq, ~((occ<<1) & (xx ~file_a)));
+  w := smear_west (sq, ~((occ>>1) & (xx ~file_h)));
+  return n ^ s ^ e ^ w;
 } 
+
+bishop_moves :: (sq: u64, occ: u64) -> u64 {
+  ne := smear_northeast(sq, ~((occ<<9) & (xx ~ file_a)));
+  se := smear_southeast(sq, ~((occ>>7) & (xx ~ file_a)));
+  sw := smear_southwest(sq, ~((occ>>9) & (xx ~ file_h)));
+  nw := smear_northwest(sq, ~((occ<<7) & (xx ~ file_h)));
+  return ne ^ se ^ sw ^ nw;
+}
 
 print_bitboard :: (b: u64) {
   loop(xx a8, "8 ");
@@ -334,5 +404,14 @@ print_bitboard :: (b: u64) {
     print("\n");
   }
 }
+
+random_u64 :: () -> u64 #expand {
+  a : u64 = xx random_get();
+  b : u64 = xx random_get();
+  return a ^ (b << 32);
+}
+
+#import "Random";
+#import "Basic";
 
 
