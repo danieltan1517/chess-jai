@@ -177,7 +177,6 @@ handle_command_line :: () #expand {
 
 __game_status_text: string;
 
-
 console_key: enum {CONSOLE_PRESS; CONSOLE_RELEASE;} = .CONSOLE_PRESS;
 console_on := false;
 console_text_buffer: [1024] u8;
