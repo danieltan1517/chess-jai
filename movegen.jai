@@ -31,10 +31,73 @@ knight_moves :: (bitboard: u64) -> u64 #expand {
   return (s2 << 8) | (s2 >> 8) | (s1 << 16) | (s1 >> 16);
 }
 
+pawn_captures :: (bitboard: u64, $turn: Turn) -> u64 #expand {
+  using Side;
+  #if turn == WHITE then {
+    l := (bitboard << 7) & xx ~file_h;
+    r := (bitboard << 9) & xx ~file_a;
+    return l | r;
+  }
+
+  #if turn == BLACK then {
+    l := (bitboard >> 9) & xx ~file_h;
+    r := (bitboard >> 7) & xx ~file_a;
+    return l | r;
+  }
+}
+
+pawn_advance :: (bitboard: u64, $t: Turn) -> u64 #expand {
+  using Turn;
+  #if t == WHITE then {
+    return bitboard << 8;
+  }
+
+  #if t == BLACK then {
+    return bitboard >> 8;
+  }
+}
+
+pawn_push_rank :: ($t: Turn) -> u64 #expand {
+  using Turn;
+  #if t == WHITE then {
+    return xx rank_3;
+  }
+
+  #if t == BLACK then {
+    return xx rank_6;
+  }
+}
+
 init_magic_bitboards :: () {
   print("initializing magic bitboards.\n");
   init_magic_bitboard();
-  print("magic bitboards initialied :)\n");
+  print("magic bitboards initialized :)\n");
+}
+
+generate_moves :: (using chess: *Chess, $T: Type) -> T, ChessFlags {
+  if #complete chess.side == {
+  case Side.WHITE;
+    moves, flags := generate_moves_for(chess, Side.WHITE, T);
+    return moves, flags;
+
+  case Side.BLACK;
+    moves, flags := generate_moves_for(chess, Side.BLACK, T);
+    return moves, flags;
+
+  }
+}
+
+ChessFlags :: enum {
+  Normal;
+  Check;
+  Checkmate;
+  Stalemate;
+  Insufficent_Material;
+}
+
+init_global_bitboards :: () {
+  init_magic_bitboards();
+  init_between_bitboards();
 }
 
 #scope_file
@@ -64,11 +127,9 @@ Chess :: struct {
     bitboard: [13] u64;
   }
 
-  en_peasant: u64;
+  en_passant: u64;
   castling: Castling;
-  side: Side;
-
-  Side :: enum s32 { white :: 0; black :: 1; };
+  turn: Turn;
 
   Castling :: enum_flags u8 {
     W_KS;
@@ -78,6 +139,8 @@ Chess :: struct {
     All :: W_KS|W_QS|B_KS|B_QS;
   }
 }
+
+Turn :: enum s32 { WHITE :: 0; BLACK :: 1; };
 
 Bitboard :: enum_flags u64 {
   a1; b1; c1; d1; e1; f1; g1; h1;
@@ -113,6 +176,170 @@ Bitboard :: enum_flags u64 {
   queen_side :: ~king_side;
 }
 
+generate_moves_for :: (chess: *Chess, $turn: Turn, $T: Type) -> T, ChessFlags {
+  opp :: turn ^ 1; 
+
+  move_gen: T;
+
+  unsafe, check, block := generate_attacks(chess, opp);
+  king    := get_bitboard(chess, turn, "king");
+  king_sq := bit_scan_forward(king);
+  queen   := get_bitboard(chess, turn, "queen");
+  rook    := get_bitboard(chess, turn, "rook");
+  bishop  := get_bitboard(chess, turn, "bishop");
+  knight  := get_bitboard(chess, turn, "knight"); 
+  pawn    := get_bitboard(chess, turn, "pawn");
+
+  pieces := king|queen|rook|bishop|knight|pawn;
+
+  num_checks := popcount(check);
+
+  if num_checks > 1 {
+    // double check.
+    to := king_moves(king) & ~unsafe & ~pieces;
+
+    return move_gen;
+  }
+
+  if num_checks == 1 {
+    // single check.
+    pinned : u64 = 0;
+    opp_qr := get_bitboard(chess, opp, "queen") | get_bitboard(chess, opp, "rook");
+    xray_rook := xray_rook_attacks(king_sq, occupied, pieces) & opp_qr;
+
+    while xray_rook {
+      sq := bit_scan_forward(xray_rook);
+      pinned |= between_squares(sq, king_sq) & occupied;
+      xray_rook &= xray_rook - 1;
+    }
+
+    opp_qb := get_bitboard(chess, opp, "queen") | get_bitboard(chess, opp, "bishop");
+    xray_bishop := xray_bishop_attacks(king_sq, occupied, pieces) & opp_qb;
+
+    while xray_bishop {
+      sq := bit_scan_forward(xray_bishop);
+      pinned |= between_squares(sq, king_sq) & occupied;
+      xray_bishop &= xray_bishop - 1;
+    }
+
+    queen  &= ~pinned;
+    rook   &= ~pinned;
+    bishop &= ~pinned;
+    knight &= ~pinned;
+    pawn   &= ~pinned;
+
+    // pawn captures
+    pawn_capture_move := pawn_captures(check, opp) & pawn;
+
+    // pawn advances block
+    pawn_forward_move := pawn_advance(block, opp) & pawn;
+
+    // pawn push block
+    pawn_push_move := pawn_advance(advance1 & ~pieces & pawn_push_rank(turn), opp) & pawn;
+
+    // en passant
+    enpassant_move := check & pawn_advace(en_passant, opp);
+
+
+
+  } else {
+    opp_qr := get_bitboard(chess, opp, "queen") | get_bitboard(chess, opp, "rook");
+    xray_rook := xray_rook_attacks(king_sq, occupied, pieces) & opp_qr;
+
+
+
+
+    opp_qb := get_bitboard(chess, opp, "queen") | get_bitboard(chess, opp, "bishop");
+    xray_bishop := xray_bishop_attacks(king_sq, occupied, pieces) & opp_qb;
+
+
+  }
+
+}
+
+xray_rook_attacks :: (sq: int, occ: u64, blockers: u64) -> u64 {
+  attacks := rook_moves(sq, occ);
+  blockers &= attacks;
+  occ ^= blockers;
+  attacks ^= rook_moves(sq, occ);
+  return attacks;
+}
+
+xray_bishop_attacks :: (sq: int, occ: u64, blockers: u64) -> u64 {
+  attacks := bishop_moves(sq, occ);
+  blockers &= attacks;
+  occ ^= blockers;
+  attacks ^= bishop_moves(sq, occ);
+  return attacks; 
+}
+
+generate_attacks :: (chess: *Chess, $turn: Turn) -> att: u64, check: u64, block: u64 {
+  opp :: turn ^ 1;
+  att:   u64 = 0;
+  check: u64 = 0;
+  block: u64 = 0;
+
+  opp_king := get_bitboard(chess, opp, "king");
+  occupied := chess.occupied & ~opp_king;
+
+  king   := get_bitboard(chess, turn, "king");
+  queen  := get_bitboard(chess, turn, "queen");
+  rook   := get_bitboard(chess, turn, "rook");
+  bishop := get_bitboard(chess, turn, "bishop");
+  knight := get_bitboard(chess, turn, "knight"); 
+  pawn   := get_bitboard(chess, turn, "pawn");
+
+  king_index := bit_scan_forward(king);
+
+  att |= king_moves(king);
+
+  knight_bitboard := knight_moves(knight);
+  att |= knight_bitboard;
+  check |= knight_moves(opp_king) & knight;
+
+  pawn_bitboard := pawn_captures(pawn, turn);
+  att |= pawn_bitboard;
+  check |= pawn_captures(opp_king, opp) & pawn;
+
+  queen_rook := queen | rook;
+  while queen_rook {
+    sq := bit_scan_forward(queen_rook);
+    bitboard := rook_moves(sq, occupied);
+    att |= bitboard;
+    if opp_king & bitboard then {
+      check |= xx 1 << sq;
+      block |= between_squares(sq, king_index);
+    }
+    queen_rook &= queen_rook - 1;
+  }
+
+  queen_bishop := queen | bishop;
+  while queen_bishop {
+    sq := bit_scan_forward(queen_bishop);
+    bitboard := bishop_moves(sq, occupied);
+    att |= bitboard;
+    if opp_king & bitboard then {
+      check |= xx 1 << sq;
+      block |= between_squares(sq, king_index);
+    }
+    queen_bishop &= queen_bishop - 1;
+  }
+
+  return att, check, block;
+}
+
+get_bitboard :: (chess: *Chess, $turn: Turn, $piece_name: string) -> u64 #expand {
+  #insert -> string {
+    #if side == Turn.WHITE {
+      return sprint("return chess.w_%;\n", piece_name);
+    }
+
+    #if side == Turn.BLACK {
+      return sprint("return chess.b_%;\n", piece_name);
+    }
+  }
+}
+
 PRNG :: struct {
   seed: u64;
 }
@@ -123,7 +350,6 @@ random_u64 :: (using p: *PRNG) -> u64 {
   seed ^= seed >> 27;
   return seed * 2685821657736338717;
 }
-
 
 Piece :: enum u8 {
   NONE     :: 0;
@@ -157,11 +383,6 @@ bishop_attacks: [64][512]  u64;
 rook_attacks:   [64][4096] u64;
 
 init_magic_bitboard :: () {
-  t := get_time();
-  defer {
-    print("Initialize took: % seconds.\n", get_time() - t);
-  }
-
   for i: 0..63 {
     sq := cast(u64) (1 << i);
     {
@@ -276,7 +497,7 @@ find_magic_number :: (attack_mask: u64, sq: int, relevant_bits: u64, $moves: (u6
   print("magic_number generation failed.\n");
   return 0;
 
-  // TODO: speed this up!
+  // We need a sparse random number to generate magic bitboards fast
   generate_magic_number :: (p: *PRNG) -> u64 #expand {
     return random_u64(p) & random_u64(p) & random_u64(p);
   }
@@ -450,7 +671,79 @@ print_bitboard :: (b: u64) {
   }
 }
 
-#import "Random";
-#import "Basic";
+init_between_bitboards :: () {
+  init_lines(a1, a8, file_a, 8);
+  init_lines(b1, b8, file_b, 8);
+  init_lines(c1, c8, file_c, 8);
+  init_lines(d1, d8, file_d, 8);
+  init_lines(e1, e8, file_e, 8);
+  init_lines(f1, f8, file_f, 8);
+  init_lines(g1, g8, file_g, 8);
+  init_lines(h1, h8, file_h, 8);
 
+  init_lines(a1, h1, rank_1, 1);
+  init_lines(a2, h2, rank_2, 1);
+  init_lines(a3, h3, rank_3, 1);
+  init_lines(a4, h4, rank_4, 1);
+  init_lines(a5, h5, rank_5, 1);
+  init_lines(a6, h6, rank_6, 1);
+  init_lines(a7, h7, rank_7, 1);
+  init_lines(a8, h8, rank_8, 1);
+
+  init_lines(f1, h3, f1|g2|h3, 9);
+  init_lines(e1, h4, e1|f2|g3|h4, 9);
+  init_lines(d1, h5, d1|e2|f3|g4|h5, 9);
+  init_lines(c1, h6, c1|d2|e3|f4|g5|h6, 9);
+  init_lines(b1, h7, b1|c2|d3|e4|f5|g6|h7, 9);
+  init_lines(a1, h8, a1|b2|c3|d4|e5|f6|g7|h8, 9);
+  init_lines(a2, g8, a2|b3|c4|d5|e6|f7|g8, 9);
+  init_lines(a3, f8, a3|b4|c5|d6|e7|f8, 9);
+  init_lines(a4, e8, a4|b5|c6|d7|e8, 9);
+  init_lines(a5, d8, a5|b6|c7|d8, 9);
+  init_lines(a6, c8, a6|b7|c8, 9);
+
+  init_lines(c1, a3, a3|b2|c1, 7);
+  init_lines(d1, a4, a4|b3|c2|d1, 7);
+  init_lines(e1, a5, a5|b4|c3|d2|e1, 7);
+  init_lines(f1, a6, a6|b5|c4|d3|e2|f1, 7);
+  init_lines(g1, a7, a7|b6|c5|d4|e3|f2|g1, 7);
+  init_lines(h1, a8, a8|b7|c6|d5|e4|f3|g2|h1, 7);
+  init_lines(h2, b8, b8|c7|d6|e5|f4|g3|h2, 7);
+  init_lines(h3, c8, c8|d7|e6|f5|g4|h3, 7);
+  init_lines(h4, d8, d8|e7|f6|g5|h4, 7);
+  init_lines(h5, e8, e8|f7|g6|h5, 7);
+  init_lines(h6, f8, f8|g7|h6, 7);
+
+  // this runs 2x faster in release mode when just a function rather than a macro.
+  init_lines :: (a: bboard, b: bboard, file: bboard, $num: int) {
+    ff := file;
+    yy := b;
+    while yy != a {
+      iii := a;
+      file_entry := ff;
+      while iii != yy {
+        i := bit_scan_forward(xx iii);
+        j := bit_scan_forward(xx yy);
+        entry := file_entry & (~(iii|yy));
+        between_look_up_table[i][j] = xx entry;
+        between_look_up_table[j][i] = xx entry;
+        file_entry = file_entry & (~iii);
+        iii = iii << num;
+      }
+      ff = ff & (~yy);
+      yy = yy >> num;
+    }
+  }
+}
+
+#scope_export 
+// this look-up table can be found inside stockfish chess engine.
+// I don't know whether it is correct... might be a bit slow...
+between_look_up_table: [64][64] u64;
+
+between_squares :: inline (i: int, j: int) -> u64 #expand {
+  return between_look_up_table[i][j];
+}
+
+#import "Basic";
 

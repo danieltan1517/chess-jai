@@ -758,7 +758,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
 
   while rook_pin {
     sq: u64 = xx  (1 << bit_scan_forward(rook_pin));
-    between_sqs := between_bitboard(sq, king);
+    between_sqs := between_squares(bit_scan_forward(rook_pin), i);
     pinned_piece := between_sqs & pieces;
     pins = pins | pinned_piece;
     rook_pin = rook_pin & (rook_pin - 1);
@@ -788,7 +788,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
 
   while bishop_pin {
     sq: u64 = xx  (1 << bit_scan_forward(bishop_pin));
-    between_sqs := between_bitboard(sq, king);
+    between_sqs := between_squares(bit_scan_forward(bishop_pin), i);
     pinned_piece := between_sqs & pieces;
     pins = pins | pinned_piece;
     bishop_pin = bishop_pin & (bishop_pin - 1);
@@ -832,7 +832,7 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
   pawn   &= ~pins;
   check_sqs : u64 = 0;
   if num_checks == 1 {
-    check_sqs = between_bitboard(checks, king) | checks;
+    check_sqs = between_squares(bit_scan_forward(checks), i) | checks;
   } else {
     check_sqs = ~0;
     #if captures_only == false then {
@@ -885,8 +885,8 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
         if (king & xx rank_5) && opp_qr {
           TF := true;
           while opp_qr {
-            ooo := cast(u64) (1 << bit_scan_forward(opp_qr));
-            btwn := between_bitboard(king, ooo);
+            ooo := bit_scan_forward(opp_qr);
+            btwn := between_squares(i, ooo);
             erase_both := occupied & (~(from_bb|ep_sq));
             if (btwn & erase_both) == 0 {
               // there is no blocker, doing the en paesant capture puts king in check.
@@ -914,8 +914,8 @@ generate_moves_for :: (moves_arr: *[..] Move16, c_flags: Castling, ep_sq: u64, o
         if (king & xx rank_4) && opp_qr {
           TF := true;
           while opp_qr {
-            ooo := cast(u64) (1 << bit_scan_forward(opp_qr));
-            btwn := between_bitboard(king, ooo);
+            ooo := bit_scan_forward(opp_qr);
+            btwn := between_squares(i, ooo);
             erase_both := occupied & (~(from_bb|ep_sq));
             if (btwn & erase_both) == 0 {
               // there is no blocker, doing the en paesant capture puts king in check.
@@ -1023,14 +1023,14 @@ xray_bishop_attacks :: (occ: u64, blockers: u64, i: int, bishop_sq: u64) -> u64,
 
 white_pawn_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
   up1 := (slider << 8) & (~occupied);
-  captures := wpawn_cap_lookup(i) & (occupied & (~friends));
+  captures := white_pawn_captures(slider) & (occupied & (~friends));
   pawn_power := ((up1 & (xx rank_3)) << 8) & (~occupied);
   return up1 | captures | pawn_power;
 }
 
 black_pawn_moves :: inline (occupied: u64, i: int, slider: u64, $$friends: u64 = 0) -> u64 {
   up1 := (slider >> 8) & (~occupied);
-  captures := bpawn_cap_lookup(i) & (occupied & (~friends));
+  captures := black_pawn_captures(slider) & (occupied & (~friends));
   pawn_power := ((up1 & (xx rank_6)) >> 8) & (~occupied);
   return up1 | captures | pawn_power;
 }
@@ -1041,14 +1041,6 @@ white_pawn_captures :: inline (slider: u64) -> u64 {
 
 black_pawn_captures :: inline (slider: u64) -> u64 {
   return ((slider >> 7) & xx (~file_a)) | ((slider >> 9) & xx (~file_h));
-}
-
-wpawn_cap_lookup :: inline (i: int) -> u64 #expand {
-  return wpawn_cap_look_up_table[i];
-}
-
-bpawn_cap_lookup :: inline (i: int) -> u64 #expand {
-  return bpawn_cap_look_up_table[i];
 }
 
 file_of :: inline (i: int) -> u64 {
@@ -1107,81 +1099,7 @@ print_bitboard :: (b: u64) {
   }
 }
 
-//bb_file := sliding(bb1, bb2, f) & (~(bb1|bb2));
-// TODO: This function is WAY to slow...
-// Actually, I don't know whether this is okay or too slow...can't tell....
-init_global_bitboards :: () {
-  #load "movegen.jai";
-  init_magic_bitboards();
-  init_lines(a1, a8, file_a, 8);
-  init_lines(b1, b8, file_b, 8);
-  init_lines(c1, c8, file_c, 8);
-  init_lines(d1, d8, file_d, 8);
-  init_lines(e1, e8, file_e, 8);
-  init_lines(f1, f8, file_f, 8);
-  init_lines(g1, g8, file_g, 8);
-  init_lines(h1, h8, file_h, 8);
-
-  init_lines(a1, h1, rank_1, 1);
-  init_lines(a2, h2, rank_2, 1);
-  init_lines(a3, h3, rank_3, 1);
-  init_lines(a4, h4, rank_4, 1);
-  init_lines(a5, h5, rank_5, 1);
-  init_lines(a6, h6, rank_6, 1);
-  init_lines(a7, h7, rank_7, 1);
-  init_lines(a8, h8, rank_8, 1);
-
-  init_lines(f1, h3, f1|g2|h3, 9);
-  init_lines(e1, h4, e1|f2|g3|h4, 9);
-  init_lines(d1, h5, d1|e2|f3|g4|h5, 9);
-  init_lines(c1, h6, c1|d2|e3|f4|g5|h6, 9);
-  init_lines(b1, h7, b1|c2|d3|e4|f5|g6|h7, 9);
-  init_lines(a1, h8, a1|b2|c3|d4|e5|f6|g7|h8, 9);
-  init_lines(a2, g8, a2|b3|c4|d5|e6|f7|g8, 9);
-  init_lines(a3, f8, a3|b4|c5|d6|e7|f8, 9);
-  init_lines(a4, e8, a4|b5|c6|d7|e8, 9);
-  init_lines(a5, d8, a5|b6|c7|d8, 9);
-  init_lines(a6, c8, a6|b7|c8, 9);
-
-  init_lines(c1, a3, a3|b2|c1, 7);
-  init_lines(d1, a4, a4|b3|c2|d1, 7);
-  init_lines(e1, a5, a5|b4|c3|d2|e1, 7);
-  init_lines(f1, a6, a6|b5|c4|d3|e2|f1, 7);
-  init_lines(g1, a7, a7|b6|c5|d4|e3|f2|g1, 7);
-  init_lines(h1, a8, a8|b7|c6|d5|e4|f3|g2|h1, 7);
-  init_lines(h2, b8, b8|c7|d6|e5|f4|g3|h2, 7);
-  init_lines(h3, c8, c8|d7|e6|f5|g4|h3, 7);
-  init_lines(h4, d8, d8|e7|f6|g5|h4, 7);
-  init_lines(h5, e8, e8|f7|g6|h5, 7);
-  init_lines(h6, f8, f8|g7|h6, 7);
-
-  for i: 0..63 {
-    wpawn_cap_look_up_table[i] = white_pawn_captures(cast(u64) (1<<i));
-    bpawn_cap_look_up_table[i] = black_pawn_captures(cast(u64) (1<<i));
-  }
-
-
-  // this runs 2x faster in release mode when just a function rather than a macro.
-  init_lines :: (a: bboard, b: bboard, file: bboard, $num: int) {
-    ff := file;
-    yy := b;
-    while yy != a {
-      iii := a;
-      file_entry := ff;
-      while iii != yy {
-        i := bit_scan_forward(xx iii);
-        j := bit_scan_forward(xx yy);
-        entry := file_entry & (~(iii|yy));
-        between_look_up_table[i][j] = xx entry;
-        between_look_up_table[j][i] = xx entry;
-        file_entry = file_entry & (~iii);
-        iii = iii << num;
-      }
-      ff = ff & (~yy);
-      yy = yy >> num;
-    }
-  }
-}
+#load "movegen.jai";
 
 encode_move_bb :: inline (f: u64, t: u64, flags: Move16) -> Move16 {
   from := bit_scan_forward(f);
@@ -1342,18 +1260,6 @@ bit_reverse64  :: (x: u64) -> u64 #expand {
 }
 
 #scope_file
-
-between_bitboard :: inline (i: u64, j: u64) -> u64 {
-  ii := bit_scan_forward(i);
-  jj := bit_scan_forward(j);
-  ret := between_look_up_table[ii][jj];
-  return ret;
-}
-
-// this look-up table can be found inside stockfish chess engine.
-// I don't know whether it is correct... might be a bit slow...
-between_look_up_table: [64][64] u64;
-
 
 // magic bit boards for king/knight/pawn look up.
 wpawn_cap_look_up_table: [64] u64;
