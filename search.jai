@@ -588,7 +588,7 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       order[i] = 90000;
     } else {
       if __killer_moves[0][ply] == move_array[i] {
-        order[i] = 9000;
+        order[i] = 9500;
       } else if __killer_moves[1][ply] == move_array[i] {
         order[i] = 8850;
       } else {
@@ -644,6 +644,8 @@ bubble_sort :: (order: [] int, move_array: [] Move16, count: int) {
     if !TF then
       break;
   }
+
+  //print("%\n", order);
 
   // for sorting
   swap :: (a: Code, b: Code) #expand {

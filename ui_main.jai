@@ -1455,7 +1455,7 @@ for_expansion :: (loop: *UCI_Message_Loop, loop_body: Code, flags: For_Flags) #e
     }
 
     for message, i: split(messages, "\n") {
-      print("[%]: %\n", name, message);
+      print("[%] %\n", name, message);
       `it := message;
       `it_index := i;
       #insert (break={return;}) loop_body;

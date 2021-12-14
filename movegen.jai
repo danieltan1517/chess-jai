@@ -243,15 +243,31 @@ generate_moves_for :: (chess: *Chess, $turn: Turn, $T: Type) -> T, ChessFlags {
 
 
   } else {
+    pinned : u64 = 0;
+
     opp_qr := get_bitboard(chess, opp, "queen") | get_bitboard(chess, opp, "rook");
     xray_rook := xray_rook_attacks(king_sq, occupied, pieces) & opp_qr;
-
-
-
+    while xray_rook {
+      sq := bit_scan_forward(xray_rook);
+      pin := between_squares(sq, king_sq) & occupied;
+      pinned |= pin;
+      xray_rook &= xray_rook - 1;
+    }
 
     opp_qb := get_bitboard(chess, opp, "queen") | get_bitboard(chess, opp, "bishop");
     xray_bishop := xray_bishop_attacks(king_sq, occupied, pieces) & opp_qb;
+    while xray_bishop {
+      sq := bit_scan_forward(xray_bishop);
+      pin := between_squares(sq, king_sq) & occupied;
+      pinned |= pin;
+      xray_bishop &= xray_bishop - 1;
+    }
 
+    queen  &= ~pinned;
+    rook   &= ~pinned;
+    bishop &= ~pinned;
+    knight &= ~pinned;
+    pawn   &= ~pinned;
 
   }
 
