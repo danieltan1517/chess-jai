@@ -94,14 +94,6 @@ PieceType :: enum u8 {
   Pawn;
 }
 
-Castling :: enum_flags {
-  W_KS;
-  W_QS;
-  B_KS;
-  B_QS;
-  All :: W_KS|W_QS|B_KS|B_QS;
-}
-
 chess_start_pos :: () -> Piece_Bitboards, whose_turn: bool, Castling, ep: u64 {
   start_pos: Piece_Bitboards;
   start_pos.w_king   = xx e1;
@@ -1088,12 +1080,6 @@ encode_move_bb :: inline (f: u64, t: u64, flags: Move16) -> Move16 {
   return cast, trunc(Move16) ret;
 }
 
-// Type of move, From, To.
-decode_move :: inline (mov: Move16) -> flags: Move16, from: int, to: int {
-  // NOTE: this cast is neccesssary to prevent the release build from doing something stupid...
-  cast_mov := cast(int) mov;
-  return  mov & (xx 0xF), xx (cast_mov & 0xFC00) >> 10, xx (cast_mov & 0x03F0) >> 4;
-}
 
 find_move :: (moves: [..]Move16, from: u64, to: u64, typ: Move16=Move16.Quiet) -> Move16 {
   if typ == Move16.Quiet {
