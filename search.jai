@@ -146,7 +146,6 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
       if !is_capture(mflag) {
         __history_moves[cast(int)whose_turn][cast(int)piece_type][to] += depth*depth;
         _pm_flag, pm_from, pm_to := decode_move(prev_move);
-
         prev_type := piece_type_at( cast(u64) (1 << pm_to), pieces, !whose_turn);
         __counter_moves[cast(int)!whose_turn][prev_type][pm_to] = move;
         __killer_moves[1][ply] = __killer_moves[0][ply];

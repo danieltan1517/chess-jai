@@ -2,10 +2,33 @@
 #import "POSIX";
 #import "String";
 
+MoveArray :: struct {
+  moves: [..] Move16;
+}
+
+add_move :: (array: *MoveArray, from: int, to: int, $flags: Move16) {
+  array_add(*array.moves, to_move16(from, to, flags));
+  print("%1%2\n", cast(serialized_bb)from, cast(serialized_bb)to);
+
+  to_move16 :: inline (from: int, to: int, flags: Move16) -> Move16 {
+    ret  := (from << 10) | (to << 4) | (xx flags);
+    return cast, trunc(Move16) ret;
+  }
+}
+
 main :: () {
+
+  chess: Chess;
+  chess_startpos(*chess);
+  moves, status := generate_moves(*chess, MoveArray);
+  print("moves: %\n", moves.moves.count);
+  print("chess\n");
+
+/*
   nnue_init();
   init_global_bitboards();
   initialize_ai_globals();
+
   pieces, whose_turn, castling, ep := chess_start_pos();
   repetitions: [..] u64;
   array_reserve(*repetitions, 200);
@@ -157,6 +180,9 @@ main :: () {
       }
     }
   }
+*/
+
+
 }
 
 stdin_stop_signal :: () -> bool {
