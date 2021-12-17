@@ -2,30 +2,19 @@
 #import "POSIX";
 #import "String";
 
-MoveArray :: struct {
-  moves: [..] Move16;
-}
-
-add_move :: (array: *MoveArray, from: int, to: int, $flags: Move16) {
-  array_add(*array.moves, to_move16(from, to, flags));
-  print("%1%2\n", cast(serialized_bb)from, cast(serialized_bb)to);
-
+add_move :: (array: *[..] Move16, from: int, to: int, $flags: Move16) {
+  array_add(array, to_move16(from, to, flags));
 }
 
 main :: () {
   nnue_init();
   init_global_bitboards();
   initialize_ai_globals();
-
-  pieces, whose_turn, castling, ep := chess_start_pos();
+  chess: Chess;
+  chess_startpos(*chess);
   repetitions: [..] u64;
   array_reserve(*repetitions, 200);
   fifty := 0;
-
-  // I don't know whether or not random is being called behind
-  // my back... so do this just in case.
-  seed := cast(s32)(get_time() * 1.1350e14);
-  random_seed(seed);
 
   setup_stdin(); // set STDIN to non-blocking.
   while true {
@@ -39,7 +28,7 @@ main :: () {
     } else if equal(input, "isready") {
       print("readyok\n");
     } else if equal(input, "ucinewgame") {
-      pieces, whose_turn, castling, ep = chess_start_pos();
+      chess_startpos(*chess);
 
     } else if equal(input, "perft_all") {
       perft_all();
@@ -63,10 +52,10 @@ main :: () {
       input = advance(input, 4);
       input = eat_spaces(input);
       index :=  find_index_from_left(input, "moves");
- 
+      exit(1); 
       // TODO: fen parsing may not work correctly against malicious inputs
       fen_string := ifx index != -1 then slice(input, 0, index) else input;
-      pieces, whose_turn, castling, ep = chess_start_from_fen(fen_string);
+      //pieces, whose_turn, castling, ep = chess_start_from_fen(fen_string);
 
       if index != -1 {
         input = advance(input, index);
@@ -79,7 +68,7 @@ main :: () {
     } else if begins_with(input, "startpos") {
       input = advance(input, 8);
       input = eat_spaces(input);
-      pieces, whose_turn, castling, ep = chess_start_pos();
+      chess_startpos(*chess);
       index := find_index_from_left(input, "moves");
       if index != -1 {
         input = advance(input, index);
@@ -100,26 +89,17 @@ main :: () {
       x2 := cast(int)(token[1] - #char "1");
       y1 := cast(int)(token[2] - #char "a");
       y2 := cast(int)(token[3] - #char "1");
-      from : u64 = cast(u64) (1 << (x2*8 + x1));
-      to   : u64 = cast(u64) (1 << (y2*8 + y1));
+      from := x2*8 + x1;
+      to   := y2*8 + y1;
 
       promote := ifx token.count == 5 then token[4] else 0;
-      move_type := get_move_type(pieces, ep, from, to, promote, whose_turn);
-      move := encode_move_bb(from, to, move_type);
+      move_type := get_move_type(*chess, xx 1<<from, xx 1<<to, promote);
+      move := to_move16(from, to, move_type);
 
-      before_pawn := pieces.w_pawn | pieces.b_pawn;
-      captured: PieceType;
-      make_move(*pieces, *castling, *ep, *captured, move, whose_turn);
-      whose_turn = !whose_turn;
-      after_pawn := pieces.w_pawn | pieces.b_pawn;
-
+      before_pawn := chess.w_pawn | chess.b_pawn;
+      make_move(*chess, move);
+      after_pawn := chess.w_pawn | chess.b_pawn;
       hash : u64 = 0;
-      if move_type == Move16.Quiet && before_pawn == after_pawn {
-        hash = zobrist_hash(*pieces, castling, ep, whose_turn);
-        fifty += 1;
-      } else {
-        fifty = 0;
-      }
       array_add(*repetitions, hash);
     }
   }
@@ -131,21 +111,21 @@ main :: () {
     case "depth";
       depth, TF := parse_int(*input);
       if !TF || depth < 1 return;
-      mov := search(*pieces, castling, ep, *repetitions, depth, whose_turn, fifty);
-      print_best_move(mov, whose_turn);
+      mov := search(*chess, *repetitions, depth, fifty);
+      print_best_move(mov);
 
     case "infinite";
       depth := INF;   // make the depth arbitrarily high.
-      mov := search(*pieces, castling, ep, *repetitions, depth, whose_turn, fifty);
-      print_best_move(mov, whose_turn);
+      mov := search(*chess, *repetitions, depth, fifty);
+      print_best_move(mov);
 
     case "perft";
       depth, TF := parse_int(*input);
       if !TF return;
-      perft_divide(*pieces, castling, ep, whose_turn, depth);
+      perft_divide(*chess, depth);
     }
 
-    print_best_move :: (mov: Move16, whose_turn: bool) {
+    print_best_move :: (mov: Move16) {
 
       if mov == 0 then {
         print("bestmove (none)\n");
@@ -255,10 +235,10 @@ reset_queue :: () #expand {
 
 // TODO: this assumes the moves are valid
 // TODO: this is a long function...
-get_move_type :: (using pieces: Piece_Bitboards, en_paesant: u64, from: u64, to: u64, promote: int, whose_turn: bool)->Move16 {
-  w_pieces := get_white_pieces(pieces);
-  b_pieces := get_black_pieces(pieces);
-  if whose_turn {
+get_move_type :: (using chess: *Chess, from: u64, to: u64, promote: int)->Move16 {
+  w_pieces := get_white_pieces(chess);
+  b_pieces := get_black_pieces(chess);
+  if chess.turn == Turn.WHITE {
 
     // pawn move
     if from & w_pawn {
@@ -294,7 +274,7 @@ get_move_type :: (using pieces: Piece_Bitboards, en_paesant: u64, from: u64, to:
       } else {
         if to & b_pieces {
           return Move16.Capture;
-        } else if to & (en_paesant << 8) {
+        } else if to & en_passant {
           return Move16.Ep_Capture;
         } else if (from & xx rank_2) && (to & xx rank_4) {
           return Move16.Double_Pawn_Push;
@@ -355,7 +335,7 @@ get_move_type :: (using pieces: Piece_Bitboards, en_paesant: u64, from: u64, to:
       } else {
         if to & w_pieces {
           return Move16.Capture;
-        } else if to & (en_paesant >> 8) {
+        } else if to & en_passant {
           return Move16.Ep_Capture;
         } else if (from & xx rank_7) && (to & xx rank_5) {
           return Move16.Double_Pawn_Push;

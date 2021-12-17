@@ -5,11 +5,11 @@ ui_exe :: "jai-chess";
 ui_file_names :: string.["ui_main.jai", "movegen.jai"];
 
 ai_exe :: "lion-tulip";
-ai_file_names :: string.["ai_main.jai", "bitboard.jai", "search.jai", "eval.jai", "movegen.jai"];
+ai_file_names :: string.["ai_main.jai", "search.jai", "eval.jai", "movegen.jai"];
 
 #run {
   args_option : enum { debug; release;} = .debug;
-  choice : enum { ai_compile; ui_compile;} = .ui_compile;
+  choice : enum { ai_compile; ui_compile;} = .ai_compile;
   args := compiler_get_command_line_arguments();
   for arg: args {
     if arg == {

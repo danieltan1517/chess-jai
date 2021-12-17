@@ -4,51 +4,43 @@ nnue_init :: () {
   __nnue_init(eval_file=eval_file);
 }
 
-evaluate :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) -> int {
+evaluate :: (using chess: *Chess, fifty: int) -> int {
   // attempt trivial eval. else use NNUE.
-  TF, score := trivial_evaluation(p, whose_turn, fifty); 
+  TF, score := trivial_evaluation(chess, fifty); 
   if TF return score;
-  return nnue_evaluate(p, whose_turn, fifty);
+  return nnue_evaluate(chess, fifty);
 }
 
 WIN_SCORE :: 200_000;
 
 #scope_file
 
-nnue_evaluate :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) -> int {
+nnue_evaluate :: (chess: *Chess, fifty: int) -> int {
   pieces  := NewArray(33, s32, allocator=__temporary_allocator);
   squares := NewArray(33, s32, allocator=__temporary_allocator);
-  index := 0;
-  translate_bitboard(w_king, 1);
-  translate_bitboard(b_king, 7);
+  pieces[0] = xx Piece.W_KING;
+  squares[0] = xx bit_scan_forward(chess.w_king);
 
-  translate_bitboard(w_queen, 2);
-  translate_bitboard(w_rook, 3);
-  translate_bitboard(w_bishop, 4);
-  translate_bitboard(w_knight, 5);
-  translate_bitboard(w_pawn, 6);
-
-  translate_bitboard(b_queen, 8);
-  translate_bitboard(b_rook, 9);
-  translate_bitboard(b_bishop, 10);
-  translate_bitboard(b_knight, 11);
-  translate_bitboard(b_pawn, 12);
-
-  eval := __nnue_evaluate(player=xx (!whose_turn), pieces.data, squares.data);
-  return (eval * (100 - fifty)) / 100;
-
-  translate_bitboard :: (bb: u64, piece_type: s32) #expand {
-    while bb {
-      pieces [index] = piece_type;
-      squares[index] = xx bit_scan_forward(bb);
+  pieces[1] = xx Piece.W_KING;
+  squares[1] = xx bit_scan_forward(chess.b_king);
+  index := 2;
+  piece := chess.occupied & ~(chess.w_king|chess.b_king);
+  for i: 0..63 {
+    bitboard := cast(u64) (1<<i);
+    if bitboard & piece {
+      print("index = %, %, %\n", index, chess.pieces[i], i);
+      pieces[index] = xx chess.pieces[i];
+      squares[index] = xx i;
       index += 1;
-      bb &= bb - 1;
     }
   }
+  
+  eval := __nnue_evaluate(xx chess.turn, pieces.data, squares.data);
+  return (eval * (100 - fifty)) / 100;
 }
 
 // We use trivial evaluation to deal with endgame positions.
-trivial_evaluation :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) -> bool, int {
+trivial_evaluation :: (using chess: *Chess, fifty: int) -> bool, int {
   // used for trivial checkmates/draws.
   w_pieces := w_queen|w_rook|w_bishop|w_knight|w_pawn;
   b_pieces := b_queen|b_rook|b_bishop|b_knight|b_pawn;
@@ -63,7 +55,7 @@ trivial_evaluation :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) 
 
 
     if w_pieces & (~(w_pawn|w_knight)) {
-      side := ifx whose_turn then 1 else -1; 
+      side := ifx turn == Turn.WHITE then 1 else -1; 
       eval := eval_winning_position(w_king, q=w_queen, r=w_rook, b=w_bishop, n=w_knight, p=bit_reverse64(w_pawn), b_king) * side;
       return true, (eval * (100 - fifty)) / 100;
     } 
@@ -74,7 +66,7 @@ trivial_evaluation :: (using p: *Piece_Bitboards, whose_turn: bool, fifty: int) 
       return true, 0;
 
     if b_pieces & (~(b_pawn|b_knight)) {
-      side := ifx whose_turn then -1 else 1;
+      side := ifx turn == Turn.WHITE then -1 else 1;
       eval := eval_winning_position(b_king, q=b_queen, r=b_rook, b=b_bishop, n=b_knight, p=b_pawn, w_king) * side;
       return true, (eval * (100 - fifty)) / 100;
     } 

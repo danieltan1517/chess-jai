@@ -1,7 +1,7 @@
 math :: #import "Math";
 #import "Basic";
 
-search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *[..] u64, depth: int, whose_turn: bool, fifty: int) -> Move16 {
+search :: (chess: *Chess, repetitions: *[..] u64, depth: int, fifty: int) -> Move16 {
   // this is basically a fancy wrapper around negamax, negamax does all the work, this just sets everything up.
   time_begin := get_time();
   memset(__history_moves.data, 0, size_of(type_of(__history_moves)));
@@ -22,7 +22,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   while cur_depth <= depth { 
     clear_hash_table();
     reset_temporary_storage();
-    score = negamax(pieces, castling, ep, cur_depth, whose_turn, *pv_line, repetitions, alpha=alpha, beta=beta, fifty=fifty, prev_move=Move16.Quiet);
+    score = negamax(chess, cur_depth, *pv_line, repetitions, alpha=alpha, beta=beta, fifty=fifty, prev_move=Move16.Quiet);
     __search_counter = (__search_counter + 1) % 64;
 
     time_taken := get_time() - time_begin;
@@ -72,7 +72,7 @@ search :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, repetitions: *
   }
 }
 
-negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, whose_turn: bool, pv_line: *PVLine, repetitions: *[..]u64, ply: int = 0, $null_flag := true, alpha := -INF, beta := INF, fifty: int, prev_move: Move16) -> int {
+negamax :: (chess: *Chess, depth: int, pv_line: *PVLine, repetitions: *[..]u64, ply: int = 0, $null_flag := true, alpha := -INF, beta := INF, fifty: int, prev_move: Move16) -> int {
   FULL_DEPTH_MOVES :: 4;
   REDUCTION_LIMIT  :: 3;
   if (__nodes_searched & 16384) && stdin_stop_signal()
@@ -81,73 +81,64 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   pv_node := alpha != beta-1;
   line: PVLine;
   __nodes_searched += 1;
-  transposition_table_lookup();
+  //transposition_table_lookup();
   if depth <= 0 then {
     pv_line.cmove = 0;
-    return quiescene(pieces, castling, ep, whose_turn, alpha, beta, fifty);
+    return quiescene(chess, alpha, beta, fifty);
   }
 
   mate_distance_pruning();
   internal_iterative_deepening();
 
-  move_array: [..] Move16;
-  array_reserve(*move_array, 60);
-  check := generate_legal_moves(pieces, castling, ep, *move_array, whose_turn);
-  is_stalemate, is_terminal, score_t := check_for_checkmate_stalemate(move_array, repetitions, ply, check, fifty, hash);
-  if is_terminal then {
-    return score_t;
-  }
+  move_array, status := generate_moves(chess, [..]Move16);
 
-  array_add(repetitions, hash);
-  defer pop(repetitions);
-
-  zugzwang := has_zugzwang(pieces);
+  check_for_checkmate_stalemate();
+  zugzwang := has_zugzwang(chess);
   reverse_futility_pruning();
   null_move_pruning();
   razoring();
-  move_ordering(pieces, move_array, whose_turn, pv_line, ply, h_move, prev_move, line.argmove[0]);
+  move_ordering(chess, move_array, pv_line, ply, Move16.Quiet, prev_move, line.argmove[0]);
 
   hash_flag := TFLAGS.ALPHA;
   for move, moves_searched : move_array {
-    c_copy, ep_copy, capture := castling, ep, PieceType.None;
     mflag, from, to := decode_move(move);
-    make_move(pieces, *c_copy, *ep_copy, *capture, move, whose_turn);
+    cap, castling := make_move(chess, move);
 
     next_fifty := 0;
-    if mflag == Move16.Quiet && (((cast(u64) (1 << to)) & (pieces.w_pawn|pieces.b_pawn)) == 0) {
+    if mflag == Move16.Quiet && (((cast(u64) (1 << to)) & (chess.w_pawn|chess.b_pawn)) == 0) {
       next_fifty = fifty + 1;
     }
 
     eval := 0;
     if moves_searched == 0 {
-      eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -beta, -alpha, next_fifty, move);
+      eval = -negamax(chess, depth-1, *line, repetitions, ply + 1, null_flag, -beta, -alpha, next_fifty, move);
     } else {
       // nega-scout
-      if ply && moves_searched > FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && check == 0 && mflag <= Move16.Double_Pawn_Push {
+      if ply && moves_searched > FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && status != ChessFlags.Check && mflag <= Move16.Double_Pawn_Push {
         // do late move reduction when not in check and making "quiet moves" 
         R := LateMoveReduction[min(depth,63)][min(moves_searched,63)];
-        eval = -negamax(pieces, c_copy, ep_copy, depth-R-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty, move);
+        eval = -negamax(chess, depth-R-1, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty, move);
       } else {
         // do normal search.
-        eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty, move);
+        eval = -negamax(chess, depth-1, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty, move);
       }
 
       // re-search the move that has failed to be proved to be bad with normal alpha beta score bounds
       if eval > alpha then {
-        eval = -negamax(pieces, c_copy, ep_copy, depth-1, !whose_turn, *line, repetitions, ply + 1, null_flag, -beta, -alpha, next_fifty, move);
+        eval = -negamax(chess, depth-1, *line, repetitions, ply + 1, null_flag, -beta, -alpha, next_fifty, move);
       } 
     }
-    unmake_move(pieces, capture, move, whose_turn);
+    unmake_move(chess, move, cap, castling);
 
     if eval >= beta then {
       hash_flag = TFLAGS.BETA;
       alpha = beta;
-      piece_type := piece_type_at(cast(u64)(1 << from), pieces, whose_turn);
-      if !is_capture(mflag) {
-        __history_moves[cast(int)whose_turn][cast(int)piece_type][to] += depth*depth;
+      piece_type := piece_at(chess, from);
+      if cap == Piece.NONE {
+        __history_moves[piece_type][to] += depth*depth;
         _pm_flag, pm_from, pm_to := decode_move(prev_move);
-        prev_type := piece_type_at( cast(u64) (1 << pm_to), pieces, !whose_turn);
-        __counter_moves[cast(int)!whose_turn][prev_type][pm_to] = move;
+        prev_type := piece_at(chess, to);
+        __counter_moves[prev_type][pm_to] = move;
         __killer_moves[1][ply] = __killer_moves[0][ply];
         __killer_moves[0][ply] = move;
       } 
@@ -157,19 +148,13 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     if eval > alpha {
       hash_flag = TFLAGS.EXACT;
       alpha = eval;
-      pv_line.argmove[0], h_move = move;
+      pv_line.argmove[0] = move;
       memcpy(*pv_line.argmove[1], *line.argmove[0], line.cmove * size_of(Move16));
       pv_line.cmove = line.cmove + 1;
     } 
   }
 
-  if is_stalemate then {
-    alpha = 0;
-    depth = 50;
-    hash_flag = TFLAGS.EXACT;
-  }
-
-  transposition_table_store();
+  //transposition_table_store();
   return alpha;
 
   mate_distance_pruning :: () #expand {
@@ -226,41 +211,41 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
     entry.bmove = h_move;
   }
 
-  check_for_checkmate_stalemate :: (move_array: [..] Move16, rep: *[..]u64, ply: int, check: u64, fifty: int, hash: u64) -> is_stalmate: bool, is_terminal: bool, score: int {
-    if !move_array then {
-      if check != 0 then {
-        return false, true, -INF + ply;
-      } else {
-        return false, true, 0 + ply;
-      }
+  check_for_checkmate_stalemate :: () #expand {
+    if status == {
+    case ChessFlags.Checkmate;
+      `return -INF + ply;
+    case ChessFlags.Stalemate;
+      `return 0 + ply;
     }
 
     // threefold repetition check / fifty move rule.
     if fifty >= 100 then {
-      return false, true, 0 + ply;
+      `return 0 + ply;
     }
 
-    count := 0;
+    /*count := 0;
     reps := 0;
     while count < fifty {
       i := max(rep.count-1-count, 0);
       if (<<rep) && hash == (<<rep) [i] then {
         reps += 1;
         if reps >= 2 then {
-          return true, false, 0 + ply;
+          `return 0 + ply;
         }
       }
       count += 1;
-    }
-    return false, false, 0;
+    }*/
   }
 
   null_move_pruning :: () #expand {
     NULL_MOVE_MAX :: 4;
     // check for zugwang before null move pruning && TODO: make sure engine doesn't bug out at en paesant.
-    if ply && null_flag && depth >= NULL_MOVE_MAX && check == 0 && !zugzwang {
+    if ply && null_flag && depth >= NULL_MOVE_MAX && status != ChessFlags.Check && !zugzwang {
       R := min( math.abs(static_eval - beta) / 205, 2) + depth / 3 + 3;
-      score := -negamax(pieces, castling, 0, depth-R-1, !whose_turn, *line, repetitions, ply+1, false, -beta, -beta + 1, fifty, Move16.Quiet);
+      make_null_move(chess);
+      score := -negamax(chess, depth-R-1, *line, repetitions, ply+1, false, -beta, -beta + 1, fifty, Move16.Quiet);
+      unmake_null_move(chess);
       if score >= beta then {
         `return beta;
       }
@@ -269,8 +254,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
   // zugzwang occurs primarily in King-Pawn endgames
   // zugzwang in chess is rare otherwise.
-  has_zugzwang :: (pieces: *Piece_Bitboards) -> bool {
-    using pieces;
+  has_zugzwang :: (using chess: *Chess) -> bool {
     w := w_queen | w_rook | w_bishop | w_knight;
     b := b_queen | b_rook | b_bishop | b_knight;
     return w == 0 || b == 0;
@@ -278,8 +262,8 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
   reverse_futility_pruning :: () #expand {
     // taken from BBC chess engine...
-    `static_eval := evaluate(pieces, whose_turn, fifty);
-    if !zugzwang && depth < 3 && !pv_node && check == 0 && math.abs(beta-1) > -INF + 100 then {
+    `static_eval := evaluate(chess, fifty);
+    if !zugzwang && depth < 3 && !pv_node && status != ChessFlags.Check && math.abs(beta-1) > -INF + 100 then {
       futility_margin := 214 * depth; // stockfish has its futility_margin at 214 * depth.
       if static_eval - futility_margin >= beta then {
         `return static_eval - futility_margin;
@@ -289,15 +273,15 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 
   razoring :: () #expand {
     // taken from BBC chess engine...
-    if !zugzwang && !pv_node && check == 0 && depth <= 3 then {
+    if !zugzwang && !pv_node && status != ChessFlags.Check && depth <= 3 then {
       score := static_eval + 250;
       if score < beta && depth == 1 {
-        new_score := quiescene(pieces, castling, ep, whose_turn, alpha, beta, fifty);
+        new_score := quiescene(chess, alpha, beta, fifty);
         `return ifx new_score > score then new_score else score;
       }
       score += 350;
       if score < beta && depth <= 2 {
-        new_score := quiescene(pieces, castling, ep, whose_turn, alpha, beta, fifty);
+        new_score := quiescene(chess, alpha, beta, fifty);
         if new_score < beta {
           `return ifx new_score > score then new_score else score;
         }
@@ -306,9 +290,10 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
   }
 
   internal_iterative_deepening :: () #expand {
-    if pv_node && depth >= 7 && pv_line.argmove[0] == 0 && h_move == 0 {
+    if pv_node && depth >= 7 && pv_line.argmove[0] == 0 { 
+      /* && h_move == 0 {*/
       for cur_depth: 1..depth-2 {
-        negamax(pieces, castling, ep, cur_depth, whose_turn, pv_line, repetitions, alpha=alpha, beta=beta, fifty=fifty, prev_move=prev_move);
+        negamax(chess, cur_depth, pv_line, repetitions, alpha=alpha, beta=beta, fifty=fifty, prev_move=prev_move);
         if stop_signal_triggered() then 
           break;
       }
@@ -321,10 +306,7 @@ negamax :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, depth: int, w
 // perft results are found here: https://www.chessprogramming.org/Perft_Results
 // more perft results: http://www.rocechess.ch/perft.html
 perft_all :: () {
-  pieces: Piece_Bitboards;
-  whose_turn: bool;
-  castling: Castling;
-  ep: u64;
+  chess: Chess;
   setup_perft_run("startpos", 
                   20, 
                   400, 
@@ -404,9 +386,9 @@ perft_all :: () {
   setup_perft_run :: ($fen: string, expected: ..int) #expand {
     print("Testing FEN=[%]\n", fen);
     if equal(fen, "startpos") {
-      pieces, whose_turn, castling, ep = chess_start_pos();
+      chess_startpos(*chess);
     } else {
-      pieces, whose_turn, castling, ep = chess_start_from_fen(fen_string=fen);
+      //pieces, whose_turn, castling, ep = chess_start_from_fen(fen_string=fen);
     }
 
     for exp, depth: expected {
@@ -421,7 +403,7 @@ perft_all :: () {
       return;
     }
     time_taken := get_time();
-    nodes := perft(*pieces, castling, ep, whose_turn, depth);
+    nodes := perft(*chess, depth);
     time_taken = get_time() - time_taken;
     if nodes == expected {
       print("perft successful at the depth of: %, % nodes found, time taken: %.\n", depth, nodes, time_taken);
@@ -431,7 +413,7 @@ perft_all :: () {
   }
 }
 
-perft_divide :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, depth: int) -> int {
+perft_divide :: (chess: *Chess, depth: int) -> int {
   push_allocator(temp);
   auto_release_temp();
   taken := get_time();
@@ -440,18 +422,16 @@ perft_divide :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: b
   moves_array: [..] Move16;
   array_reserve(*moves_array, 40);
 
-  generate_legal_moves(p, castling, ep, *moves_array, whose_turn);
+  moves := generate_moves(chess, [..]Move16);
   print("legal moves from here: %\n", moves_array.count);
-  for move : moves_array {
-    c_copy, ep_copy, capture := castling, ep, PieceType.None;
-    make_move(p, *c_copy, *ep_copy, *capture, move, whose_turn);
-    add := perft(p, c_copy, ep_copy, !whose_turn, depth-1);
-
+  for move : moves {
+    cap, flags := make_move(chess, move);
+    add := perft(chess, depth-1);
     type, from, to := decode_move(move);
     print("%1%2: %3 nodes\n", cast(serialized_bb)from, cast(serialized_bb)to, add);
 
     num_nodes = num_nodes + add;
-    unmake_move(p, capture, move, whose_turn);
+    unmake_move(chess, move, cap, flags);
   }
 
   taken = get_time() - taken;
@@ -460,7 +440,7 @@ perft_divide :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: b
 }
 
 initialize_ai_globals :: () {
-  zobrist_init_globals();
+  //zobrist_init_globals();
 }
 
 INF :: 0x7FF_FFFF; // Alias
@@ -468,18 +448,18 @@ INF :: 0x7FF_FFFF; // Alias
 #scope_file
 // search capture moves only, we do this to avoid horizon effect
 // see: https://www.chessprogramming.org/Quiescence_Search
-quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, alpha: int, beta: int, fifty: int = 0) -> int {
+quiescene :: (chess: *Chess, alpha: int, beta: int, fifty: int = 0) -> int {
   if (__nodes_searched & 16384) && stdin_stop_signal()
     return 0;
   auto_release_temp();
-  eval := evaluate(pieces, whose_turn, fifty);
+  eval := evaluate(chess, fifty);
   if eval >= beta then
     return beta;
 
   // delta pruning:
-  if can_delta_prune(pieces) {
+  if can_delta_prune(chess) {
     delta := 975;
-    if is_promoting_pawn(pieces) then {
+    if is_promoting_pawn(chess) then {
       delta += 775;
     }
     if eval < (alpha - delta) then {
@@ -492,15 +472,13 @@ quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn:
 
   move_array: [..] Move16;
   array_reserve(*move_array, 40);
-  generate_legal_moves(pieces, castling, ep, *move_array, whose_turn, captures_only=true);
-  capture_order(pieces, move_array, whose_turn);
-
+  moves, status := generate_moves(chess, [..] Move16);
+  capture_order(chess, move_array);
   // search captures only, captures negate the fifty move rule
-  for cap_move: move_array {
-    c_copy, ep_copy, capture := castling, ep, PieceType.None;
-    make_move(pieces, *c_copy, *ep_copy, *capture, cap_move, whose_turn);
-    score := -quiescene(pieces, c_copy, ep_copy, !whose_turn, -beta, -alpha, fifty=0);
-    unmake_move(pieces, capture, cap_move, whose_turn);
+  for move: moves {
+    cap, flags := make_move(chess, move);
+    score := -quiescene(chess, -beta, -alpha, fifty=0);
+    unmake_move(chess, move, cap, flags);
 
     if score >= beta then
       return beta;
@@ -510,13 +488,13 @@ quiescene :: (pieces: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn:
 
   return alpha;
 
-  can_delta_prune :: (using pieces: *Piece_Bitboards) -> bool #expand {
+  can_delta_prune :: (using chess: *Chess) -> bool #expand {
     w := w_queen | w_rook | w_bishop | w_knight;
     b := b_queen | b_rook | b_bishop | b_knight;
     return w != 0 || b != 0;
   }
 
-  is_promoting_pawn :: inline (using pieces: *Piece_Bitboards) -> bool {
+  is_promoting_pawn :: inline (using chess: *Chess) -> bool {
     return ((w_pawn|b_pawn) & xx (rank_7|rank_2)) != 0;
   }
 }
@@ -531,24 +509,21 @@ PVLine :: struct {
 
 // performance test
 // walks the move generation tree of strictly legal moves to count the leaf nodes
-perft :: (p: *Piece_Bitboards, castling: Castling, ep: u64, whose_turn: bool, depth: int) -> int {
+perft :: (chess: *Chess, depth: int) -> int {
   if depth == 0 then return 1;
 
   auto_release_temp();
   num_nodes := 0;
-  moves_array: [..] Move16;
-  array_reserve(*moves_array, 40);
-  generate_legal_moves(p, castling, ep, *moves_array, whose_turn);
+  moves_array := generate_moves(chess, [..]Move16);
   for move : moves_array {
-    c_copy, ep_copy, capture := castling, ep, PieceType.None;
-    make_move(p, *c_copy, *ep_copy, *capture, move, whose_turn);
-    num_nodes = num_nodes + perft(p, c_copy, ep_copy, !whose_turn, depth-1);
-    unmake_move(p, capture, move, whose_turn);
+    piece, flags := make_move(chess, move);
+    num_nodes = num_nodes + perft(chess, depth-1);
+    unmake_move(chess, move, piece, flags);
   }
   return num_nodes;
 }
 
-move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn: bool, pv_line: *PVLine, ply: int, bh_move: Move16, prev_move: Move16, null_line: Move16) {
+move_ordering :: (chess: *Chess, move_array: [..] Move16, pv_line: *PVLine, ply: int, bh_move: Move16, prev_move: Move16, null_line: Move16) {
   // TODO: I don't know if some other function wants to use temporary storage.
   auto_release_temp();
 
@@ -556,7 +531,6 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
 
   count := move_array.count;
   order := NewArray(count, int, allocator=__temporary_allocator);
-  pawns := pieces.w_pawn | pieces.b_pawn;
   for i: 0..count-1 {
     if move_array[i] == pv_line.argmove[0] {
       order[i] = INF;
@@ -565,18 +539,14 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       order[i] = INF - 1;
       continue;
     }
-    flags, from_index, to_index := decode_move(move_array[i]);
-    from := cast(u64) (1 << from_index);
-    to   := cast(u64) (1 << to_index);
-    piece_type := piece_type_at(from, pieces, whose_turn);
+    flags, from, to := decode_move(move_array[i]);
+    piece_type := piece_at(chess, from);
     using Move16;
     if flags == Capture {
-      piece_to_type := piece_type_at(to, pieces, !whose_turn);
+      piece_to_type := piece_at(chess, to);
       order[i] = mvv_lva(piece_to_type, piece_type);
-
     } else if flags == Ep_Capture {
-      order[i] = mvv_lva(PieceType.Pawn, PieceType.Pawn);
-
+      order[i] = mvv_lva(Piece.W_PAWN, Piece.W_PAWN);
     } else if flags == Knight_Promotion || flags == Knight_Promotion_Capture {
       order[i] = 32500;
     } else if flags == Bishop_Promotion || flags == Bishop_Promotion_Capture {
@@ -591,13 +561,13 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
       } else if __killer_moves[1][ply] == move_array[i] {
         order[i] = 8850;
       } else {
-        order[i] = __history_moves[cast(int)whose_turn][cast(int)piece_type][to_index];
+        order[i] = __history_moves[cast(int)piece_type][to];
       }
     }
 
     _pm_flag, pm_from, pm_to := decode_move(prev_move);
-    prev_type := piece_type_at( cast(u64) (1 << pm_to), pieces, !whose_turn);
-    if move_array[i] == __counter_moves[cast(int)!whose_turn][prev_type][pm_to] then {
+    prev_type := piece_at(chess, pm_to);
+    if move_array[i] == __counter_moves[prev_type][pm_to] then {
       COUNTER_BONUS :: 900;
       order[i] += COUNTER_BONUS;
     }
@@ -606,23 +576,21 @@ move_ordering :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn:
   bubble_sort(order, move_array, count);
 }
 
-capture_order :: (pieces: *Piece_Bitboards, move_array: [..] Move16, whose_turn: bool) {
+capture_order :: (chess: *Chess, move_array: [..] Move16) {
   auto_release_temp();
   count := move_array.count;
   order := NewArray(count, int, allocator=__temporary_allocator);
   for i: 0..count-1 {
-    flags, from_index, to_index := decode_move(move_array[i]);
-    from := cast(u64) (1 << from_index);
-    to   := cast(u64) (1 << to_index);
-    piece_type := piece_type_at(from, pieces, !whose_turn);
+    flags, from, to := decode_move(move_array[i]);
+    piece_type := piece_at(chess, from);
     using Move16;
     if flags == Capture {
-      piece_to_type := piece_type_at(to, pieces, !whose_turn);
+      piece_to_type := piece_at(chess, to);
       order[i] = mvv_lva(piece_to_type, piece_type);
     } else if flags == Ep_Capture {
-      order[i] = mvv_lva(PieceType.Pawn, PieceType.Pawn);
+      order[i] = mvv_lva(Piece.W_PAWN, Piece.W_PAWN);
     } else if Knight_Promotion <= flags && flags <= Queen_Promotion_Capture {
-      order[i] = mvv_lva(PieceType.Queen, PieceType.Pawn);
+      order[i] = mvv_lva(Piece.W_QUEEN, Piece.W_PAWN);
     }
   }
   bubble_sort(order, move_array, count);
@@ -666,56 +634,35 @@ bubble_sort :: (order: [] int, move_array: [] Move16, count: int) {
 
 // most valuable victim, least valuable attacker.
 // see: https://www.chessprogramming.org/MVV-LVA
-mvv_lva :: (victim: PieceType, attacker: PieceType) -> score: int {
-  vs := piece_score[cast(int) victim] - piece_score[cast(int) attacker]/1000;
+mvv_lva :: (victim: Piece, attacker: Piece) -> score: int {
+  vs := piece_score[cast(int) victim] - piece_score[cast(int) attacker]/100;
   return vs;
 
-  piece_score :: #run -> [7] int {
-    using PieceType;
-    array: [7] int;
-    array[cast(int) None]   =     0;
-    array[cast(int) King]   = 500000;
-    array[cast(int) Queen]  =  90000;
-    array[cast(int) Rook]   =  50000;
-    array[cast(int) Bishop] =  35000;
-    array[cast(int) Knight] =  32500;
-    array[cast(int) Pawn]   =  10000;
+  piece_score :: #run -> [13] int {
+    using Piece;
+    array: [13] int;
+    array[cast(int)NONE     ] = 0;
+    array[cast(int)W_KING   ] = 100_000;
+    array[cast(int)W_QUEEN  ] =  90_000;
+    array[cast(int)W_ROOK   ] =  50_000;
+    array[cast(int)W_BISHOP ] =  30_000;
+    array[cast(int)W_KNIGHT ] =  30_000;
+    array[cast(int)W_PAWN   ] =  10_000;
+
+    array[cast(int)B_KING   ] = 100_000;
+    array[cast(int)B_QUEEN  ] =  90_000;
+    array[cast(int)B_ROOK   ] =  50_000;
+    array[cast(int)B_BISHOP ] =  30_000;
+    array[cast(int)B_KNIGHT ] =  30_000;
+    array[cast(int)B_PAWN   ] =  10_000;
     return array;
   }
 }
 
-piece_type_at :: (bit: u64, using p: *Piece_Bitboards, whose_turn: bool) -> PieceType {
-  if whose_turn {
-    return search_pieces(bit, w_king, w_queen, w_rook, w_bishop, w_knight, w_pawn);
-  } else {
-    return search_pieces(bit, b_king, b_queen, b_rook, b_bishop, b_knight, b_pawn);
-  }
-
-  search_pieces :: (bit: u64, king: u64, queen: u64, rook: u64, bishop: u64, knight: u64, pawn: u64) -> PieceType {
-    using PieceType;
-    if bit & pawn {
-      return Pawn;
-    } else if bit & knight {
-      return Knight;
-    } else if bit & bishop {
-      return Bishop;
-    } else if bit & rook {
-      return Rook;
-    } else if bit & queen {
-      return Queen;
-    } else if bit & king {
-      return King;
-    } else {
-      return None;
-    }
-  }
-}
-
-
 __nodes_searched := 0;
-__history_moves:   [2][7][64] int;
+__history_moves:   [13][64] int;
 __killer_moves:    [2][64] Move16;
-__counter_moves:   [2][7][64] Move16;
+__counter_moves:   [13][64] Move16;
 
 // get something off the ground.
 TSIZE :: 0x400_000;

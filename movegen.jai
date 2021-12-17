@@ -56,12 +56,21 @@ chess_startpos :: (chess: *Chess) {
   }
 }
 
-make_move :: (chess: *Chess, move: Move16) -> captured: Piece {
+make_null_move :: (chess: *Chess) #expand {
+  chess.turn ^= 1;
+}
+
+unmake_null_move :: (chess: *Chess) #expand {
+  chess.turn ^= 1;
+}
+
+make_move :: (chess: *Chess, move: Move16) -> captured: Piece, Castling {
   flags, sq, to_sq := decode_move16(move);
   // TODO:... handle promotion...
   chess.en_passant = 0;
   from := cast(u64) (1 << sq);
   to   := cast(u64) (1 << to_sq);
+  castling := chess.castling;
   chess.occupied ^= from;
   chess.castling &= castling_move_table[sq];
   chess.castling &= castling_move_table[to_sq];
@@ -107,7 +116,7 @@ make_move :: (chess: *Chess, move: Move16) -> captured: Piece {
   }
 
   chess.turn ^= 1;
-  return captured;
+  return captured, castling;
 }
 
 unmake_move :: (chess: *Chess, move: Move16, cap: Piece, castling: Castling) {
@@ -1181,12 +1190,6 @@ bit_scan_forward :: (input: u64)->int #expand {
   return result;
 }
 
-popcount :: (value: u64) -> int #expand {
-  result: int;
-  #asm { popcnt.q  result, value; }
-  return result;
-}
-
 bishop_mask :: (sq: u64) -> u64 {
   ne := smear_northeast(sq, xx ~(file_h|rank_8));
   se := smear_southeast(sq, xx ~(file_h|rank_1));
@@ -1439,6 +1442,11 @@ Piece :: enum u8 {
 get_white_pieces :: inline p => p.w_king | p.w_queen | p.w_rook | p.w_bishop | p.w_knight | p.w_pawn;
 get_black_pieces :: inline p => p.b_king | p.b_queen | p.b_rook | p.b_bishop | p.b_knight | p.b_pawn;
 
+
+piece_at :: (chess: *Chess, index: int) -> Piece #expand {
+  return chess.pieces[index];
+}
+
 // TODO: get rid of this.
 can_move :: (using chess: *Chess, sq: u64) -> bool {
   if turn == Turn.WHITE {
@@ -1451,3 +1459,40 @@ can_move :: (using chess: *Chess, sq: u64) -> bool {
     return (b_pieces & sq) != 0;
   }
 }
+
+popcount :: (value: u64) -> int #expand {
+  result: int;
+  #asm { popcnt.q  result, value; }
+  return result;
+}
+
+bit_reverse64  :: (x: u64) -> u64 #expand {
+  // Modified from clang objdump
+  rdi: u64 = x;
+  rax, rcx, rdx: u64;
+  #asm {
+    bswap.q   rdi;
+    mov.q     rax, 1085102592571150095;
+    and.q     rax, rdi;
+    shl.q     rax, 4;
+    mov.q     rcx, -1085102592571150096;
+    and.q     rcx, rdi;
+    shr.q     rcx, 4;
+    or.q      rcx, rax;
+    mov.q     rax, 3689348814741910323;
+    and.q     rax, rcx;
+    mov.q     rdx, -3689348814741910324;
+    and.q     rdx, rcx;
+    shr.q     rdx, 2;
+    lea.q     rax, [rdx + rax*4];
+    mov.q     rcx, 6148914691236517205;
+    and.q     rcx, rax;
+    mov.q     rdx, -6148914691236517206;
+    and.q     rdx, rax;
+    shr.q     rdx;
+    lea.q     rax, [rdx + rcx*2];
+  }
+
+  return rax;
+}
+
