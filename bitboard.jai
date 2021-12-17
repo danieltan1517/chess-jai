@@ -1071,8 +1071,6 @@ print_bitboard :: (b: u64) {
   }
 }
 
-#load "movegen.jai";
-
 encode_move_bb :: inline (f: u64, t: u64, flags: Move16) -> Move16 {
   from := bit_scan_forward(f);
   to   := bit_scan_forward(t);

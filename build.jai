@@ -2,14 +2,14 @@
 #import "Compiler";
 
 ui_exe :: "jai-chess";
-ui_file_names :: string.["ui_main.jai", "bitboard.jai"];
+ui_file_names :: string.["ui_main.jai", "movegen.jai"];
 
 ai_exe :: "lion-tulip";
-ai_file_names :: string.["ai_main.jai", "bitboard.jai", "search.jai", "eval.jai"];
+ai_file_names :: string.["ai_main.jai", "bitboard.jai", "search.jai", "eval.jai", "movegen.jai"];
 
 #run {
   args_option : enum { debug; release;} = .debug;
-  choice : enum { ai_compile; ui_compile;} = .ai_compile;
+  choice : enum { ai_compile; ui_compile;} = .ui_compile;
   args := compiler_get_command_line_arguments();
   for arg: args {
     if arg == {
@@ -113,10 +113,6 @@ install :: () {
   // sudo apt install libgl-dev       --- opengl 
   // sudo apt install libglfw3-dev     --- glfw
   // https://github.com/Matthies/NN
-}
-
-todo :: () {
-  // Transposition Table. Should cut down on the moves
 }
 
 
