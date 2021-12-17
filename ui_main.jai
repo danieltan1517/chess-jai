@@ -927,17 +927,13 @@ handle_undo_move :: (window: *GLFWwindow, chess: *Chess, moves_arr: *[..] Move16
         board_state := pop(*move_record);
         // NOTE: need to flip whose_turn BEFORE generate_legal_moves, else we would get the opposite side's moves
         // by accident. We also need to copy the flags from the board_state BEFORE generate_legal_moves!
-        chess.en_passant = board_state.en_paesant_sq;
-        chess.castling = board_state.flags;
-        unmake_move(chess, board_state.move, board_state.captured);
+        unmake_move(chess, board_state.move, board_state.captured, board_state.flags);
         pop(*hash_record);
         
         while move_record && !w_human_turn(chess) && !b_human_turn(chess) {
           board_state := pop(*move_record);
-          chess.en_passant = board_state.en_paesant_sq;
-          chess.castling = board_state.flags;
           reset_lines(chess.turn == Turn.WHITE);
-          unmake_move(chess, board_state.move, board_state.captured);
+          unmake_move(chess, board_state.move, board_state.captured, board_state.flags);
           pop(*hash_record);
         }
 
@@ -980,14 +976,12 @@ reset :: (chess: *Chess, moves_arr: *[..]Move16) {
   timer_on = false;
   while move_record {
     board_state := pop(*move_record);
-    chess.en_passant = board_state.en_paesant_sq;
-    chess.castling = board_state.flags;
-    unmake_move(chess, board_state.move, board_state.captured);
+    unmake_move(chess, board_state.move, board_state.captured, board_state.flags);
     pop(*hash_record);
   }
 
-  array_reset(moves_arr);
-  moves, status := generate_moves(chess, [..]Move16);
+  array_reset(moves_arr); // TODO: is this a leak???
+  <<moves_arr = generate_moves(chess, [..]Move16);
 
   highlight_the_square = 0;
   possible_moves_bb = 0;
@@ -1293,7 +1287,7 @@ uci_ai_loop :: (using engine: *UCI_Engine, chess: *Chess, moves_arr: *[..]Move16
         parse_token(*message);
         TF, from, to, type := parse_move(message);
         // TODO: parse best move could fail, what to do if that happens????
-        assert(TF);
+        assert(TF, "null move.\n");
         actual_move := find_move(<<moves_arr, from, to, type);
         if actual_move {
           ui_handle_move_made(chess, moves_arr, actual_move);
