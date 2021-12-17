@@ -114,7 +114,7 @@ main :: () {
     }
     handle_undo_move(window, *chess, *moves_arr);
 
-    if w_human_turn() || b_human_turn() {
+    if w_human_turn(*chess) || b_human_turn(*chess) {
       handle_board_click(xx width, xx height, *chess, *moves_arr, white_side=white_side);
     }
     draw_chess(xx width, xx height, *chess, t, highlight_the_square, possible_moves_bb, last_move_bb, white_side);
@@ -418,7 +418,7 @@ draw_chess :: (width: float, height: float, chess: *Chess, texture: *Texture, hi
   cen_x := width * 0.5; 
   cen_y := height * 0.5;
   if timer_on == true {
-    if whose_turn then {
+    if chess.turn == Turn.WHITE then {
       w_clock_time -= delta_time;
     } else {
       b_clock_time -= delta_time;
@@ -435,8 +435,8 @@ draw_chess :: (width: float, height: float, chess: *Chess, texture: *Texture, hi
   if font {
     bottom : string  = w_engine_name;
     top    : string  = b_engine_name;
-    bot_col: Vector4 = ifx  whose_turn then BLANK else L_BLANK;
-    top_col: Vector4 = ifx !whose_turn then BLANK else L_BLANK;
+    bot_col: Vector4 = ifx chess.turn == Turn.WHITE then BLANK else L_BLANK;
+    top_col: Vector4 = ifx chess.turn == Turn.BLACK then BLANK else L_BLANK;
 
     bot_time := w_clock_time;
     top_time := b_clock_time;
@@ -514,7 +514,7 @@ draw_chess :: (width: float, height: float, chess: *Chess, texture: *Texture, hi
     white_color := Vector4.{1.0, 1.0, 1.0, 1};
     black_color := Vector4.{0.0, 0.0, 0.0, 1};
     im_set_texture(null);
-    if whose_turn {
+    if chess.turn == Turn.WHITE {
       for i: 0..engine_line_count[0]-1 {
         draw_move(engine_line[0][i], white_color);
         white_color.w *= 0.90;
@@ -578,7 +578,7 @@ draw_chess :: (width: float, height: float, chess: *Chess, texture: *Texture, hi
   }
 
   draw_promotion_ui :: (promote_sq: u64) #expand {
-    if whose_turn {
+    if chess.turn == Turn.WHITE {
       if promtion_type == {
       case UI_PIECE.UI_QUEEN;
         draw_bitboard(promotion_sq, u0=1.0/6.0, v0=0.0, u1=2.0/6.0, v1=0.5, BLANK);
@@ -622,7 +622,7 @@ draw_chess :: (width: float, height: float, chess: *Chess, texture: *Texture, hi
     PROMOTION_BACKGROUND :: Vector4.{1.0, 1.0, 1.0, 0.85};
     im_draw_rect(posx, posy + scale_up_sq_len, posx + scale_up_sq_len*4, posy, c=PROMOTION_BACKGROUND);
     im_set_texture(texture);
-    if whose_turn {
+    if chess.turn == Turn.WHITE {
       im_draw_rect(posx, posy + scale_up_sq_len, posx + scale_up_sq_len, posy, u0=1.0/6.0, v0=0.0, u1=2.0/6.0, v1=0.5, c=BLANK);
       posx += scale_up_sq_len;
       im_draw_rect(posx, posy + scale_up_sq_len, posx + scale_up_sq_len, posy, u0=4.0/6.0, v0=0.0, u1=5.0/6.0, v1=0.5, c=BLANK);
@@ -906,7 +906,7 @@ handle_flip_board :: (window: *GLFWwindow, white_side: bool)->bool {
 undo_key_state: enum {UNDO_KEY_IDLE; UNDO_KEY_PRESS; } = .UNDO_KEY_IDLE;
 
 add_move :: (moves: *[..] Move16, from: int, to: int, flags: Move16) {
-  if flags == Move16.Ep_Capture print("enpassant: %1%2\n", cast(serialized_bb)from, cast(serialized_bb)to);
+  //print("%1%2\n", cast(serialized_bb) from, cast(serialized_bb)to);
   array_add(moves, to_move16(from, to, flags));
 }
 
@@ -929,22 +929,20 @@ handle_undo_move :: (window: *GLFWwindow, chess: *Chess, moves_arr: *[..] Move16
         // by accident. We also need to copy the flags from the board_state BEFORE generate_legal_moves!
         chess.en_passant = board_state.en_paesant_sq;
         chess.castling = board_state.flags;
-        chess.turn ^= 1;
         unmake_move(chess, board_state.move, board_state.captured);
         pop(*hash_record);
         
-        while move_record && !w_human_turn() && !b_human_turn() {
+        while move_record && !w_human_turn(chess) && !b_human_turn(chess) {
           board_state := pop(*move_record);
           chess.en_passant = board_state.en_paesant_sq;
           chess.castling = board_state.flags;
-          reset_lines(whose_turn);
-          chess.turn ^= 1;
+          reset_lines(chess.turn == Turn.WHITE);
           unmake_move(chess, board_state.move, board_state.captured);
           pop(*hash_record);
         }
 
         array_reset(moves_arr); // TODO:
-        generate_moves(chess, [..]Move16);
+        <<moves_arr = generate_moves(chess, [..]Move16);
 
         highlight_the_square = 0;
         possible_moves_bb = 0;
@@ -984,7 +982,6 @@ reset :: (chess: *Chess, moves_arr: *[..]Move16) {
     board_state := pop(*move_record);
     chess.en_passant = board_state.en_paesant_sq;
     chess.castling = board_state.flags;
-    chess.turn ^= 1;
     unmake_move(chess, board_state.move, board_state.captured);
     pop(*hash_record);
   }
@@ -1048,7 +1045,6 @@ ui_handle_move_made :: (chess: *Chess, moves_arr: *[..] Move16, mov: Move16) {
   record_move.en_paesant_sq = chess.en_passant;
   record_move.captured = make_move(chess, mov);
   array_add(*move_record, record_move);
-  whose_turn = !whose_turn;
   array_reset(moves_arr);
   // TODO: FIX!!!
   <<moves_arr = generate_moves(chess, [..] Move16);
@@ -1107,7 +1103,6 @@ ui_handle_move_made :: (chess: *Chess, moves_arr: *[..] Move16, mov: Move16) {
 }
 
 last_move_bb: u64 = 0;
-whose_turn := true;  // whose_turn=true=white, whose_turn=false=black.
 promotion_sq : u64 = 0;
 highlight_the_square: u64 = 0;
 piece_select_state: enum { PIECE_IDLE; PIECE_SELECTED; PIECE_PROMOTION; } = .PIECE_IDLE;
@@ -1122,8 +1117,8 @@ b_engine_name: string;
 w_clock_time : float = 30*60;
 b_clock_time : float = 30*60;
 
-w_human_turn :: () => (w_is_human && whose_turn);
-b_human_turn :: () => (b_is_human && !whose_turn);
+w_human_turn :: (c) => (w_is_human && c.turn == Turn.WHITE);
+b_human_turn :: (c) => (b_is_human && c.turn == Turn.BLACK);
 
 UI_PIECE :: enum {
   UI_QUEEN;
@@ -1222,8 +1217,8 @@ uci_ai_loop :: (using engine: *UCI_Engine, chess: *Chess, moves_arr: *[..]Move16
 
     // make sure there are moves that could be made.
     if moves_arr.count > 0 && 
-       ( ((equal(w_engine_name, engine.name) && !w_is_human && whose_turn)) || 
-         ((equal(b_engine_name, engine.name) && !b_is_human && !whose_turn))) {
+       ( ((equal(w_engine_name, engine.name) && !w_is_human && chess.turn == Turn.WHITE)) || 
+         ((equal(b_engine_name, engine.name) && !b_is_human && chess.turn == Turn.BLACK))) {
       
       if reset_key_state == .RESET_PRESS then {
         uci_state = .UCI_NEWGAME;
@@ -1266,8 +1261,8 @@ uci_ai_loop :: (using engine: *UCI_Engine, chess: *Chess, moves_arr: *[..]Move16
   case .UCI_GO_TURN;
     can_make_move := true;
     // need to make sure AI does not transform into human halfway.
-    if !(((equal(w_engine_name, engine.name) && !w_is_human && whose_turn)) || 
-        ((equal(b_engine_name, engine.name) && !b_is_human && !whose_turn))) {
+    if !(((equal(w_engine_name, engine.name) && !w_is_human && chess.turn == Turn.WHITE)) || 
+        ((equal(b_engine_name, engine.name) && !b_is_human && chess.turn == Turn.BLACK))) {
       uci_write_command(engine, "stop\n");
       timeout_timer = 0.0;
       can_make_move = false;
@@ -1542,10 +1537,10 @@ get_opening_name :: (move_record: [..] Board_States, opening_book: *BookNode) ->
 }
 
 handle_engine_info :: (engine: *UCI_Engine, message: string) {
-  while message {
+  /*while message {
     tok, success := parse_token(*message);
     if !success break;
-    if equal(tok, "pv") {
+    if equal(tok, "pv") {   // TODO: FIX FIX FIX
       reset_lines(whose_turn);
       while message {
         tok, success := parse_token(*message);
@@ -1554,7 +1549,7 @@ handle_engine_info :: (engine: *UCI_Engine, message: string) {
         add_move(to_move16(from, to, type), whose_turn);
       }
     }
-  }
+  }*/
 }
 
 /*
@@ -1708,7 +1703,7 @@ load_opening_book :: (file_path: string) -> *BookNode {
     defer array_free(moves_arr);
     array_reserve(*moves_arr, 50);
 
-    moves_arr := generate_moves(*chess); // *moves_arr, whose_turn);
+    moves_arr := generate_moves(*chess);
 
     // linear search through the legal moves
     for mov : moves_arr {
