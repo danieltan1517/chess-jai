@@ -380,7 +380,6 @@ perft_all :: () {
                   182_838,
                   3_605_103);
 
-
   print("All perft tests complete!\n");
 
   setup_perft_run :: ($fen: string, expected: ..int) #expand {
@@ -388,7 +387,7 @@ perft_all :: () {
     if equal(fen, "startpos") {
       chess_startpos(*chess);
     } else {
-      //pieces, whose_turn, castling, ep = chess_start_from_fen(fen_string=fen);
+      chess_fen(*chess, fen);
     }
 
     for exp, depth: expected {

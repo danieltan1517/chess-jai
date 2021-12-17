@@ -55,7 +55,7 @@ main :: () {
       exit(1); 
       // TODO: fen parsing may not work correctly against malicious inputs
       fen_string := ifx index != -1 then slice(input, 0, index) else input;
-      //pieces, whose_turn, castling, ep = chess_start_from_fen(fen_string);
+      chess_fen(*chess, fen_string);
 
       if index != -1 {
         input = advance(input, index);

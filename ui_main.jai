@@ -479,6 +479,7 @@ draw_chess :: (width: float, height: float, chess: *Chess, texture: *Texture, hi
 
   draw_bitboard(last_move_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, YELLOW);
   draw_bitboard(possible_moves_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, GREY);
+  draw_bitboard(chess.occupied, u0=0.0, v0=0.0, u1=1.0, v1=1.0, RED);
 
   if coordinates_on == true && font {
     // add board labels.
