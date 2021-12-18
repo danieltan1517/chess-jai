@@ -4,15 +4,16 @@ math :: #import "Math";
 search :: (chess: *Chess, repetitions: *[..] u64, depth: int, fifty: int) -> Move16 {
   // this is basically a fancy wrapper around negamax, negamax does all the work, this just sets everything up.
   time_begin := get_time();
+  memset(pv_table.data, 0, size_of(type_of(pv_table)));
   memset(__history_moves.data, 0, size_of(type_of(__history_moves)));
   memset(__killer_moves.data,  0, size_of(type_of(__killer_moves)));
   memset(__counter_moves.data, 0, size_of(type_of(__counter_moves)));
   __nodes_searched = 0;
+  ply = 0;
   clear_hash_table();
   reset_temporary_storage();
   push_allocator(temp);
 
-  pv_line: PVLine;
   score : int; 
   best_move : Move16;
   alpha: int = -INF;
@@ -22,7 +23,7 @@ search :: (chess: *Chess, repetitions: *[..] u64, depth: int, fifty: int) -> Mov
   while cur_depth <= depth { 
     clear_hash_table();
     reset_temporary_storage();
-    score = negamax(chess, cur_depth, *pv_line, repetitions, alpha=alpha, beta=beta, fifty=fifty, prev_move=Move16.Quiet);
+    score = negamax(chess, cur_depth, repetitions, alpha=alpha, beta=beta, fifty=fifty, prev_move=Move16.Quiet);
     __search_counter = (__search_counter + 1) % 64;
 
     time_taken := get_time() - time_begin;
@@ -45,7 +46,7 @@ search :: (chess: *Chess, repetitions: *[..] u64, depth: int, fifty: int) -> Mov
     alpha = score - delta;
     beta  = score + delta;
     delta = 50;
-    best_move = pv_line.argmove[0];
+    best_move = pv_table[0][0];
     print_stats(cur_depth);
     cur_depth += 1;
   }
@@ -57,9 +58,9 @@ search :: (chess: *Chess, repetitions: *[..] u64, depth: int, fifty: int) -> Mov
     nps  := cast(int)(__nodes_searched/(`time_taken+0.0001));
     print_to_builder(*builder, "info depth % ", depth);
     print_to_builder(*builder, "nodes % time % score cp % nps % pv ", __nodes_searched, t_ms, score, nps);
-    for mv: pv_line.argmove {
-      if mv == 0 then
-        break;
+    count := pv_table_count[0] - 1;
+    for i: 0..count {
+      mv := pv_table[0][i];
       print_move_to_buffer(mv);
     }
     str := builder_to_string(*builder, allocator=__temporary_allocator);
@@ -72,38 +73,42 @@ search :: (chess: *Chess, repetitions: *[..] u64, depth: int, fifty: int) -> Mov
   }
 }
 
-negamax :: (chess: *Chess, depth: int, pv_line: *PVLine, repetitions: *[..]u64, ply: int = 0, $null_flag := true, alpha := -INF, beta := INF, fifty: int, prev_move: Move16) -> int {
+ply := 0;
+pmove: Move16;
+
+negamax :: (chess: *Chess, depth: int, repetitions: *[..]u64, $null_flag := true, alpha := -INF, beta := INF, fifty: int, prev_move: Move16) -> int {
+  pmove = prev_move;
   FULL_DEPTH_MOVES :: 4;
   REDUCTION_LIMIT  :: 3;
   if (__nodes_searched & 16384) && stdin_stop_signal()
     return 0;
   auto_release_temp();
   pv_node := alpha != beta-1;
-  line: PVLine;
   __nodes_searched += 1;
   //transposition_table_lookup();
+
   if depth <= 0 then {
-    pv_line.cmove = 0;
+    pv_table_count[ply] = 0;
+    pv_table[ply][0] = 0;
     return quiescene(chess, alpha, beta, fifty);
   }
 
   mate_distance_pruning();
   internal_iterative_deepening();
 
-  move_array, status := generate_moves(chess, Heap(Move16, 50));
+  move_array, status := generate_moves(chess, Heap(Move16, 80));
 
   check_for_checkmate_stalemate();
   zugzwang := has_zugzwang(chess);
   reverse_futility_pruning();
   null_move_pruning();
   razoring();
-  //move_ordering(chess, move_array, pv_line, ply, Move16.Quiet, prev_move, line.argmove[0]);
 
   hash_flag := TFLAGS.ALPHA;
   for move, moves_searched : move_array {
     mflag, from, to := decode_move(move);
     cap, castling := make_move(chess, move);
-
+    ply += 1;
     next_fifty := 0;
     if mflag == Move16.Quiet && (((cast(u64) (1 << to)) & (chess.w_pawn|chess.b_pawn)) == 0) {
       next_fifty = fifty + 1;
@@ -111,24 +116,25 @@ negamax :: (chess: *Chess, depth: int, pv_line: *PVLine, repetitions: *[..]u64, 
 
     eval := 0;
     if moves_searched == 0 {
-      eval = -negamax(chess, depth-1, *line, repetitions, ply + 1, null_flag, -beta, -alpha, next_fifty, move);
+      eval = -negamax(chess, depth-1, repetitions, null_flag, -beta, -alpha, next_fifty, move);
     } else {
       // nega-scout
       if ply && moves_searched > FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && status != ChessFlags.Check && mflag <= Move16.Double_Pawn_Push {
         // do late move reduction when not in check and making "quiet moves" 
         R := LateMoveReduction[min(depth,63)][min(moves_searched,63)];
-        eval = -negamax(chess, depth-R-1, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty, move);
+        eval = -negamax(chess, depth-R-1, repetitions, null_flag, -alpha-1, -alpha, next_fifty, move);
       } else {
         // do normal search.
-        eval = -negamax(chess, depth-1, *line, repetitions, ply + 1, null_flag, -alpha-1, -alpha, next_fifty, move);
+        eval = -negamax(chess, depth-1, repetitions, null_flag, -alpha-1, -alpha, next_fifty, move);
       }
 
       // re-search the move that has failed to be proved to be bad with normal alpha beta score bounds
       if eval > alpha then {
-        eval = -negamax(chess, depth-1, *line, repetitions, ply + 1, null_flag, -beta, -alpha, next_fifty, move);
+        eval = -negamax(chess, depth-1, repetitions, null_flag, -beta, -alpha, next_fifty, move);
       } 
     }
     unmake_move(chess, move, cap, castling);
+    ply -= 1;
 
     if eval >= beta then {
       hash_flag = TFLAGS.BETA;
@@ -148,9 +154,9 @@ negamax :: (chess: *Chess, depth: int, pv_line: *PVLine, repetitions: *[..]u64, 
     if eval > alpha {
       hash_flag = TFLAGS.EXACT;
       alpha = eval;
-      pv_line.argmove[0] = move;
-      memcpy(*pv_line.argmove[1], *line.argmove[0], line.cmove * size_of(Move16));
-      pv_line.cmove = line.cmove + 1;
+      pv_table[ply][0] = move;
+      memcpy(*pv_table[ply][1], *pv_table[ply+1][0], pv_table_count[ply+1] * size_of(Move16));
+      pv_table_count[ply] = pv_table_count[ply+1] + 1;
     } 
   }
 
@@ -244,7 +250,7 @@ negamax :: (chess: *Chess, depth: int, pv_line: *PVLine, repetitions: *[..]u64, 
     if ply && null_flag && depth >= NULL_MOVE_MAX && status != ChessFlags.Check && !zugzwang {
       R := min( math.abs(static_eval - beta) / 205, 2) + depth / 3 + 3;
       make_null_move(chess);
-      score := -negamax(chess, depth-R-1, *line, repetitions, ply+1, false, -beta, -beta + 1, fifty, Move16.Quiet);
+      score := -negamax(chess, depth-R-1, repetitions, false, -beta, -beta + 1, fifty, Move16.Quiet);
       unmake_null_move(chess);
       if score >= beta then {
         `return beta;
@@ -290,10 +296,9 @@ negamax :: (chess: *Chess, depth: int, pv_line: *PVLine, repetitions: *[..]u64, 
   }
 
   internal_iterative_deepening :: () #expand {
-    if pv_node && depth >= 7 && pv_line.argmove[0] == 0 { 
-      /* && h_move == 0 {*/
+    if pv_node && depth >= 7 && pv_table[ply][0] == 0 { 
       for cur_depth: 1..depth-2 {
-        negamax(chess, cur_depth, pv_line, repetitions, alpha=alpha, beta=beta, fifty=fifty, prev_move=prev_move);
+        negamax(chess, cur_depth, repetitions, alpha=alpha, beta=beta, fifty=fifty, prev_move=prev_move);
         if stop_signal_triggered() then 
           break;
       }
@@ -498,11 +503,8 @@ quiescene :: (chess: *Chess, alpha: int, beta: int, fifty: int = 0) -> int {
 
 __search_counter := 0;
 
-
-PVLine :: struct {
-  cmove: u8;
-  argmove: [64] Move16;  // TODO: WTF, THIS is the thing that is taking up SOO much time?!?!
-}
+pv_table: [64][64] Move16;
+pv_table_count: [64] int;
 
 // performance test
 // walks the move generation tree of strictly legal moves to count the leaf nodes
@@ -518,59 +520,6 @@ perft :: (chess: *Chess, depth: int) -> int {
     unmake_move(chess, move, piece, flags);
   }
   return num_nodes;
-}
-
-move_ordering :: (chess: *Chess, move_array: [..] Move16, pv_line: *PVLine, ply: int, bh_move: Move16, prev_move: Move16, null_line: Move16) {
-  // TODO: I don't know if some other function wants to use temporary storage.
-  auto_release_temp();
-
-  _, __, null_to := decode_move(null_line);
-
-  count := move_array.count;
-  order := NewArray(count, int, allocator=__temporary_allocator);
-  for i: 0..count-1 {
-    if move_array[i] == pv_line.argmove[0] {
-      order[i] = INF;
-      continue;
-    } else if move_array[i] == bh_move {
-      order[i] = INF - 1;
-      continue;
-    }
-    flags, from, to := decode_move(move_array[i]);
-    piece_type := piece_at(chess, from);
-    using Move16;
-    if flags == Capture {
-      piece_to_type := piece_at(chess, to);
-      order[i] = mvv_lva(piece_to_type, piece_type);
-    } else if flags == Ep_Capture {
-      order[i] = mvv_lva(Piece.W_PAWN, Piece.W_PAWN);
-    } else if flags == Knight_Promotion || flags == Knight_Promotion_Capture {
-      order[i] = 32500;
-    } else if flags == Bishop_Promotion || flags == Bishop_Promotion_Capture {
-      order[i] = 35000;
-    } else if flags == Rook_Promotion || flags == Rook_Promotion_Capture {
-      order[i] = 50000;
-    } else if flags == Queen_Promotion || flags == Queen_Promotion_Capture {
-      order[i] = 90000;
-    } else {
-      if __killer_moves[0][ply] == move_array[i] {
-        order[i] = 9500;
-      } else if __killer_moves[1][ply] == move_array[i] {
-        order[i] = 8850;
-      } else {
-        order[i] = __history_moves[cast(int)piece_type][to];
-      }
-    }
-
-    _pm_flag, pm_from, pm_to := decode_move(prev_move);
-    prev_type := piece_at(chess, pm_to);
-    if move_array[i] == __counter_moves[prev_type][pm_to] then {
-      COUNTER_BONUS :: 900;
-      order[i] += COUNTER_BONUS;
-    }
-  }
-
-  bubble_sort(order, move_array, count);
 }
 
 capture_order :: (chess: *Chess, move_array: [..] Move16) {
@@ -743,8 +692,58 @@ heap_add :: (using heap: *$H/Heap, item: H.T, num: int) {
   }
 }
 
-add_move :: (using heap: *$H/Heap, from: int, to: int, $flags: Move16) {
-  //array_add(array, to_move16(from, to, flags));
+add_move :: (chess: *Chess, heap: *$H/Heap, from: int, to: int, $flags: Move16) {
+  using Move16;
+
+  move := to_move16(from, to, flags);
+  score := 0;
+  if move == pv_table[ply][0] then {
+    score = INF;
+    heap_add(heap, move, score);
+    return;
+  }
+
+  #if flags == Capture {
+    att := piece_at(chess, from);
+    vic := piece_at(chess, to);
+    score = mvv_lva(vic, att);
+  }
+  #if flags == Ep_Capture {
+    score = mvv_lva(Piece.W_PAWN, Piece.W_PAWN);
+  }
+
+  #if flags == Knight_Promotion || flags == Knight_Promotion_Capture {
+    score = 32500;
+  }
+  #if flags == Bishop_Promotion || flags == Bishop_Promotion_Capture {
+    score = 35000;
+  }
+  #if flags == Rook_Promotion || flags == Rook_Promotion_Capture {
+    score = 50000;
+  }
+  #if flags == Queen_Promotion || flags == Queen_Promotion_Capture {
+    score = 90000;
+  }
+
+  #if flags == Quiet || flags == Double_Pawn_Push || flags == King_Castle || flags == Queen_Castle {
+    if __killer_moves[0][ply] {
+      score = 9500;
+    } else if __killer_moves[1][ply] {
+      score = 8850;
+    } else {
+      piece := cast(int) piece_at(chess, from);
+      score = __history_moves[piece][to];
+    }
+
+    _, __, pto := decode_move(pmove);
+    prev_piece := cast(int) piece_at(chess, pto);
+    if move == __counter_moves[prev_piece][pto] then {
+      COUNTER_BONUS :: 900;
+      score += COUNTER_BONUS;
+    }
+  }
+
+  heap_add(heap, move, score);
 }
 
 Perft :: struct($N: int) {
@@ -771,7 +770,7 @@ for_expansion :: (perft: *$P/Perft, code: Code, f: For_Flags) #expand {
   }
 }
 
-add_move :: (using perft: *$P/Perft, from: int, to: int, $flags: Move16) {
+add_move :: (chess: *Chess, using perft: *$P/Perft, from: int, to: int, $flags: Move16) {
   move := to_move16(from, to, flags);
   array[count] = move;
   count += 1;
