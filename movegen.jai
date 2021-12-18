@@ -671,6 +671,9 @@ using Bitboard :: enum_flags u64 {
   queen_side :: ~king_side;
 }
 
+// TODO: enpassant does not work on diagonal pins for esoteric
+// reasons, hopefully we will be able to handle this case robustly,
+// but for now, just get something off the ground.
 generate_moves_for :: (chess: *Chess, $turn: Turn, $T: Type) -> T, ChessFlags {
   opp :: turn ^ 1; 
   move_gen: T;

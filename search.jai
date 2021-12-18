@@ -90,14 +90,14 @@ negamax :: (chess: *Chess, depth: int, pv_line: *PVLine, repetitions: *[..]u64, 
   mate_distance_pruning();
   internal_iterative_deepening();
 
-  move_array, status := generate_moves(chess, [..]Move16);
+  move_array, status := generate_moves(chess, Heap(Move16, 50));
 
   check_for_checkmate_stalemate();
   zugzwang := has_zugzwang(chess);
   reverse_futility_pruning();
   null_move_pruning();
   razoring();
-  move_ordering(chess, move_array, pv_line, ply, Move16.Quiet, prev_move, line.argmove[0]);
+  //move_ordering(chess, move_array, pv_line, ply, Move16.Quiet, prev_move, line.argmove[0]);
 
   hash_flag := TFLAGS.ALPHA;
   for move, moves_searched : move_array {
@@ -418,8 +418,8 @@ perft_divide :: (chess: *Chess, depth: int) -> int {
   taken := get_time();
   if depth <= 0 then return 1;
   num_nodes := 0;
-  moves := generate_moves(chess, [..]Move16);
-  print("legal moves from here: %\n", moves.count);
+  moves := generate_moves(chess, Perft(80));
+  print("moves from here: %\n", moves.count);
   for move : moves {
     cap, flags := make_move(chess, move);
     add := perft(chess, depth-1);
@@ -511,8 +511,8 @@ perft :: (chess: *Chess, depth: int) -> int {
 
   auto_release_temp();
   num_nodes := 0;
-  moves_array := generate_moves(chess, [..]Move16);
-  for move : moves_array {
+  moves := generate_moves(chess, Perft(80));
+  for move : moves {
     piece, flags := make_move(chess, move);
     num_nodes = num_nodes + perft(chess, depth-1);
     unmake_move(chess, move, piece, flags);
@@ -682,5 +682,98 @@ clear_hash_table :: () #expand {
   memset(*ttable, 0, size_of(type_of(ttable)));
 }
 
+#scope_export
+Heap :: struct(T: Type, $N: int) {
+  items: [N] T;
+  score: [N] int;
+  count: int;
+}
 
+heap_pop :: (using heap: *$H/Heap) -> H.T, int {
+  it := items[0];
+  sc := score[0];
+
+  items[0] = items[count-1];
+  score[0] = score[count-1];
+  i := 0;
+  back := count-1;
+  while i < back {
+    l := (i*2)+1;
+    r := (i*2)+2;
+    largest := i;
+    if l < back && score[l] > score[largest] then
+      largest = l;
+    if r < back && score[r] > score[largest] then
+      largest = r;
+    if largest == i then {
+      break;
+    }
+
+    swap(score[i], score[largest]);
+    swap(items[i], items[largest]);
+    i = largest;
+  }
+  count-=1;
+  return it, sc;
+
+  swap :: (a: Code, b: Code) #expand {
+    t := (#insert a);
+    (#insert a) = (#insert b);
+    (#insert b) = t;
+  }
+}
+
+heap_add :: (using heap: *$H/Heap, item: H.T, num: int) {
+  child  := count;
+  parent := (child-1) / 2;
+  items[count] = item;
+  score[count] = num;
+  count += 1;
+  while child > 0 && score[parent] < score[child] {
+    swap(score[parent], score[child]);
+    swap(items[parent], items[child]);
+    child = parent;
+    parent = (child-1) / 2;
+  }
+
+  swap :: (a: Code, b: Code) #expand {
+    t := (#insert a);
+    (#insert a) = (#insert b);
+    (#insert b) = t;
+  }
+}
+
+add_move :: (using heap: *$H/Heap, from: int, to: int, $flags: Move16) {
+  //array_add(array, to_move16(from, to, flags));
+}
+
+Perft :: struct($N: int) {
+  count: int;
+  array: [N] Move16;
+}
+
+for_expansion :: (using heap: *$H/Heap, code: Code, f: For_Flags) #expand {
+  i := 0;
+  while heap.count > 0 {
+    mov, score := heap_pop(heap);
+    `it, `it_index := mov, i;
+    #insert code;
+    i += 1;
+  }
+}
+
+for_expansion :: (perft: *$P/Perft, code: Code, f: For_Flags) #expand {
+  i := 0;
+  while i < perft.count {
+    `it, `it_index := perft.array[i], i;
+    #insert code;
+    i += 1;
+  }
+}
+
+add_move :: (using perft: *$P/Perft, from: int, to: int, $flags: Move16) {
+  move := to_move16(from, to, flags);
+  array[count] = move;
+  count += 1;
+}
 

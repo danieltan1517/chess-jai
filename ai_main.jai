@@ -2,11 +2,6 @@
 #import "POSIX";
 #import "String";
 
-add_move :: (array: *[..] Move16, from: int, to: int, $flags: Move16) {
-  assert(from != to, "%1%2 invalid move.\n", cast(serialized_bb)from, cast(serialized_bb)to);
-  array_add(array, to_move16(from, to, flags));
-}
-
 main :: () {
   nnue_init();
   init_global_bitboards();
