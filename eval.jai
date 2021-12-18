@@ -9,6 +9,7 @@ evaluate :: (using chess: *Chess, fifty: int) -> int {
   TF, score := trivial_evaluation(chess, fifty); 
   if TF return score;
   return nnue_evaluate(chess, fifty);
+  return 0;
 }
 
 WIN_SCORE :: 200_000;

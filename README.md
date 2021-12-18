@@ -42,7 +42,7 @@ The chess GUI uses the glfw3 and gl libraries.
 * Kogge-Stone Algorithm
 * Passes all perft tests
 * Implements Bitboards for fast move generation
-* Move generator can generate approximately 46 million positions per second
+* Move generator can generate approximately 50 million positions per second
 * Uses https://github.com/dshawul/nnue-probe for NNUE (Efficiently Updatable Neural Networks) for chess evaluation function
 * Negamax search with Alpha-Beta Pruning
 * Encodes Moves as 16-bit integers
@@ -64,5 +64,7 @@ The chess GUI uses the glfw3 and gl libraries.
 * Mate Distance Pruning
 
 ## Still needs to be implemented
-* Better optimization for movegen 
 * NNUE Incremental Update: https://www.talkchess.com/forum3/viewtopic.php?f=7&t=75415&start=3
+
+## Some articles to read: 
+* https://www.codeproject.com/Articles/5313417/Worlds-fastest-Bitboard-Chess-Movegenerator

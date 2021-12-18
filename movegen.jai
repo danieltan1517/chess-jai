@@ -202,7 +202,7 @@ chess_startpos :: (chess: *Chess) {
     while bb {
       idx := bit_scan_forward(bb); 
       chess.pieces[idx] = p;
-      bb &= bb - 1;
+      bb = popbit(bb);
     }
   }
 }
@@ -515,9 +515,10 @@ do_en_passant_moves :: (chess: *Chess, pawn: u64, en_passant: u64, $turn: Turn, 
   victim := pawn_advance(en_passant, opp) & filter;
   if victim == 0 then
     return;
-
   ep_sq := bit_scan_forward(en_passant);
   pawn &= pawn_captures(en_passant, opp);
+  if !pawn then
+    return;
 
   occupied := chess.occupied;
   king := get_king(chess, turn) & ep_rank;
@@ -539,7 +540,7 @@ do_en_passant_moves :: (chess: *Chess, pawn: u64, en_passant: u64, $turn: Turn, 
         if (between & erase_both) == 0 {
           return;
         }
-        queen_rook &= queen_rook - 1;
+        queen_rook = popbit(queen_rook);
       }
 
       // do enpassant move.
@@ -688,8 +689,10 @@ generate_moves_for :: (chess: *Chess, $turn: Turn, $T: Type) -> T, ChessFlags {
   num_checks := popcount(check);
 
   {
-    from_bitboard := king;
-    to_bitboard := king_moves(king) & ~pieces & ~unsafe;
+    // COMPILER BUG: Release produces the wrong code for this for -O2.
+    to_bitboard : u64 = king_moves(king);
+    to_bitboard &= ~unsafe;
+    to_bitboard &= ~pieces;
     quiets := to_bitboard & ~occupied;
     while quiets {
       to_sq := bit_scan_forward(quiets);
@@ -718,7 +721,7 @@ generate_moves_for :: (chess: *Chess, $turn: Turn, $T: Type) -> T, ChessFlags {
     while xray_rook {
       sq := bit_scan_forward(xray_rook);
       pinned |= between_squares(sq, king_sq) & occupied;
-      xray_rook &= xray_rook - 1;
+      xray_rook = popbit(xray_rook);
     }
 
     opp_qb := get_queen(chess, opp) | get_bishop(chess, opp);
@@ -727,7 +730,7 @@ generate_moves_for :: (chess: *Chess, $turn: Turn, $T: Type) -> T, ChessFlags {
     while xray_bishop {
       sq := bit_scan_forward(xray_bishop);
       pinned |= between_squares(sq, king_sq) & occupied;
-      xray_bishop &= xray_bishop - 1;
+      xray_bishop = popbit(xray_bishop);
     }
 
     queen  &= ~pinned;
@@ -746,15 +749,15 @@ generate_moves_for :: (chess: *Chess, $turn: Turn, $T: Type) -> T, ChessFlags {
       while captures {
         to_sq := bit_scan_forward(captures);
         add_move(*move_gen, sq, to_sq, Move16.Capture);
-        captures &= captures - 1;
+        captures = popbit(captures);
       }
       quiets := to_bitboard & ~occupied;
       while quiets {
         to_sq := bit_scan_forward(quiets);
         add_move(*move_gen, sq, to_sq, Move16.Quiet);
-        quiets &= quiets - 1;
+        quiets = popbit(quiets);
       }
-      queen_rook &= queen_rook - 1;
+      queen_rook = popbit(queen_rook);
     }
 
     queen_bishop := queen|bishop;
@@ -765,17 +768,18 @@ generate_moves_for :: (chess: *Chess, $turn: Turn, $T: Type) -> T, ChessFlags {
       while captures {
         to_sq := bit_scan_forward(captures);
         add_move(*move_gen, sq, to_sq, Move16.Capture);
-        captures &= captures - 1;
+        captures = popbit(captures);
       }
       quiets := to_bitboard & ~occupied;
       while quiets {
         to_sq := bit_scan_forward(quiets);
         add_move(*move_gen, sq, to_sq, Move16.Quiet);
-        quiets &= quiets - 1;
+        quiets = popbit(quiets);
       }
-      queen_bishop &= queen_bishop - 1;
+      queen_bishop = popbit(queen_bishop);
     }
 
+    knight &= knight_moves(block_check);
     while knight {
       sq := bit_scan_forward(knight);
       from_bitboard := cast(u64) (1 << sq);
@@ -784,15 +788,15 @@ generate_moves_for :: (chess: *Chess, $turn: Turn, $T: Type) -> T, ChessFlags {
       while captures {
         to_sq := bit_scan_forward(captures);
         add_move(*move_gen, sq, to_sq, Move16.Capture);
-        captures &= captures - 1;
+        captures = popbit(captures);
       }
       quiets := to_bitboard & ~occupied;
       while quiets {
         to_sq := bit_scan_forward(quiets);
         add_move(*move_gen, sq, to_sq, Move16.Quiet);
-        quiets &= quiets - 1;
+        quiets = popbit(quiets);
       }
-      knight &= knight - 1;
+      knight = popbit(knight);
     }
 
     do_en_passant_moves(chess, pawn, en_passant, turn, *move_gen, filter=check);
@@ -808,7 +812,7 @@ generate_moves_for :: (chess: *Chess, $turn: Turn, $T: Type) -> T, ChessFlags {
           add_move(*move_gen, sq, to_sq, Move16.Bishop_Promotion_Capture);
           add_move(*move_gen, sq, to_sq, Move16.Rook_Promotion_Capture);
           add_move(*move_gen, sq, to_sq, Move16.Queen_Promotion_Capture);
-          captures &= captures - 1;
+          captures = popbit(captures);
         }
         forward1 := pawn_advance(from_bitboard, turn) & ~occupied & block_check;
         if forward1 then {
@@ -824,7 +828,7 @@ generate_moves_for :: (chess: *Chess, $turn: Turn, $T: Type) -> T, ChessFlags {
         while captures {
           to_sq := bit_scan_forward(captures);
           add_move(*move_gen, sq, to_sq, Move16.Capture);
-          captures &= captures - 1;
+          captures = popbit(captures);
         }
         forward1 := pawn_advance(from_bitboard, turn) & ~occupied;
         if forward1 & block_check then {
@@ -839,7 +843,7 @@ generate_moves_for :: (chess: *Chess, $turn: Turn, $T: Type) -> T, ChessFlags {
         }
       }
 
-      pawn &= pawn - 1;
+      pawn = popbit(pawn);
     }
     if move_gen.count > 0
       return move_gen, ChessFlags.Check;
@@ -860,8 +864,8 @@ generate_moves_for :: (chess: *Chess, $turn: Turn, $T: Type) -> T, ChessFlags {
     handle_castling :: ($F: Castling, $castle_sqs: Bitboard, $check_occ: Bitboard, $from: Bitboard, $to: Bitboard, $flags: Move16) #expand {
       if chess.castling & F {
         if (safe_sqs & castle_sqs) == castle_sqs && (not_occu & check_occ) == check_occ {
-          sq    :: #run bit_scan_forward(xx from);
-          to_sq :: #run bit_scan_forward(xx to);
+          sq    := bit_scan_forward(xx from);
+          to_sq := bit_scan_forward(xx to);
           add_move(*move_gen, sq, to_sq, flags);
         }
       }
@@ -886,7 +890,7 @@ generate_moves_for :: (chess: *Chess, $turn: Turn, $T: Type) -> T, ChessFlags {
         while to_bitboards {
           to_sq := bit_scan_forward(to_bitboards);
           add_move(*move_gen, sq, to_sq, Move16.Quiet);
-          to_bitboards &= to_bitboards - 1;
+          to_bitboards = popbit(to_bitboards);
         }
       } else if pawn & pin & king_file {
         // vertical pawn moves only
@@ -904,7 +908,7 @@ generate_moves_for :: (chess: *Chess, $turn: Turn, $T: Type) -> T, ChessFlags {
         }
       }
 
-      xray_rook &= xray_rook - 1;
+      xray_rook = popbit(xray_rook);
     }
 
     opp_qb := get_queen(chess, opp) | get_bishop(chess, opp);
@@ -925,7 +929,7 @@ generate_moves_for :: (chess: *Chess, $turn: Turn, $T: Type) -> T, ChessFlags {
         while to_bitboards {
           to_sq := bit_scan_forward(to_bitboards);
           add_move(*move_gen, sq, to_sq, Move16.Quiet);
-          to_bitboards &= to_bitboards - 1;
+          to_bitboards = popbit(to_bitboards);
         }
 
       } else if pawn & pin {
@@ -937,7 +941,7 @@ generate_moves_for :: (chess: *Chess, $turn: Turn, $T: Type) -> T, ChessFlags {
         }
       }
 
-      xray_bishop &= xray_bishop - 1;
+      xray_bishop = popbit(xray_bishop);
     }
 
     queen  &= ~pinned;
@@ -954,7 +958,7 @@ generate_moves_for :: (chess: *Chess, $turn: Turn, $T: Type) -> T, ChessFlags {
       while captures {
         to_sq := bit_scan_forward(captures);
         add_move(*move_gen, sq, to_sq, Move16.Capture);
-        captures &= captures - 1;
+        captures = popbit(captures);
       }
       quiets := to_bitboard & ~occupied;
       while quiets {
@@ -962,7 +966,7 @@ generate_moves_for :: (chess: *Chess, $turn: Turn, $T: Type) -> T, ChessFlags {
         add_move(*move_gen, sq, to_sq, Move16.Quiet);
         quiets &= quiets - 1;
       }
-      queen_rook &= queen_rook - 1;
+      queen_rook = popbit(queen_rook);
     }
 
     queen_bishop := queen|bishop;
@@ -973,15 +977,15 @@ generate_moves_for :: (chess: *Chess, $turn: Turn, $T: Type) -> T, ChessFlags {
       while captures {
         to_sq := bit_scan_forward(captures);
         add_move(*move_gen, sq, to_sq, Move16.Capture);
-        captures &= captures - 1;
+        captures = popbit(captures);
       }
       quiets := to_bitboard & ~occupied;
       while quiets {
         to_sq := bit_scan_forward(quiets);
         add_move(*move_gen, sq, to_sq, Move16.Quiet);
-        quiets &= quiets - 1;
+        quiets = popbit(quiets);
       }
-      queen_bishop &= queen_bishop - 1;
+      queen_bishop = popbit(queen_bishop);
     }
 
     while knight {
@@ -992,32 +996,35 @@ generate_moves_for :: (chess: *Chess, $turn: Turn, $T: Type) -> T, ChessFlags {
       while captures {
         to_sq := bit_scan_forward(captures);
         add_move(*move_gen, sq, to_sq, Move16.Capture);
-        captures &= captures - 1;
+        captures = popbit(captures);
       }
       quiets := to_bitboard & ~occupied;
       while quiets {
         to_sq := bit_scan_forward(quiets);
         add_move(*move_gen, sq, to_sq, Move16.Quiet);
-        quiets &= quiets - 1;
+        quiets = popbit(quiets);
       }
-      knight &= knight - 1;
+      knight = popbit(knight);
     }
 
     do_en_passant_moves(chess, pawn, en_passant, turn, *move_gen, filter=~0);
-    while pawn {
-      sq := bit_scan_forward(pawn);
-      from_bitboard := cast(u64) (1 << sq);
-      if from_bitboard & promotion_rank() {
-        captures := pawn_captures(from_bitboard, turn) & occupied & ~pieces;
+
+    promoting := pawn & promotion_rank();
+    if promoting != 0 {
+      from_bitboard := promoting;
+      while from_bitboard {
+        sq := bit_scan_forward(from_bitboard);
+        bitboard := cast(u64) (1 << sq);
+        captures := pawn_captures(bitboard, turn) & occupied & ~pieces;
         while captures {
           to_sq := bit_scan_forward(captures);
           add_move(*move_gen, sq, to_sq, Move16.Knight_Promotion_Capture);
           add_move(*move_gen, sq, to_sq, Move16.Bishop_Promotion_Capture);
           add_move(*move_gen, sq, to_sq, Move16.Rook_Promotion_Capture);
           add_move(*move_gen, sq, to_sq, Move16.Queen_Promotion_Capture);
-          captures &= captures - 1;
+          captures = popbit(captures);
         }
-        forward1 := pawn_advance(from_bitboard, turn) & ~occupied;
+        forward1 := pawn_advance(bitboard, turn) & ~occupied;
         if forward1 then {
           to_sq := bit_scan_forward(forward1);
           add_move(*move_gen, sq, to_sq, Move16.Knight_Promotion);
@@ -1025,29 +1032,34 @@ generate_moves_for :: (chess: *Chess, $turn: Turn, $T: Type) -> T, ChessFlags {
           add_move(*move_gen, sq, to_sq, Move16.Rook_Promotion);
           add_move(*move_gen, sq, to_sq, Move16.Queen_Promotion);
         }
-      } else {
-       
-        captures := pawn_captures(from_bitboard, turn) & occupied & ~pieces;
-        while captures {
-          to_sq := bit_scan_forward(captures);
-          add_move(*move_gen, sq, to_sq, Move16.Capture);
-          captures &= captures - 1;
-        }
-        forward1 := pawn_advance(from_bitboard, turn) & ~occupied;
-        if forward1 then {
-          to_sq := bit_scan_forward(forward1);
-          add_move(*move_gen, sq, to_sq, Move16.Quiet);
-          forward1 &= PawnPushRank(turn);
-          forward2 := pawn_advance(forward1, turn) & ~occupied;
-          if forward2 then {
-            to_sq := bit_scan_forward(forward2);
-            add_move(*move_gen, sq, to_sq, Move16.Double_Pawn_Push);
-          }
+        from_bitboard = popbit(from_bitboard);
+      }
+    }
+
+    pawn &= ~promoting;
+    while pawn {
+      sq := bit_scan_forward(pawn);
+      from_bitboard := cast(u64) (1 << sq);
+      captures := pawn_captures(from_bitboard, turn) & occupied & ~pieces;
+      while captures {
+        to_sq := bit_scan_forward(captures);
+        add_move(*move_gen, sq, to_sq, Move16.Capture);
+        captures = popbit(captures);
+      }
+      forward1 := pawn_advance(from_bitboard, turn) & ~occupied;
+      if forward1 then {
+        to_sq := bit_scan_forward(forward1);
+        add_move(*move_gen, sq, to_sq, Move16.Quiet);
+        forward1 &= PawnPushRank(turn);
+        forward2 := pawn_advance(forward1, turn) & ~occupied;
+        if forward2 then {
+          to_sq := bit_scan_forward(forward2);
+          add_move(*move_gen, sq, to_sq, Move16.Double_Pawn_Push);
         }
       }
-
-      pawn &= pawn - 1;
+      pawn = popbit(pawn);
     }
+
     if move_gen.count > 0
       return move_gen, ChessFlags.Normal;
     else
@@ -1088,8 +1100,6 @@ generate_attacks :: (chess: *Chess, $turn: Turn) -> att: u64, check: u64 {
   opp :: turn ^ 1;
   att:   u64 = 0;
   check: u64 = 0;
-  block: u64 = 0;
-
   opp_king := get_king(chess, opp);
   occupied := chess.occupied & ~opp_king;
 
@@ -1119,9 +1129,8 @@ generate_attacks :: (chess: *Chess, $turn: Turn) -> att: u64, check: u64 {
     att |= bitboard;
     if opp_king & bitboard then {
       check |= xx 1 << sq;
-      block |= between_squares(sq, king_index);
     }
-    queen_rook &= queen_rook - 1;
+    queen_rook = popbit(queen_rook);
   }
 
   queen_bishop := queen | bishop;
@@ -1131,9 +1140,8 @@ generate_attacks :: (chess: *Chess, $turn: Turn) -> att: u64, check: u64 {
     att |= bitboard;
     if opp_king & bitboard then {
       check |= xx 1 << sq;
-      block |= between_squares(sq, king_index);
     }
-    queen_bishop &= queen_bishop - 1;
+    queen_bishop = popbit(queen_bishop);
   }
 
   return att, check;
@@ -1651,3 +1659,7 @@ bit_reverse64  :: (x: u64) -> u64 #expand {
   return rax;
 }
 
+popbit :: (a: u64) -> u64 #expand {
+  #asm { blsr.q a, a; }
+  return a; 
+}
