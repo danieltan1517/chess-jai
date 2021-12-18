@@ -323,20 +323,22 @@ console_write_command :: (engines: *[..] UCI_Engine, str: string, chess: *Chess,
     if !equal(fen_string, "startpos") then {
       free(fen_string);
     }
-    while str[0] == #char " " {
+    while str && str[0] == #char " " {
       advance(*str, 1);
     }
-    fen_string = copy_string(str);
-    if equal(fen_string, "startpos") then {
-      chess_startpos(chess);
-    } else {
-      print("%\n", fen_string);
-      if !chess_fen(chess, fen_string) then {
-        print("fail fen parsing.\n");
+    if str {
+      fen_string = copy_string(str);
+      if equal(fen_string, "startpos") then {
         chess_startpos(chess);
+      } else {
+        print("%\n", fen_string);
+        if !chess_fen(chess, fen_string) then {
+          print("fail fen parsing.\n");
+          chess_startpos(chess);
+        }
       }
+      reset(chess, moves_arr);
     }
-    reset(chess, moves_arr);
     return;
 
   case "white";

@@ -28,7 +28,6 @@ nnue_evaluate :: (chess: *Chess, fifty: int) -> int {
   for i: 0..63 {
     bitboard := cast(u64) (1<<i);
     if bitboard & piece {
-      print("index = %, %, %\n", index, chess.pieces[i], i);
       pieces[index] = xx chess.pieces[i];
       squares[index] = xx i;
       index += 1;

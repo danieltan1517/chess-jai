@@ -356,7 +356,7 @@ perft_all :: () {
                   9_467,
                   422_333,
                   15_833_292);
-    
+
   // position 5: TalkChess discussed. rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8  
   setup_perft_run("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8",
                   44,
@@ -418,11 +418,8 @@ perft_divide :: (chess: *Chess, depth: int) -> int {
   taken := get_time();
   if depth <= 0 then return 1;
   num_nodes := 0;
-  moves_array: [..] Move16;
-  array_reserve(*moves_array, 40);
-
   moves := generate_moves(chess, [..]Move16);
-  print("legal moves from here: %\n", moves_array.count);
+  print("legal moves from here: %\n", moves.count);
   for move : moves {
     cap, flags := make_move(chess, move);
     add := perft(chess, depth-1);
@@ -452,7 +449,8 @@ quiescene :: (chess: *Chess, alpha: int, beta: int, fifty: int = 0) -> int {
     return 0;
   auto_release_temp();
   eval := evaluate(chess, fifty);
-  if eval >= beta then
+  return eval;
+  /*if eval >= beta then
     return beta;
 
   // delta pruning:
@@ -485,7 +483,7 @@ quiescene :: (chess: *Chess, alpha: int, beta: int, fifty: int = 0) -> int {
       alpha = score;
   }
 
-  return alpha;
+  return alpha;*/
 
   can_delta_prune :: (using chess: *Chess) -> bool #expand {
     w := w_queen | w_rook | w_bishop | w_knight;
