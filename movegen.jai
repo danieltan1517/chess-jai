@@ -1663,3 +1663,53 @@ popbit :: (a: u64) -> u64 #expand {
   #asm { blsr.q a, a; }
   return a; 
 }
+
+#no_reset zobrist_piece_table : [13][64] u64;
+#no_reset zobrist_castling_table : [16] u64;
+#no_reset zobrist_ep: [64] u64;
+
+#run initialize_zobrist_hashing();
+
+initialize_zobrist_hashing :: () {
+  prng := PRNG.{0xcafe_babe_f00d_face};
+  for i: 1..12 {
+    for j: 0..63 {
+      zobrist_piece_table[i][j] = random_u64(*prng);
+    }
+  }
+  for i: 0..15 {
+    zobrist_castling_table[i] = random_u64(*prng);
+  }
+  zobrist_ep[0] = 0;
+  for i: 1..63 {
+    zobrist_ep[i] = random_u64(*prng);
+  }
+}
+
+zobrist_incremental_update :: (hash: u64, piece: int, index: int) -> hash: u64 {
+  hash ^= zobrist_piece_table[piece][index];
+  return hash;
+}
+
+zobrist_hash :: (using chess: *Chess) -> hash: u64 {
+  hash: u64 = 0;
+  for i: 0..63 {
+    piece_index := cast(int) pieces[i];
+    hash ^= zobrist_piece_table[piece_index][i];
+  }
+  hash ^= zobrist_castling_table[cast(int)castling];
+
+  index := zobrist_bit_scan_forward(en_passant);
+  hash ^= zobrist_ep[index];
+  return hash;
+
+  zobrist_bit_scan_forward :: (input: u64)->int #expand {
+    result := 0;
+    #asm { bsf.q result, input; }
+    return result;
+  }
+}
+
+
+
+
