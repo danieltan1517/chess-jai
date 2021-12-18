@@ -52,10 +52,13 @@ main :: () {
       input = advance(input, 4);
       input = eat_spaces(input);
       index :=  find_index_from_left(input, "moves");
-      exit(1); 
       // TODO: fen parsing may not work correctly against malicious inputs
       fen_string := ifx index != -1 then slice(input, 0, index) else input;
-      chess_fen(*chess, fen_string);
+      print("fen = %\n", fen_string);
+      if !chess_fen(*chess, fen_string) {
+        chess_startpos(*chess);
+        return;
+      }
 
       if index != -1 {
         input = advance(input, index);

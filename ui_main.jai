@@ -318,6 +318,7 @@ console_write_command :: (engines: *[..] UCI_Engine, str: string, chess: *Chess,
     return;
 
   case "fen";
+    print("fen\n");
     reset(chess, moves_arr);
     if !equal(fen_string, "startpos") then {
       free(fen_string);
@@ -329,7 +330,11 @@ console_write_command :: (engines: *[..] UCI_Engine, str: string, chess: *Chess,
     if equal(fen_string, "startpos") then {
       chess_startpos(chess);
     } else {
-      // TODO:  Fix FEN<< piece_bitboard, whose_turn, <<flags, <<ep_sq = chess_start_from_fen(fen_string);
+      print("%\n", fen_string);
+      if !chess_fen(chess, fen_string) then {
+        print("fail fen parsing.\n");
+        chess_startpos(chess);
+      }
     }
     reset(chess, moves_arr);
     return;
@@ -926,8 +931,6 @@ handle_undo_move :: (window: *GLFWwindow, chess: *Chess, moves_arr: *[..] Move16
       undo_key_state = .UNDO_KEY_PRESS;
       if move_record {
         board_state := pop(*move_record);
-        // NOTE: need to flip whose_turn BEFORE generate_legal_moves, else we would get the opposite side's moves
-        // by accident. We also need to copy the flags from the board_state BEFORE generate_legal_moves!
         unmake_move(chess, board_state.move, board_state.captured, board_state.flags);
         pop(*hash_record);
         
@@ -1036,9 +1039,7 @@ ui_handle_move_made :: (chess: *Chess, moves_arr: *[..] Move16, mov: Move16) {
   // record the move down 
   record_move: Board_States;
   record_move.move = mov;
-  record_move.flags = chess.castling;
-  record_move.en_paesant_sq = chess.en_passant;
-  record_move.captured = make_move(chess, mov);
+  record_move.captured, record_move.flags = make_move(chess, mov);
   array_add(*move_record, record_move);
   array_reset(moves_arr);
   // TODO: FIX!!!
@@ -1131,7 +1132,6 @@ move_record: [..] Board_States;
 Board_States :: struct {
   move: Move16;
   flags: Castling;
-  en_paesant_sq: u64;
   captured: Piece;
 }
 
