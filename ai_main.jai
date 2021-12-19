@@ -13,7 +13,7 @@ main :: () {
   fifty := 0;
 
   setup_stdin(); // set STDIN to non-blocking.
-  while true {
+  while !should_quit {
     reset_stop_signal();
     input := getline();
     if equal(input, "quit") {
@@ -132,7 +132,7 @@ main :: () {
       }
 
       using Move16;
-      flags, from, to := decode_move(mov);
+      flags, from, to := decode_move16(mov);
       // hopefully promote the piece functions correctly...
       if flags == Knight_Promotion || flags == Knight_Promotion_Capture {
         print("bestmove %1%2n\n", cast(serialized_bb) from, cast(serialized_bb) to);
@@ -156,6 +156,9 @@ stdin_stop_signal :: () -> bool {
     for line: split(str, "\n") {
       if equal(line, "stop") {
         __stop_signal = true;
+      } else if equal(line, "quit") {
+        __stop_signal = true;
+        should_quit = true;
       } else {
         enqueue(line);
       }
@@ -173,6 +176,7 @@ reset_stop_signal :: () #expand {
 }
 
 #scope_file
+should_quit := false;
 
 uci_response :: #string DONE
 uciok

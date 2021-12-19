@@ -16,8 +16,8 @@ WIN_SCORE :: 200_000;
 #scope_file
 
 nnue_evaluate :: (chess: *Chess, fifty: int) -> int {
-  pieces  := NewArray(33, s32, allocator=__temporary_allocator);
-  squares := NewArray(33, s32, allocator=__temporary_allocator);
+  pieces : [40] s32;
+  squares: [40] s32;
   pieces[0] = xx Piece.W_KING;
   squares[0] = xx bit_scan_forward(chess.w_king);
 
@@ -33,6 +33,8 @@ nnue_evaluate :: (chess: *Chess, fifty: int) -> int {
       index += 1;
     }
   }
+  pieces[index] = 0;
+  squares[index] = 0;
   
   eval := __nnue_evaluate(xx chess.turn, pieces.data, squares.data);
   return (eval * (100 - fifty)) / 100;

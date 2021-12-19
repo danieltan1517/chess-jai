@@ -30,6 +30,8 @@ END
 
 fen_string := "startpos";
 
+Quiescene :: struct {} //DUMMY TODO: get rid of this!
+
 main :: () {
   print(welcome_message);
   white_side := true;
@@ -486,7 +488,6 @@ draw_chess :: (width: float, height: float, chess: *Chess, texture: *Texture, hi
 
   draw_bitboard(last_move_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, YELLOW);
   draw_bitboard(possible_moves_bb, u0=0.0, v0=0.0, u1=1.0, v1=1.0, GREY);
-  draw_bitboard(chess.occupied, u0=0.0, v0=0.0, u1=1.0, v1=1.0, RED);
 
   if coordinates_on == true && font {
     // add board labels.
@@ -544,7 +545,7 @@ draw_chess :: (width: float, height: float, chess: *Chess, texture: *Texture, hi
   }
 
   draw_move :: (move: Move16, c: Vector4) #expand {
-    _, from, to := decode_move(move);
+    _, from, to := decode_move16(move);
     i0, j0, i1, j1 := 0;
     if white_side {
       i0, j0 = from & 7, from >> 3;
@@ -858,7 +859,7 @@ handle_board_click :: (width: float, height: float, chess: *Chess, moves_arr: *[
     }
   case .PIECE_PROMOTION;
     if wants_to_promote {
-      type, from_i, to_i := decode_move(promote_move);
+      type, from_i, to_i := decode_move16(promote_move);
       from := cast(u64) (1 << from_i);
       to   := cast(u64) (1 << to_i);
       mov: Move16;
@@ -913,7 +914,7 @@ handle_flip_board :: (window: *GLFWwindow, white_side: bool)->bool {
 
 undo_key_state: enum {UNDO_KEY_IDLE; UNDO_KEY_PRESS; } = .UNDO_KEY_IDLE;
 
-add_move :: (moves: *[..] Move16, from: int, to: int, flags: Move16) {
+add_move :: (chess: *Chess, moves: *[..] Move16, from: int, to: int, flags: Move16, in_check: bool) {
   //print("%1%2\n", cast(serialized_bb) from, cast(serialized_bb)to);
   array_add(moves, to_move16(from, to, flags));
 }
@@ -951,7 +952,7 @@ handle_undo_move :: (window: *GLFWwindow, chess: *Chess, moves_arr: *[..] Move16
         promote_move = cast(Move16) 0;
         if move_record {
           last_board_state := move_record[move_record.count - 1];
-          type, x, y := decode_move(last_board_state.move);
+          type, x, y := decode_move16(last_board_state.move);
           last_move_bb = (cast(u64)(1 << x)) | (cast(u64)(1 << y));
         } else {
           last_move_bb = 0;
@@ -994,7 +995,7 @@ reset :: (chess: *Chess, moves_arr: *[..]Move16) {
   promote_move = cast(Move16) 0;
   if move_record {
     last_board_state := move_record[move_record.count - 1];
-    type, x, y := decode_move(last_board_state.move);
+    type, x, y := decode_move16(last_board_state.move);
     last_move_bb = (cast(u64)(1 << x)) | (cast(u64)(1 << y));
   } else {
     last_move_bb = 0;
@@ -1038,6 +1039,7 @@ handle_reset :: (window: *GLFWwindow, chess: *Chess, moves_arr: *[..] Move16) {
 ui_handle_move_made :: (chess: *Chess, moves_arr: *[..] Move16, mov: Move16) {
   before_pawn := chess.w_pawn | chess.b_pawn;
   timer_on = true;
+  status: ChessFlags;
   // record the move down 
   record_move: Board_States;
   record_move.move = mov;
@@ -1045,40 +1047,32 @@ ui_handle_move_made :: (chess: *Chess, moves_arr: *[..] Move16, mov: Move16) {
   array_add(*move_record, record_move);
   array_reset(moves_arr);
   // TODO: FIX!!!
-  <<moves_arr = generate_moves(chess, [..] Move16);
+  <<moves_arr, status = generate_moves(chess, [..] Move16);
   after_pawn := chess.w_pawn | chess.b_pawn;
 
   // zero if there has been a capture, or a pawn has moved.
   // else we hash.
   hash : u64 = 0;
-  f := decode_move(mov);
+  f := decode_move16(mov);
   if f == Move16.Quiet && before_pawn == after_pawn {
     hash = 0; //zobrist_hash(chess, whose_turn); // TODO FIX ZOBRIST.
   }
 
   array_add(*hash_record, hash);
-  if moves_arr.count == 0 {
-    if check_bb != 0 {
-      __game_status_text = "Checkmate.";
-      timer_on = false;
-    } else {
-      __game_status_text = "Stalemate.";
-      timer_on = false;
-    }
-  } else if hash != 0 && check_for_repetition(hash_record, hash) {
+  if status == ChessFlags.Checkmate {
+    __game_status_text = "Checkmate.";
+    timer_on = false;
+  } else if status == ChessFlags.Stalemate {
+    __game_status_text = "Stalemate.";
+    timer_on = false;
+  } else if status == ChessFlags.Threefold_Repetition {
     __game_status_text = "Stalemate by threefold repetition.";
     array_reset(moves_arr);
     timer_on = false;
-  } else if check_bb != 0 {
+  } else if status == ChessFlags.Check {
     __game_status_text = "Check.";
   } else {
     __game_status_text = "";
-
-    //TF, opening_name := get_opening_name(move_record, opening_book);
-    // TODO: Optimize this. 
-    /*if TF then {
-      __game_status_text = opening_name;
-    }*/
   }
 
   highlight_the_square = 0;
@@ -1231,7 +1225,7 @@ uci_ai_loop :: (using engine: *UCI_Engine, chess: *Chess, moves_arr: *[..]Move16
         TF, mov := pick_random_opening(move_record, opening_book);
         if TF && mov != 0 {
           ui_handle_move_made(chess, flags, ep_sq, moves_arr, mov);
-          f, fbb, tbb := decode_move(mov);
+          f, fbb, tbb := decode_move16(mov);
           from := cast(u64)(1 << fbb);
           to   := cast(u64)(1 << tbb);
           last_move_bb = from|to;
@@ -1704,7 +1698,7 @@ load_opening_book :: (file_path: string) -> *BookNode {
 
     // linear search through the legal moves
     for mov : moves_arr {
-      f, from, to := decode_move(mov);
+      f, from, to := decode_move16(mov);
       from_mov_bb := cast(u64) (1 << from);
       to_mov_bb   := cast(u64) (1 << to);
       if (from_mov_bb & from_bitboard) && (to_mov_bb == to_bitboard) {
@@ -1752,7 +1746,7 @@ find_move :: (moves: [..]Move16, from: int, to: int, typ: Move16=Move16.Quiet) -
 possible_moves_for :: (moves: [..] Move16, from: u64) -> u64 {
   ret: u64 = 0;
   for move: moves {
-    type, i, j := decode_move(move);
+    type, i, j := decode_move16(move);
     from_move := cast(u64) (1 << i);
     to_move   := cast(u64) (1 << j);
     if from == from_move {
@@ -1761,3 +1755,4 @@ possible_moves_for :: (moves: [..] Move16, from: u64) -> u64 {
   }
   return ret;
 }
+

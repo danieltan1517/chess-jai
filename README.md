@@ -68,3 +68,4 @@ The chess GUI uses the glfw3 and gl libraries.
 
 ## Some articles to read: 
 * https://www.codeproject.com/Articles/5313417/Worlds-fastest-Bitboard-Chess-Movegenerator
+* https://www.chessprogramming.org/SEE_-_The_Swap_Algorithm
