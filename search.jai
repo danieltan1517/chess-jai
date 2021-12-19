@@ -531,7 +531,7 @@ perft :: (chess: *Chess, depth: int) -> int {
 
   auto_release_temp();
   num_nodes := 0;
-  moves := generate_moves(chess, Perft(80));
+  moves, f := generate_moves(chess, Perft(80));
   for move : moves {
     piece, flags := make_move(chess, move);
     num_nodes = num_nodes + perft(chess, depth-1);

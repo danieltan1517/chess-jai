@@ -30,8 +30,6 @@ END
 
 fen_string := "startpos";
 
-Quiescene :: struct {} //DUMMY TODO: get rid of this!
-
 main :: () {
   print(welcome_message);
   white_side := true;
