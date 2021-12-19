@@ -700,13 +700,13 @@ generate_moves_for :: (chess: *Chess, $turn: Turn, $T: Type) -> T, ChessFlags {
     while quiets {
       to_sq := bit_scan_forward(quiets);
       add_move(chess, *move_gen, king_sq, to_sq, Move16.Quiet);
-      quiets &= quiets - 1;
+      quiets = popbit(quiets);
     }
     captures := to_bitboard & occupied;
     while captures {
       to_sq := bit_scan_forward(captures);
       add_move(chess, *move_gen, king_sq, to_sq, Move16.Capture);
-      captures &= captures - 1;
+      captures = popbit(captures);
     }
   }
 

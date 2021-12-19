@@ -96,7 +96,7 @@ negamax :: (chess: *Chess, depth: int, repetitions: *[..]u64, $null_flag := true
   mate_distance_pruning();
   internal_iterative_deepening();
 
-  move_array, status := generate_moves(chess, Heap(Move16, 80));
+  move_array, status := generate_moves(chess, Negamax(Move16, 80));
 
   check_for_checkmate_stalemate();
   zugzwang := has_zugzwang(chess);
@@ -454,8 +454,7 @@ quiescene :: (chess: *Chess, alpha: int, beta: int, fifty: int = 0) -> int {
     return 0;
   auto_release_temp();
   eval := evaluate(chess, fifty);
-  return eval;
-  /*if eval >= beta then
+  if eval >= beta then
     return beta;
 
   // delta pruning:
@@ -472,10 +471,7 @@ quiescene :: (chess: *Chess, alpha: int, beta: int, fifty: int = 0) -> int {
   if alpha < eval then
     alpha = eval; 
 
-  move_array: [..] Move16;
-  array_reserve(*move_array, 40);
-  moves, status := generate_moves(chess, [..] Move16);
-  capture_order(chess, move_array);
+  moves, status := generate_moves(chess, Quiescene(Move16, 30));
   // search captures only, captures negate the fifty move rule
   for move: moves {
     cap, flags := make_move(chess, move);
@@ -488,7 +484,7 @@ quiescene :: (chess: *Chess, alpha: int, beta: int, fifty: int = 0) -> int {
       alpha = score;
   }
 
-  return alpha;*/
+  return alpha;
 
   can_delta_prune :: (using chess: *Chess) -> bool #expand {
     w := w_queen | w_rook | w_bishop | w_knight;
@@ -611,7 +607,7 @@ __killer_moves:    [2][64] Move16;
 __counter_moves:   [13][64] Move16;
 
 // get something off the ground.
-TSIZE :: 0x400_000;
+TSIZE :: 0x1;
 
 ttable : struct {
   hash:     [TSIZE] u64;
@@ -632,13 +628,19 @@ clear_hash_table :: () #expand {
 }
 
 #scope_export
-Heap :: struct(T: Type, $N: int) {
+Negamax :: struct(T: Type, $N: int) {
   items: [N] T;
   score: [N] int;
   count: int;
 }
 
-heap_pop :: (using heap: *$H/Heap) -> H.T, int {
+Quiescene :: struct(T: Type, $N: int) {
+  items: [N] T;
+  score: [N] int;
+  count: int;
+}
+
+heap_pop :: (using heap: *$Q/Quiescene) -> Q.T, int {
   it := items[0];
   sc := score[0];
 
@@ -672,7 +674,7 @@ heap_pop :: (using heap: *$H/Heap) -> H.T, int {
   }
 }
 
-heap_add :: (using heap: *$H/Heap, item: H.T, num: int) {
+heap_add :: (using heap: *$Q/Quiescene, item: Q.T, num: int) {
   child  := count;
   parent := (child-1) / 2;
   items[count] = item;
@@ -692,7 +694,82 @@ heap_add :: (using heap: *$H/Heap, item: H.T, num: int) {
   }
 }
 
-add_move :: (chess: *Chess, heap: *$H/Heap, from: int, to: int, $flags: Move16) {
+heap_pop :: (using heap: *$Neg/Negamax) -> Neg.T, int {
+  it := items[0];
+  sc := score[0];
+
+  items[0] = items[count-1];
+  score[0] = score[count-1];
+  i := 0;
+  back := count-1;
+  while i < back {
+    l := (i*2)+1;
+    r := (i*2)+2;
+    largest := i;
+    if l < back && score[l] > score[largest] then
+      largest = l;
+    if r < back && score[r] > score[largest] then
+      largest = r;
+    if largest == i then {
+      break;
+    }
+
+    swap(score[i], score[largest]);
+    swap(items[i], items[largest]);
+    i = largest;
+  }
+  count-=1;
+  return it, sc;
+
+  swap :: (a: Code, b: Code) #expand {
+    t := (#insert a);
+    (#insert a) = (#insert b);
+    (#insert b) = t;
+  }
+}
+
+heap_add :: (using heap: *$Neg/Negamax, item: Neg.T, num: int) {
+  child  := count;
+  parent := (child-1) / 2;
+  items[count] = item;
+  score[count] = num;
+  count += 1;
+  while child > 0 && score[parent] < score[child] {
+    swap(score[parent], score[child]);
+    swap(items[parent], items[child]);
+    child = parent;
+    parent = (child-1) / 2;
+  }
+
+  swap :: (a: Code, b: Code) #expand {
+    t := (#insert a);
+    (#insert a) = (#insert b);
+    (#insert b) = t;
+  }
+}
+
+add_move :: (chess: *Chess, heap: *$Q/Quiescene, from: int, to: int, $flags: Move16) {
+  using Move16;
+
+  score := 0;
+  move := to_move16(from, to, flags);
+  #if flags == Capture {
+    att := piece_at(chess, from);
+    vic := piece_at(chess, to);
+    score = mvv_lva(vic, att);
+    heap_add(heap, move, score);
+  }
+  #if flags == Ep_Capture {
+    score = mvv_lva(Piece.W_PAWN, Piece.W_PAWN);
+    heap_add(heap, move, score);
+  }
+  #if flags == Queen_Promotion || flags == Queen_Promotion_Capture {
+    score = 90000;
+    heap_add(heap, move, score);
+  }
+}
+
+add_move :: (chess: *Chess, heap: *$Neg/Negamax, from: int, to: int, $flags: Move16) {
   using Move16;
 
   move := to_move16(from, to, flags);
@@ -751,7 +828,17 @@ Perft :: struct($N: int) {
   array: [N] Move16;
 }
 
-for_expansion :: (using heap: *$H/Heap, code: Code, f: For_Flags) #expand {
+for_expansion :: (using heap: *$Q/Quiescene, code: Code, f: For_Flags) #expand {
+  i := 0;
+  while heap.count > 0 {
+    mov, score := heap_pop(heap);
+    `it, `it_index := mov, i;
+    #insert code;
+    i += 1;
+  }
+}
+
+for_expansion :: (using heap: *$Neg/Negamax, code: Code, f: For_Flags) #expand {
   i := 0;
   while heap.count > 0 {
     mov, score := heap_pop(heap);
