@@ -88,7 +88,6 @@ main :: () {
   //zobrist_init_globals();
   init_global_bitboards();
   chess: Chess;
-  array_reserve(*hash_record, 200); // records the game down. I use this struct to backtrack and undo moves
   array_reserve(*move_record, 200); // records the game down. I use this struct to backtrack and undo moves
   flags: Castling = Castling.All;
   ep_sq: u64 = 0;
@@ -318,16 +317,12 @@ console_write_command :: (engines: *[..] UCI_Engine, str: string, chess: *Chess,
     return;
 
   case "fen";
-    print("fen\n");
     reset(chess, moves_arr);
-    if !equal(fen_string, "startpos") then {
-      free(fen_string);
-    }
     while str && str[0] == #char " " {
       advance(*str, 1);
     }
     if str {
-      fen_string = copy_string(str);
+      fen_string = copy_string(str); // TODO: eventually need to free memory up.
       if equal(fen_string, "startpos") then {
         chess_startpos(chess);
       } else {
@@ -337,7 +332,6 @@ console_write_command :: (engines: *[..] UCI_Engine, str: string, chess: *Chess,
           chess_startpos(chess);
         }
       }
-      reset(chess, moves_arr);
     }
     return;
 
@@ -933,13 +927,11 @@ handle_undo_move :: (window: *GLFWwindow, chess: *Chess, moves_arr: *[..] Move16
       if move_record {
         board_state := pop(*move_record);
         unmake_move(chess, board_state.move, board_state.captured, board_state.flags);
-        pop(*hash_record);
         
         while move_record && !w_human_turn(chess) && !b_human_turn(chess) {
           board_state := pop(*move_record);
           reset_lines(chess.turn == Turn.WHITE);
           unmake_move(chess, board_state.move, board_state.captured, board_state.flags);
-          pop(*hash_record);
         }
 
         array_reset(moves_arr); // TODO:
@@ -982,12 +974,10 @@ reset :: (chess: *Chess, moves_arr: *[..]Move16) {
   while move_record {
     board_state := pop(*move_record);
     unmake_move(chess, board_state.move, board_state.captured, board_state.flags);
-    pop(*hash_record);
   }
 
   array_reset(moves_arr); // TODO: is this a leak???
   <<moves_arr = generate_moves(chess, [..]Move16);
-
   highlight_the_square = 0;
   possible_moves_bb = 0;
   promote_move = cast(Move16) 0;
@@ -1018,14 +1008,8 @@ handle_reset :: (window: *GLFWwindow, chess: *Chess, moves_arr: *[..] Move16) {
     if n_state == GLFW_PRESS && (l_ctrl_key == GLFW_PRESS || r_ctrl_key == GLFW_PRESS) {
       reset_key_state = .RESET_PRESS;
       reset(chess, moves_arr);
-      if !equal(fen_string, "startpos") then {
-        free(fen_string);
-      }
       fen_string = "startpos";
       chess_startpos(chess);
-      reset(chess, moves_arr);
-
-
     }
   case .RESET_PRESS;
     if n_state == GLFW_RELEASE || (l_ctrl_key == GLFW_RELEASE && r_ctrl_key == GLFW_RELEASE) {
@@ -1043,20 +1027,12 @@ ui_handle_move_made :: (chess: *Chess, moves_arr: *[..] Move16, mov: Move16) {
   record_move.move = mov;
   record_move.captured, record_move.flags = make_move(chess, mov);
   array_add(*move_record, record_move);
+
   array_reset(moves_arr);
   // TODO: FIX!!!
   <<moves_arr, status = generate_moves(chess, [..] Move16);
   after_pawn := chess.w_pawn | chess.b_pawn;
 
-  // zero if there has been a capture, or a pawn has moved.
-  // else we hash.
-  hash : u64 = 0;
-  f := decode_move16(mov);
-  if f == Move16.Quiet && before_pawn == after_pawn {
-    hash = 0; //zobrist_hash(chess, whose_turn); // TODO FIX ZOBRIST.
-  }
-
-  array_add(*hash_record, hash);
   if status == ChessFlags.Checkmate {
     __game_status_text = "Checkmate.";
     timer_on = false;
@@ -1076,19 +1052,6 @@ ui_handle_move_made :: (chess: *Chess, moves_arr: *[..] Move16, mov: Move16) {
   highlight_the_square = 0;
   possible_moves_bb = 0;
   promote_move = cast(Move16) 0;
-
-  check_for_repetition :: (hash_record: [] u64, hash: u64) -> bool #expand {
-    count := 0;
-    fifty := 0;
-    for < hash_record {
-      if it == 0 break;
-      if it == hash {
-        count += 1;
-      }
-      fifty += 1;
-    }
-    return count >= 3 || fifty >= 100;
-  }
 
 }
 
@@ -1120,7 +1083,6 @@ UI_PIECE :: enum {
 promtion_type := UI_PIECE.UI_QUEEN;
 promote_move : Move16;
 
-hash_record: [..] u64;
 move_record: [..] Board_States;
 
 Board_States :: struct {
@@ -1174,6 +1136,7 @@ uci_position_command :: () -> string {
 }
 
 uci_ai_loop :: (using engine: *UCI_Engine, chess: *Chess, moves_arr: *[..]Move16) {
+  print("uci_state = %\n", uci_state);
   if uci_state == {
   case .UCI_INIT;
     uci_write_command(engine, "uci\n");
@@ -1248,6 +1211,7 @@ uci_ai_loop :: (using engine: *UCI_Engine, chess: *Chess, moves_arr: *[..]Move16
     }
 
   case .UCI_GO_TURN;
+
     can_make_move := true;
     // need to make sure AI does not transform into human halfway.
     if !(((equal(w_engine_name, engine.name) && !w_is_human && chess.turn == Turn.WHITE)) || 
@@ -1262,10 +1226,12 @@ uci_ai_loop :: (using engine: *UCI_Engine, chess: *Chess, moves_arr: *[..]Move16
       uci_write_command(engine, "stop\n");
       timeout_timer = 0.0;
       uci_state = .UCI_NEWGAME;
+      print("timeout!\n");
     } else if timeout_timer >= timeout_limit {
       uci_write_command(engine, "stop\n");
       print("timeout!\n");
       timeout_timer = 0.0;
+      uci_state = .UCI_NEWGAME;
     } 
 
     for message: uci_messages(engine) {

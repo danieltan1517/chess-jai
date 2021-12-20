@@ -27,7 +27,7 @@ search :: (chess: *Chess, repetitions: *[..] u64, depth: int, fifty: int) -> Mov
     __search_counter = (__search_counter + 1) % 64;
 
     time_taken := get_time() - time_begin;
-    if stop_signal_triggered() then 
+    if cur_depth > 1 then //&& stop_signal_triggered() then 
       break;
 
     if score <= alpha then {
@@ -43,9 +43,9 @@ search :: (chess: *Chess, repetitions: *[..] u64, depth: int, fifty: int) -> Mov
       continue;
     }
 
-    //alpha = score - delta;
-    //beta  = score + delta;
-    //delta = 50;
+    alpha = score - delta;
+    beta  = score + delta;
+    delta = 50;
     best_move = pv_table[0][0];
     print_stats(cur_depth);
     cur_depth += 1;
@@ -80,7 +80,7 @@ negamax :: (chess: *Chess, depth: int, repetitions: *[..]u64, $null_flag := true
   pmove = prev_move;
   FULL_DEPTH_MOVES :: 4;
   REDUCTION_LIMIT  :: 4;
-  if (__nodes_searched & 16384) && stdin_stop_signal()
+  if (__nodes_searched & 1024) && stdin_stop_signal()
     return 0;
   auto_release_temp();
   pv_node := alpha != beta-1;
@@ -130,7 +130,7 @@ negamax :: (chess: *Chess, depth: int, repetitions: *[..]u64, $null_flag := true
          && status != ChessFlags.Check && mflag <= Move16.Double_Pawn_Push {
 
         // do late move reduction when not in check and making "quiet moves" 
-        R := 1;  //LateMoveReduction[min(depth,63)][min(moves_searched,63)];
+        R := LateMoveReduction[min(depth,63)][min(moves_searched,63)];
         eval = -negamax(chess, depth-R-1, repetitions, null_flag, -alpha-1, -alpha, next_fifty, move);
       } else {
         // do normal search.
@@ -259,7 +259,7 @@ negamax :: (chess: *Chess, depth: int, repetitions: *[..]u64, $null_flag := true
     NULL_MOVE_MAX :: 4;
     // check for zugwang before null move pruning && TODO: make sure engine doesn't bug out at en paesant.
     if ply && null_flag && depth >= NULL_MOVE_MAX && status != ChessFlags.Check && !zugzwang {
-      R := 2; //min( math.abs(static_eval - beta) / 205, 2) + depth / 3 + 3;
+      R := min( math.abs(static_eval - beta) / 205, 2) + depth / 3 + 3;
       make_null_move(chess);
       score := -negamax(chess, depth-R-1, repetitions, false, -beta, -beta + 1, fifty, Move16.Quiet);
       unmake_null_move(chess);
@@ -461,7 +461,7 @@ INF :: 0x7FF_FFFF; // Alias
 // search capture moves only, we do this to avoid horizon effect
 // see: https://www.chessprogramming.org/Quiescence_Search
 quiescene :: (chess: *Chess, alpha: int, beta: int, fifty: int = 0) -> int {
-  if (__nodes_searched & 16384) && stdin_stop_signal()
+  if (__nodes_searched & 1024) && stdin_stop_signal()
     return 0;
   __nodes_searched += 1;
   auto_release_temp();
@@ -493,7 +493,6 @@ quiescene :: (chess: *Chess, alpha: int, beta: int, fifty: int = 0) -> int {
     if alpha < eval then
       alpha = eval; 
   }
-
   // search captures only, captures negate the fifty move rule
   for move: moves {
     cap, flags := make_move(chess, move);

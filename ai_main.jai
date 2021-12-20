@@ -13,7 +13,7 @@ main :: () {
   fifty := 0;
 
   setup_stdin(); // set STDIN to non-blocking.
-  while !should_quit {
+  while true {
     reset_stop_signal();
     input := getline();
     if equal(input, "quit") {
@@ -158,7 +158,7 @@ stdin_stop_signal :: () -> bool {
         __stop_signal = true;
       } else if equal(line, "quit") {
         __stop_signal = true;
-        should_quit = true;
+        exit(0);
       } else {
         enqueue(line);
       }
@@ -176,7 +176,6 @@ reset_stop_signal :: () #expand {
 }
 
 #scope_file
-should_quit := false;
 
 uci_response :: #string DONE
 uciok
@@ -193,7 +192,7 @@ getline :: () -> string {
     return dequeue();
   reset_queue();
   bytes_read := 0;
-  memset(__buffer.data, 0, __buffer.count);
+  memset(__buffer.data, 0, size_of(type_of(__buffer)));
   while true {
     bytes_read = read(STDIN_FILENO, __buffer.data, __buffer.count-1);
     if bytes_read > 0
