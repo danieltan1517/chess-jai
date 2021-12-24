@@ -105,6 +105,14 @@ negamax :: (chess: *Chess, depth: int, repetitions: *[..]u64, $null_flag := true
   for move, moves_searched : move_array {
     mflag, from, to := decode_move16(move);
 
+    // skip bad captures. SEE algorithm.
+    pfrom := cast(int) piece_at(chess, from);
+    pto   := cast(int) piece_at(chess, to);
+
+    // see pruning.
+    if mflag == Move16.Capture && PVALUE[pfrom] > PVALUE[pto] && see(chess, move) < -depth*218 then
+      continue;
+
     // make move.
     cap, castling := make_move(chess, move);
     ply += 1;
@@ -147,7 +155,7 @@ negamax :: (chess: *Chess, depth: int, repetitions: *[..]u64, $null_flag := true
       alpha = beta;
       piece_type := piece_at(chess, from);
       if cap == Piece.NONE {
-        __history_moves[piece_type][to] += depth*depth;
+        __history_moves[piece_type][to] += depth;
         _pm_flag, pm_from, pm_to := decode_move16(prev_move);
         prev_type := piece_at(chess, to);
         __counter_moves[prev_type][pm_to] = move;
@@ -490,7 +498,6 @@ quiescene :: (chess: *Chess, alpha: int, beta: int, fifty: int = 0) -> int {
     if status == ChessFlags.Normal && is_bad_capture(move) then
       continue;
 
-
     cap, flags := make_move(chess, move);
     score := -quiescene(chess, -beta, -alpha, fifty=0);
     unmake_move(chess, move, cap, flags);
@@ -512,7 +519,6 @@ quiescene :: (chess: *Chess, alpha: int, beta: int, fifty: int = 0) -> int {
   is_promoting_pawn :: inline (using chess: *Chess) -> bool {
     return ((w_pawn|b_pawn) & xx (rank_7|rank_2)) != 0;
   }
-
 
   is_bad_capture :: (move: Move16) -> bool #expand {
     _, from, to := decode_move16(move);
@@ -968,19 +974,19 @@ PVALUE :: #run -> [13] int {
   using Piece;
   array: [13] int;
   array[cast(int)NONE     ] = 0;
-  array[cast(int)W_KING   ] = 1000;
-  array[cast(int)W_QUEEN  ] =   10;
-  array[cast(int)W_ROOK   ] =    5;
-  array[cast(int)W_BISHOP ] =    3;
-  array[cast(int)W_KNIGHT ] =    3;
-  array[cast(int)W_PAWN   ] =    1;
+  array[cast(int)W_KING   ] = 100000;
+  array[cast(int)W_QUEEN  ] =   1000;
+  array[cast(int)W_ROOK   ] =    500;
+  array[cast(int)W_BISHOP ] =    300;
+  array[cast(int)W_KNIGHT ] =    300;
+  array[cast(int)W_PAWN   ] =    100;
 
-  array[cast(int)B_KING   ] = 1000;
-  array[cast(int)B_QUEEN  ] =   10;
-  array[cast(int)B_ROOK   ] =    5;
-  array[cast(int)B_BISHOP ] =    3;
-  array[cast(int)B_KNIGHT ] =    3;
-  array[cast(int)B_PAWN   ] =    1;
+  array[cast(int)B_KING   ] = 100000;
+  array[cast(int)B_QUEEN  ] =   1000;
+  array[cast(int)B_ROOK   ] =    500;
+  array[cast(int)B_BISHOP ] =    300;
+  array[cast(int)B_KNIGHT ] =    300;
+  array[cast(int)B_PAWN   ] =    100;
   return array;
 }
 

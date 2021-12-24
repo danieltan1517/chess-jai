@@ -1754,7 +1754,11 @@ initialize_zobrist_hashing :: () {
   }
   zobrist_ep[0] = 0;
   for i: 1..63 {
-    zobrist_ep[i] = random_u64(*prng);
+    bit := cast(u64)  (1<<i);
+    epbits := cast(u64) (rank_3|rank_6);
+    if bit & epbits then {
+      zobrist_ep[i] = random_u64(*prng);
+    }
   }
 }
 

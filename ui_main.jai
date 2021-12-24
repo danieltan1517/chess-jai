@@ -326,7 +326,6 @@ console_write_command :: (engines: *[..] UCI_Engine, str: string, chess: *Chess,
       if equal(fen_string, "startpos") then {
         chess_startpos(chess);
       } else {
-        print("%\n", fen_string);
         if !chess_fen(chess, fen_string) then {
           print("fail fen parsing.\n");
           chess_startpos(chess);

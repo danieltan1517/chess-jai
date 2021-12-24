@@ -50,8 +50,8 @@ main :: () {
       index :=  find_index_from_left(input, "moves");
       // TODO: fen parsing may not work correctly against malicious inputs
       fen_string := ifx index != -1 then slice(input, 0, index) else input;
-      print("fen = %\n", fen_string);
       if !chess_fen(*chess, fen_string) {
+        print("invalid fen %\n", fen_string);
         chess_startpos(*chess);
         return;
       }
