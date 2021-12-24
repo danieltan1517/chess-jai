@@ -62,10 +62,11 @@ The chess GUI uses the glfw3 and gl libraries.
 * Simple Mop-Up Endgame Evaluation.
 * Countermove Heuristic
 * Mate Distance Pruning
+* SEE Quiescene Search Pruning
 
 ## Still needs to be implemented
 * NNUE Incremental Update: https://www.talkchess.com/forum3/viewtopic.php?f=7&t=75415&start=3
+* Zobrist Hashing Incremental Update
 
 ## Some articles to read: 
 * https://www.codeproject.com/Articles/5313417/Worlds-fastest-Bitboard-Chess-Movegenerator
-* https://www.chessprogramming.org/SEE_-_The_Swap_Algorithm

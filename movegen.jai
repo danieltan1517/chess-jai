@@ -166,12 +166,6 @@ get_pieces :: (using chess: *Chess) -> u64 #expand {
          b_pawn|b_bishop|b_knight|b_rook|b_queen|b_king;
 }
 
-bit_scan_forward :: (input: u64)->int #expand {
-  result := -1;
-  #asm { bsf.q result, input; }
-  return result;
-}
-
 move_is_promotion :: inline (using m: Move16) -> bool {
   type, from, to := decode_move16(m);
   return Knight_Promotion <= type && type <= Queen_Promotion_Capture;
@@ -217,7 +211,6 @@ unmake_null_move :: (chess: *Chess) #expand {
 
 make_move :: (chess: *Chess, move: Move16) -> captured: Piece, Castling {
   flags, sq, to_sq := decode_move16(move);
-  // TODO:... handle promotion...
   chess.en_passant = 0;
   from := cast(u64) (1 << sq);
   to   := cast(u64) (1 << to_sq);
@@ -638,7 +631,7 @@ Castling :: enum_flags u8 {
 
 Turn :: enum s32 { WHITE :: 0; BLACK :: 1; };
 
-#scope_file
+//#scope_file
 
 using Bitboard :: enum_flags u64 {
   a1; b1; c1; d1; e1; f1; g1; h1;
@@ -1231,48 +1224,6 @@ generate_attacks :: (chess: *Chess, $turn: Turn) -> att: u64, check: u64 {
   return att, check;
 }
 
-get_king :: (chess: *Chess, $turn: Turn) -> u64 #expand {
-  #if turn == Turn.WHITE then 
-    return chess.w_king;
-  #if turn == Turn.BLACK then
-    return chess.b_king; 
-}
-
-get_queen :: (chess: *Chess, $turn: Turn) -> u64 #expand {
-  #if turn == Turn.WHITE then 
-    return chess.w_queen;
-  #if turn == Turn.BLACK then
-    return chess.b_queen; 
-}
-
-get_rook :: (chess: *Chess, $turn: Turn) -> u64 #expand {
-  #if turn == Turn.WHITE then 
-    return chess.w_rook;
-  #if turn == Turn.BLACK then
-    return chess.b_rook; 
-}
-
-get_bishop :: (chess: *Chess, $turn: Turn) -> u64 #expand {
-  #if turn == Turn.WHITE then 
-    return chess.w_bishop;
-  #if turn == Turn.BLACK then
-    return chess.b_bishop; 
-}
-
-get_knight :: (chess: *Chess, $turn: Turn) -> u64 #expand {
-  #if turn == Turn.WHITE then
-    return chess.w_knight;
-  #if turn == Turn.BLACK then
-    return chess.b_knight;
-}
-
-get_pawn :: (chess: *Chess, $turn: Turn) -> u64 #expand {
-  #if turn == Turn.WHITE then
-    return chess.w_pawn;
-  #if turn == Turn.BLACK then
-    return chess.b_pawn;
-}
-
 PRNG :: struct {
   seed: u64;
 }
@@ -1831,6 +1782,47 @@ zobrist_hash :: (using chess: *Chess) -> hash: u64 {
   }
 }
 
+get_king :: (chess: *Chess, $turn: Turn) -> u64 #expand {
+  #if turn == Turn.WHITE then 
+    return chess.w_king;
+  #if turn == Turn.BLACK then
+    return chess.b_king; 
+}
+
+get_queen :: (chess: *Chess, $turn: Turn) -> u64 #expand {
+  #if turn == Turn.WHITE then 
+    return chess.w_queen;
+  #if turn == Turn.BLACK then
+    return chess.b_queen; 
+}
+
+get_rook :: (chess: *Chess, $turn: Turn) -> u64 #expand {
+  #if turn == Turn.WHITE then 
+    return chess.w_rook;
+  #if turn == Turn.BLACK then
+    return chess.b_rook; 
+}
+
+get_bishop :: (chess: *Chess, $turn: Turn) -> u64 #expand {
+  #if turn == Turn.WHITE then 
+    return chess.w_bishop;
+  #if turn == Turn.BLACK then
+    return chess.b_bishop; 
+}
+
+get_knight :: (chess: *Chess, $turn: Turn) -> u64 #expand {
+  #if turn == Turn.WHITE then
+    return chess.w_knight;
+  #if turn == Turn.BLACK then
+    return chess.b_knight;
+}
+
+get_pawn :: (chess: *Chess, $turn: Turn) -> u64 #expand {
+  #if turn == Turn.WHITE then
+    return chess.w_pawn;
+  #if turn == Turn.BLACK then
+    return chess.b_pawn;
+}
 
 
 

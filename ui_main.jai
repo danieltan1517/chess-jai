@@ -1136,7 +1136,6 @@ uci_position_command :: () -> string {
 }
 
 uci_ai_loop :: (using engine: *UCI_Engine, chess: *Chess, moves_arr: *[..]Move16) {
-  print("uci_state = %\n", uci_state);
   if uci_state == {
   case .UCI_INIT;
     uci_write_command(engine, "uci\n");
@@ -1231,7 +1230,6 @@ uci_ai_loop :: (using engine: *UCI_Engine, chess: *Chess, moves_arr: *[..]Move16
       uci_write_command(engine, "stop\n");
       print("timeout!\n");
       timeout_timer = 0.0;
-      uci_state = .UCI_NEWGAME;
     } 
 
     for message: uci_messages(engine) {
