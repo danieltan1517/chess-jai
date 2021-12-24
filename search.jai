@@ -21,7 +21,6 @@ search :: (chess: *Chess, repetitions: *[..] u64, depth: int, fifty: int) -> Mov
   delta: int = 50;
   cur_depth := 1;
   while cur_depth <= depth { 
-    clear_hash_table();
     reset_temporary_storage();
     score = negamax(chess, cur_depth, repetitions, alpha=alpha, beta=beta, fifty=fifty, prev_move=Move16.Quiet);
     __search_counter = (__search_counter + 1) % 64;
