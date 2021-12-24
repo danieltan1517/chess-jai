@@ -23,8 +23,6 @@ search :: (chess: *Chess, repetitions: *[..] u64, depth: int, fifty: int) -> Mov
   while cur_depth <= depth { 
     reset_temporary_storage();
     score = negamax(chess, cur_depth, repetitions, alpha=alpha, beta=beta, fifty=fifty, prev_move=Move16.Quiet);
-    __search_counter = (__search_counter + 1) % 64;
-
     time_taken := get_time() - time_begin;
     if stop_signal_triggered() then 
       break;
@@ -74,6 +72,7 @@ search :: (chess: *Chess, repetitions: *[..] u64, depth: int, fifty: int) -> Mov
 
 ply := 0;
 pmove: Move16;
+h_move := Move16.Quiet;
 
 negamax :: (chess: *Chess, depth: int, repetitions: *[..]u64, $null_flag := true, alpha := -INF, beta := INF, fifty: int, prev_move: Move16) -> int {
   pmove = prev_move;
@@ -83,7 +82,7 @@ negamax :: (chess: *Chess, depth: int, repetitions: *[..]u64, $null_flag := true
     return 0;
   pv_node := alpha != beta-1;
   __nodes_searched += 1;
-  //transposition_table_lookup();
+  transposition_table_lookup(chess.hash);
 
   if depth <= 0 then {
     pv_table_count[ply] = 0;
@@ -93,8 +92,8 @@ negamax :: (chess: *Chess, depth: int, repetitions: *[..]u64, $null_flag := true
 
   mate_distance_pruning();
   internal_iterative_deepening();
-
-  move_array, status := generate_moves(chess, Negamax(Move16, 80));
+  move_gen: Negamax(Move16, 80);
+  status := generate_moves(chess, *move_gen);
 
   check_for_checkmate_stalemate();
   reverse_futility_pruning();
@@ -102,24 +101,27 @@ negamax :: (chess: *Chess, depth: int, repetitions: *[..]u64, $null_flag := true
   razoring();
 
   hash_flag := TFLAGS.ALPHA;
-  for move, moves_searched : move_array {
+  for move, moves_searched : move_gen {
     mflag, from, to := decode_move16(move);
 
     // skip bad captures. SEE algorithm.
     pfrom := cast(int) piece_at(chess, from);
     pto   := cast(int) piece_at(chess, to);
 
-    // see pruning.
-    if mflag == Move16.Capture && PVALUE[pfrom] > PVALUE[pto] && see(chess, move) < -depth*218 then
+    // see pruning. TODO: does not handle pins!
+    if mflag == Move16.Capture 
+    && depth<4 && PVALUE[pfrom] > PVALUE[pto] 
+    && see(chess, move) < -depth*218 then
       continue;
 
     // make move.
-    cap, castling := make_move(chess, move);
+    cap, castling, hash := make_move(chess, move);
     ply += 1;
     next_fifty := 0;
-    if mflag == Move16.Quiet && (((cast(u64) (1 << to)) & (chess.w_pawn|chess.b_pawn)) == 0) {
+
+    // not a capture/pawn move.
+    if cap == Piece.NONE || ((chess.w_pawn|chess.b_pawn) & xx (1 << to)) then
       next_fifty = fifty + 1;
-    }
 
     eval := 0;
     if moves_searched == 0 {
@@ -147,7 +149,7 @@ negamax :: (chess: *Chess, depth: int, repetitions: *[..]u64, $null_flag := true
         eval = -negamax(chess, depth-1, repetitions, null_flag, -beta, -alpha, next_fifty, move);
       } 
     }
-    unmake_move(chess, move, cap, castling);
+    unmake_move(chess, move, cap, castling, hash);
     ply -= 1;
 
     if eval >= beta then {
@@ -176,7 +178,7 @@ negamax :: (chess: *Chess, depth: int, repetitions: *[..]u64, $null_flag := true
     } 
   }
 
-  //transposition_table_store();
+  transposition_table_store(chess.hash);
   return alpha;
 
   mate_distance_pruning :: () #expand {
@@ -190,29 +192,27 @@ negamax :: (chess: *Chess, depth: int, repetitions: *[..]u64, $null_flag := true
     }
   }
 
-  transposition_table_lookup :: () #expand {
-    `hash := zobrist_hash(pieces, castling, ep, whose_turn);
-    `key  := hash % TSIZE;
-    `h_move := Move16.Quiet;
+  transposition_table_lookup :: (hash: u64) #expand {
+    key  := hash % TSIZE;
+    h_move = Move16.Quiet;
     if ttable.hash[key] == hash then {
       entry := *ttable.entries[key];
       h_move = entry.bmove;
       value := entry.score;
-      flag  := entry.flag & 0x3;
-      counter := cast(int) (entry.flag >> 2);
-      if counter == __search_counter && ply > 0 && entry.depth >= depth {
+      flag  := entry.flag;
+      if !pv_node && ply > 0 && entry.depth >= depth {
         if flag == {
         case TFLAGS.EXACT;
         `return value;
 
         case TFLAGS.ALPHA;
         if value <= alpha then {
-          `return value; 
+          `return alpha; 
         }
 
         case TFLAGS.BETA;
         if value >= beta then {
-          `return value; 
+          `return beta; 
         }
 
         }
@@ -220,15 +220,12 @@ negamax :: (chess: *Chess, depth: int, repetitions: *[..]u64, $null_flag := true
     }
   }
 
-  transposition_table_store :: () #expand {
+  transposition_table_store :: (hash: u64) #expand {
+    key  := hash % TSIZE;
     entry := *ttable.entries[key];
-    counter := cast(int) (entry.flag >> 2);
-    if entry.depth == 50 && counter == __search_counter
-      return;
-
     ttable.hash[key] = hash;
     entry.score = xx alpha;
-    entry.flag = (xx (__search_counter<<2)) | hash_flag;
+    entry.flag = hash_flag;
     entry.depth = xx depth;
     entry.bmove = h_move;
   }
@@ -245,21 +242,6 @@ negamax :: (chess: *Chess, depth: int, repetitions: *[..]u64, $null_flag := true
     if fifty >= 100 then {
       `return 0 + ply;
     }
-
-/*  TODO: Need to complete zobrist hashing before doing draw checking.
-    count := 0;
-    reps := 0;
-    while count < fifty {
-      i := max(repetitions.count-1-count, 0);
-      if (<<repetitions) && hash == (<<repetitions) [i] then {
-        reps += 1;
-        if reps >= 2 then {
-          status = Threefold_Repetition;
-        }
-      }
-      count += 1;
-    }
-*/
   }
 
   null_move_pruning :: () #expand {
@@ -309,7 +291,7 @@ negamax :: (chess: *Chess, depth: int, repetitions: *[..]u64, $null_flag := true
   }
 
   internal_iterative_deepening :: () #expand {
-    if pv_node && depth >= 7 && pv_table[ply][0] == 0 { 
+    if pv_node && h_move == 0 && depth >= 7 && pv_table[ply][0] == 0 { 
       for cur_depth: 1..depth-2 {
         negamax(chess, cur_depth, repetitions, alpha=alpha, beta=beta, fifty=fifty, prev_move=prev_move);
         if stop_signal_triggered() then 
@@ -429,24 +411,24 @@ perft_all :: () {
 }
 
 perft_divide :: (chess: *Chess, depth: int) -> int {
-  push_allocator(temp);
   taken := get_time();
   if depth <= 0 then return 1;
   num_nodes := 0;
-  moves := generate_moves(chess, Perft(80));
-  print("moves from here: %\n", moves.count);
-  for move : moves {
-    cap, flags := make_move(chess, move);
-    add := perft(chess, depth-1);
-    type, from, to := decode_move16(move);
-    print("%1%2: %3 nodes\n", cast(serialized_bb)from, cast(serialized_bb)to, add);
+  movegen: Perft(80);
+  generate_moves(chess, *movegen);
+  print("moves from here: %\n\n", movegen.count);
+  for move : movegen {
+    cap, flags, hash := make_move(chess, move);
+    move_count := perft(chess, depth-1);
+    _, from, to := decode_move16(move);
+    print("%1%2: %3 nodes\n", cast(serialized_bb)from, cast(serialized_bb)to, move_count);
 
-    num_nodes = num_nodes + add;
-    unmake_move(chess, move, cap, flags);
+    num_nodes += move_count;
+    unmake_move(chess, move, cap, flags, hash);
   }
 
   taken = get_time() - taken;
-  print("Total: % nodes, Time taken: %\n", num_nodes, taken);
+  print("Total: % nodes, Time taken: %\n\n", num_nodes, taken);
   return num_nodes;
 }
 
@@ -463,7 +445,8 @@ quiescene :: (chess: *Chess, alpha: int, beta: int, fifty: int = 0) -> int {
   if (__nodes_searched & 1024) && stdin_stop_signal()
     return 0;
   __nodes_searched += 1;
-  moves, status := generate_moves(chess, Quiescene(Move16, 30));
+  moves: Quiescene(Move16, 30);
+  status := generate_moves(chess, *moves);
   using ChessFlags;
   if status == {
   case Stalemate;
@@ -498,9 +481,9 @@ quiescene :: (chess: *Chess, alpha: int, beta: int, fifty: int = 0) -> int {
     if status == ChessFlags.Normal && is_bad_capture(move) then
       continue;
 
-    cap, flags := make_move(chess, move);
+    cap, flags, hash := make_move(chess, move);
     score := -quiescene(chess, -beta, -alpha, fifty=0);
-    unmake_move(chess, move, cap, flags);
+    unmake_move(chess, move, cap, flags, hash);
 
     if score >= beta then
       return beta;
@@ -530,8 +513,6 @@ quiescene :: (chess: *Chess, alpha: int, beta: int, fifty: int = 0) -> int {
   }
 }
 
-__search_counter := 0;
-
 pv_table: [64][64] Move16;
 pv_table_count: [64] int;
 
@@ -540,11 +521,13 @@ pv_table_count: [64] int;
 perft :: (chess: *Chess, depth: int) -> int {
   if depth == 0 then return 1;
   num_nodes := 0;
-  moves, f := generate_moves(chess, Perft(80));
-  for move : moves {
-    piece, flags := make_move(chess, move);
-    num_nodes = num_nodes + perft(chess, depth-1);
-    unmake_move(chess, move, piece, flags);
+  if zobrist_hash(chess) != chess.hash print("ERROR\n");
+  movegen: Perft(80);
+  generate_moves(chess, *movegen);
+  for move : movegen {
+    piece, flags, hash := make_move(chess, move);
+    num_nodes += perft(chess, depth-1);
+    unmake_move(chess, move, piece, flags, hash);
   }
   return num_nodes;
 }
@@ -591,7 +574,7 @@ __killer_moves:    [64][2] Move16;
 __counter_moves:   [13][64] Move16;
 
 // get something off the ground.
-TSIZE :: 0x1;
+TSIZE :: 0x1000;
 
 ttable : struct {
   hash:     [TSIZE] u64;
@@ -773,6 +756,11 @@ add_move :: (chess: *Chess, heap: *$Neg/Negamax, from: int, to: int, $flags: Mov
   // move is part of principle variation. store it.
   if move == pv_table[ply][0] then {
     score = INF;
+    heap_add(heap, move, score);
+    return;
+  }
+  if move == h_move then {
+    score = INF-1;
     heap_add(heap, move, score);
     return;
   }

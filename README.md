@@ -52,7 +52,7 @@ The chess GUI uses the glfw3 and gl libraries.
 * Hash Move
 * Killer Moves Move Ordering
 * History Moves Move Ordering
-* Zobrist Hashing
+* Zobrist Hashing w/ Incremental Update
 * Transposition Table 
 * 3-fold repetition & fifty-move rule (still some bugs.)
 * Late Move Reduction
@@ -66,7 +66,6 @@ The chess GUI uses the glfw3 and gl libraries.
 
 ## Still needs to be implemented
 * NNUE Incremental Update: https://www.talkchess.com/forum3/viewtopic.php?f=7&t=75415&start=3
-* Zobrist Hashing Incremental Update
 
 ## Some articles to read: 
 * https://www.codeproject.com/Articles/5313417/Worlds-fastest-Bitboard-Chess-Movegenerator
