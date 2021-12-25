@@ -68,7 +68,7 @@ The chess GUI uses the glfw3 and gl libraries.
 * Countermove Heuristic
 
 ### Evaluation
-* (NNUE)[https://github.com/dshawul/nnue-probe for NNUE] (Efficiently Updatable Neural Networks) for chess evaluation function
+* [NNUE](https://github.com/dshawul/nnue-probe) (Efficiently Updatable Neural Networks) for chess evaluation function
 * Simple Mop-Up Endgame Evaluation.
 
 ## Still needs to be implemented
