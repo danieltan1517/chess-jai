@@ -14,7 +14,6 @@ main :: () {
   while true {
     reset_stop_signal();
     input := getline();
-    print("Received: %\n", input);
     if equal(input, "quit") {
       print("Engine exit.\n");
       break;
@@ -98,11 +97,9 @@ main :: () {
   go_command :: (input: string, chess: *Chess, fifty: int) {
     parse_token(*input);
     token := parse_token(*input);
-    print("searching...\n");
     if token == {
     case "depth";
       depth, TF := parse_int(*input);
-      print("searching... depth %\n", depth);
       if !TF || depth < 1 return;
       mov := search(chess, depth, fifty);
       print_best_move(mov);

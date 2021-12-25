@@ -16,11 +16,11 @@ search :: (chess: *Chess, depth: int, fifty: int) -> Move16 {
   beta:  int =  INF;
   delta: int = 50;
   cur_depth := 1;
-  print("inside search function.\n");
+
+  push_allocator(temp);
   while cur_depth <= depth { 
-    print("calling negamax.\n");
+    reset_temporary_storage();
     score = negamax(chess, cur_depth, alpha=alpha, beta=beta, fifty=fifty, prev_move=Move16.Quiet);
-    print("negamax end.\n");
     time_taken := get_time() - time_begin;
     if cur_depth > 1 && stop_signal_triggered() then 
       break;
@@ -48,7 +48,6 @@ search :: (chess: *Chess, depth: int, fifty: int) -> Move16 {
   return best_move;
 
   print_stats :: (depth: int) #expand {
-    push_allocator(temp);
     builder: String_Builder;
     t_ms := cast(int)(`time_taken*1000.0); // convert secs to ms
     nps  := cast(int)(__nodes_searched/(`time_taken+0.0001));
@@ -97,18 +96,14 @@ negamax :: (chess: *Chess, depth: int, $null_flag := true, alpha := -INF, beta :
 
   if pv_node && depth >= 7 && pv_table[ply][0] == 0 { 
     for cur_depth: 1..depth-2 {
-      negamax(chess, cur_depth, alpha=alpha, beta=beta, fifty=fifty, prev_move=prev_move);
+      score := negamax(chess, cur_depth, null_flag=null_flag, alpha=alpha, beta=beta, fifty=fifty, prev_move=prev_move);
       if stop_signal_triggered() then 
-        break;
+        return score;
     }
   }
 
-  move_gen: Negamax(Move16, 200);
-  move_gen.pv = pv_table[ply][0];
-  move_gen.hmove = Move16.Quiet;
-  move_gen.killer1 = __killer_moves[ply][1];
-  move_gen.killer2 = __killer_moves[ply][0];
-  move_gen.pmove   = prev_move;
+  auto_release_temp();
+  move_gen := init_negamax(pv_table[ply][0], Move16.Quiet, __killer_moves[ply][0], __killer_moves[ply][1], prev_move);
   status := generate_moves(chess, *move_gen);
 
   if status == {
@@ -395,7 +390,7 @@ perft_divide :: (chess: *Chess, depth: int) -> int {
   taken := get_time();
   if depth <= 0 then return 1;
   num_nodes := 0;
-  movegen: Perft(70);
+  movegen: Perft(80);
   generate_moves(chess, *movegen);
   ep := chess.en_passant;
   print("moves from here: %\n\n", movegen.count);
@@ -429,7 +424,8 @@ quiescene :: (chess: *Chess, alpha: int, beta: int, fifty: int = 0) -> int {
     return 0;
   __nodes_searched += 1;
 
-  moves: Quiescene(Move16, 30);
+  auto_release_temp();
+  moves := init_quiescene();
   status := generate_moves(chess, *moves);
   using ChessFlags;
   if status == {
@@ -507,9 +503,8 @@ pv_table_count: [64] int;
 perft :: (chess: *Chess, depth: int) -> int {
   if depth == 0 then return 1;
   num_nodes := 0;
-  movegen: Perft(70);
+  movegen: Perft(80);
   generate_moves(chess, *movegen);
-
   ep := chess.en_passant;
   for move : movegen {
     piece, flags, hash := make_move(chess, move);
@@ -583,9 +578,9 @@ clear_hash_table :: () #expand {
 }
 
 #scope_export
-Negamax :: struct(T: Type, $N: int) {
-  items: [N] T;
-  score: [N] int;
+Negamax :: struct($T: Type) {
+  items: [] T;
+  score: [] int;
   count: int;
 
   pv     : Move16;
@@ -595,9 +590,30 @@ Negamax :: struct(T: Type, $N: int) {
   pmove  : Move16;
 }
 
-Quiescene :: struct(T: Type, $N: int) {
-  items: [N] T;
-  score: [N] int;
+init_negamax :: (pv: Move16, hmove: Move16, killer1: Move16, killer2: Move16, pmove  : Move16) -> Negamax(Move16) {
+  n: Negamax(Move16);
+  n.items = NewArray(200, Move16);
+  n.score = NewArray(200, int);
+  n.count = 0;
+  n.pv      = pv;
+  n.hmove   = hmove;
+  n.killer1 = killer1;
+  n.killer2 = killer2;
+  n.pmove   = pmove;
+  return n;
+}
+
+init_quiescene :: () -> Quiescene(Move16) {
+  q: Quiescene(Move16);
+  q.items = NewArray(30, Move16);
+  q.score = NewArray(30, int);
+  q.count = 0;
+  return q;
+}
+
+Quiescene :: struct(T: Type) {
+  items: [] T;
+  score: [] int;
   count: int;
 }
 
@@ -846,7 +862,6 @@ see :: (chess: *Chess, move: Move16) -> eval: int {
   _, from, to := decode_move16(move);
   target := cast(int) piece_at(chess, to);
   apiece := cast(int) piece_at(chess, from);
-  //print("%1, %2, (%3%4)\n", target, apiece, cast(serialized_bb)from, cast(serialized_bb)to);
 
   gain: [32] int;
   d := 0;
@@ -873,7 +888,6 @@ see :: (chess: *Chess, move: Move16) -> eval: int {
       attadef |= consider_x_rays(occupied, to, from_set);
 
     from_set, apiece = get_least_valuable_piece(attadef, turn);
-    //print("from %, to %, attackers: %\n\n", cast(Bitboard)from_set, cast(serialized_bb)to, popcount(attadef));
   }
 
   for < i: d..1 {

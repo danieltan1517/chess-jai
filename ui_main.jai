@@ -52,9 +52,8 @@ main :: () {
   glfwSetCharCallback(window, console_text_input);
   im_init_gl();
   path := tprint("%1%2", #filepath, "resources/");
-  font = load_font(path, "AnonymousPro.ttf", 20); // @@ Search system fonts automatically?
+  font = load_font(path, "AnonymousPro.ttf", 20);
 
-  //opening_book = load_opening_book("resources/openings.txt");
   t := New(Texture);
   defer {
     destroy_texture(t);
@@ -85,7 +84,6 @@ main :: () {
     }
   }
 
-  //zobrist_init_globals();
   init_global_bitboards();
   chess: Chess;
   array_reserve(*move_record, 200); // records the game down. I use this struct to backtrack and undo moves
@@ -323,6 +321,8 @@ console_write_command :: (engines: *[..] UCI_Engine, str: string, chess: *Chess,
         }
       }
     }
+    
+    generate_moves(chess, moves_arr);
     return;
 
   case "white";
@@ -334,14 +334,6 @@ console_write_command :: (engines: *[..] UCI_Engine, str: string, chess: *Chess,
         w_is_human = false;
         return;
       }
-    }
-    return;
-  case "opening_book";
-    if str == {
-    case "true";
-      openings_on = true;
-    case "false";
-      openings_on = false;
     }
     return;
 
@@ -778,7 +770,7 @@ handle_board_click :: (width: float, height: float, chess: *Chess, moves_arr: *[
       from := highlight_the_square;
       to   := sq;
       if to & possible_moves_bb {
-        mov := find_move(<<moves_arr, bit_scan_forward(from), bit_scan_forward(to));
+        mov := find_move(moves_arr, bit_scan_forward(from), bit_scan_forward(to));
         if move_is_promotion(mov) {
           // bring up promotion interface.
           piece_select_state = .PIECE_PROMOTION;
@@ -897,12 +889,6 @@ handle_undo_move :: (window: *GLFWwindow, chess: *Chess, moves_arr: *[..] Move16
           __game_status_text = "Check.";
         } else {
           __game_status_text = "";
-         
-          /*TF, opening_name := get_opening_name(move_record, opening_book);
-          // TODO: Optimize this. 
-          if TF then {
-            __game_status_text = opening_name;
-          }*/
         }
       }
     }
@@ -917,23 +903,14 @@ reset_key_state: enum { RESET_IDLE; RESET_PRESS; } = .RESET_IDLE;
 
 reset :: (chess: *Chess, moves_arr: *[..]Move16) {
   timer_on = false;
-  while move_record {
-    board_state := pop(*move_record);
-    unmake_move(chess, board_state.move, board_state.captured, board_state.flags, board_state.hash);
-  }
-
+  array_reset(*move_record);
   array_reset(moves_arr); // TODO: is this a leak???
+  chess_startpos(chess);
   generate_moves(chess, moves_arr);
+  last_move_bb = 0;
   highlight_the_square = 0;
   possible_moves_bb = 0;
   promote_move = cast(Move16) 0;
-  if move_record {
-    last_board_state := move_record[move_record.count - 1];
-    type, x, y := decode_move16(last_board_state.move);
-    last_move_bb = (cast(u64)(1 << x)) | (cast(u64)(1 << y));
-  } else {
-    last_move_bb = 0;
-  }
   __game_status_text = "";
   w_clock_time = 30.0*60.0;
   b_clock_time = 30.0*60.0;
@@ -953,7 +930,6 @@ handle_reset :: (window: *GLFWwindow, chess: *Chess, moves_arr: *[..] Move16) {
       reset_key_state = .RESET_PRESS;
       reset(chess, moves_arr);
       fen_string = "startpos";
-      chess_startpos(chess);
     }
   case .RESET_PRESS;
     if n_state == GLFW_RELEASE || (l_ctrl_key == GLFW_RELEASE && r_ctrl_key == GLFW_RELEASE) {
@@ -1157,7 +1133,7 @@ uci_ai_loop :: (using engine: *UCI_Engine, chess: *Chess, moves_arr: *[..]Move16
         parse_token(*message);
         TF, from, to, type := parse_move(message);
         assert(TF, "null move.\n");
-        actual_move := find_move(<<moves_arr, from, to, type);
+        actual_move := find_move(moves_arr, from, to, type);
         if actual_move {
           ui_handle_move_made(chess, moves_arr, actual_move);
           last_move_bb = cast(u64)((1<<from)|(1<<to));
@@ -1350,22 +1326,22 @@ UCI_Engine :: struct {
   pid: pid_t;
   read_pipe:  s32;
   write_pipe: s32;
-  depth: int = 12;
+  depth: int = 8;
 }
 
 
 font : *Dynamic_Font;
 
-find_move :: (moves: [..]Move16, from: int, to: int, typ: Move16=Move16.Quiet) -> Move16 {
+find_move :: (moves: *[..]Move16, from: int, to: int, typ: Move16=Move16.Quiet) -> Move16 {
   if typ == Move16.Quiet {
-    for mov: moves {
+    for mov: <<moves {
       flags, from2, to2 := decode_move16(mov);
       if from == from2 && to == to2 {
         return mov;
       }
     }
   } else if Move16.Knight_Promotion <= typ && typ <= Move16.Queen_Promotion_Capture {
-    for mov: moves {
+    for mov: <<moves {
       flags, fr2, to2 := decode_move16(mov);
       if from == fr2 && to == to2 && ((flags == typ) || flags == (typ + xx 4)) {
         return mov;
