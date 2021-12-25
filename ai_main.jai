@@ -8,14 +8,13 @@ main :: () {
   initialize_ai_globals();
   chess: Chess;
   chess_startpos(*chess);
-  repetitions: [..] u64;
-  array_reserve(*repetitions, 200);
   fifty := 0;
 
   setup_stdin(); // set STDIN to non-blocking.
   while true {
     reset_stop_signal();
     input := getline();
+    print("Received: %\n", input);
     if equal(input, "quit") {
       print("Engine exit.\n");
       break;
@@ -33,14 +32,13 @@ main :: () {
       setup_position(input);
 
     } else if begins_with(input, "go ") {
-      go_command(input);
+      go_command(input, *chess, fifty);
     }
   }
 
   setup_position :: (input: string) #expand {
     // TODO: this does not guard against incoherent IO, this is just
     // to get it working... 
-    array_reset(*repetitions);
     fifty = 0;
     input = advance(input, 9);
     input = eat_spaces(input);
@@ -48,7 +46,6 @@ main :: () {
       input = advance(input, 4);
       input = eat_spaces(input);
       index :=  find_index_from_left(input, "moves");
-      // TODO: fen parsing may not work correctly against malicious inputs
       fen_string := ifx index != -1 then slice(input, 0, index) else input;
       if !chess_fen(*chess, fen_string) {
         print("invalid fen %\n", fen_string);
@@ -92,36 +89,33 @@ main :: () {
       to   := y2*8 + y1;
 
       promote := ifx token.count == 5 then token[4] else 0;
-      move_type := get_move_type(*chess, xx 1<<from, xx 1<<to, promote);
+      move_type := get_move_type(*chess, cast(u64) (1<<from), cast(u64) (1<<to), promote);
       move := to_move16(from, to, move_type);
-
-      before_pawn := chess.w_pawn | chess.b_pawn;
       make_move(*chess, move);
-      after_pawn := chess.w_pawn | chess.b_pawn;
-      hash : u64 = 0;
-      array_add(*repetitions, hash);
     }
   }
 
-  go_command :: (input: string) #expand {
-    input = advance(input, 3);
+  go_command :: (input: string, chess: *Chess, fifty: int) {
+    parse_token(*input);
     token := parse_token(*input);
+    print("searching...\n");
     if token == {
     case "depth";
       depth, TF := parse_int(*input);
+      print("searching... depth %\n", depth);
       if !TF || depth < 1 return;
-      mov := search(*chess, *repetitions, depth, fifty);
+      mov := search(chess, depth, fifty);
       print_best_move(mov);
 
     case "infinite";
       depth := INF;   // make the depth arbitrarily high.
-      mov := search(*chess, *repetitions, depth, fifty);
+      mov := search(chess, depth, fifty);
       print_best_move(mov);
 
     case "perft";
       depth, TF := parse_int(*input);
       if !TF return;
-      perft_divide(*chess, depth);
+      perft_divide(chess, depth);
     }
 
     print_best_move :: (mov: Move16) {

@@ -89,12 +89,12 @@ main :: () {
   init_global_bitboards();
   chess: Chess;
   array_reserve(*move_record, 200); // records the game down. I use this struct to backtrack and undo moves
-  flags: Castling = Castling.All;
   ep_sq: u64 = 0;
   
   chess_startpos(*chess);
-
-  moves_arr := generate_moves(*chess, [..]Move16);
+  moves_arr: [..] Move16;
+  array_reserve(*moves_arr, 80);
+  generate_moves(*chess, *moves_arr);
   while !glfwWindowShouldClose(window) {
     ftime := cast(float)get_time();
     read_mouse_input(window);
@@ -267,15 +267,6 @@ console_write_command :: (engines: *[..] UCI_Engine, str: string, chess: *Chess,
   }
 
   if command == {
-  case "engine_lines";
-    if str == {
-    case "true";
-      engine_lines_bool = true;
-    case "false";
-      engine_lines_bool = false;
-    }
-    return;
-
   case "board_theme";
     if str == {
     case "green";
@@ -508,33 +499,6 @@ draw_chess :: (width: float, height: float, chess: *Chess, texture: *Texture, hi
     draw_promotion_ui(promotion_sq);
   }
 
-
-  // DRAW ARROWS
-  if engine_lines_bool == true then {
-    white_color := Vector4.{1.0, 1.0, 1.0, 1};
-    black_color := Vector4.{0.0, 0.0, 0.0, 1};
-    im_set_texture(null);
-    if chess.turn == Turn.WHITE {
-      for i: 0..engine_line_count[0]-1 {
-        draw_move(engine_line[0][i], white_color);
-        white_color.w *= 0.90;
-      }
-      for i: 0..engine_line_count[1]-1 {
-        draw_move(engine_line[1][i], black_color);
-        black_color.w *= 0.90;
-      }
-    } else {
-      for i: 0..engine_line_count[1]-1 {
-        draw_move(engine_line[1][i], black_color);
-        black_color.w *= 0.90;
-      }
-      for i: 0..engine_line_count[0]-1 {
-        draw_move(engine_line[0][i], white_color);
-        white_color.w *= 0.90;
-      }
-    }
-  }
-
   draw_move :: (move: Move16, c: Vector4) #expand {
     _, from, to := decode_move16(move);
     i0, j0, i1, j1 := 0;
@@ -718,22 +682,6 @@ read_mouse_input :: (window: *GLFWwindow) {
   }
 }
 
-engine_lines_bool: bool = false;
-engine_line: [2][128] Move16;
-engine_line_count_w := 0;
-engine_line_count: [2] int;
-
-reset_lines :: (turn: bool) {
-  turn = !turn;
-  engine_line_count[cast(int)turn] = 0;
-}
-
-add_move :: (move: Move16, turn: bool) {
-  turn = !turn;
-  engine_line[cast(int)turn][engine_line_count[cast(int)turn]] = move;
-  engine_line_count[cast(int)turn] += 1;
-}
-
 handle_board_click :: (width: float, height: float, chess: *Chess, moves_arr: *[..] Move16, white_side := true) {
   cen_x := width * 0.5; 
   cen_y := height * 0.5;
@@ -906,8 +854,8 @@ handle_flip_board :: (window: *GLFWwindow, white_side: bool)->bool {
 undo_key_state: enum {UNDO_KEY_IDLE; UNDO_KEY_PRESS; } = .UNDO_KEY_IDLE;
 
 add_move :: (chess: *Chess, moves: *[..] Move16, from: int, to: int, flags: Move16, in_check: bool) {
-  //print("%1%2\n", cast(serialized_bb) from, cast(serialized_bb)to);
-  array_add(moves, to_move16(from, to, flags));
+  move := to_move16(from, to, flags);
+  array_add(moves, move);
 }
 
 handle_undo_move :: (window: *GLFWwindow, chess: *Chess, moves_arr: *[..] Move16) {
@@ -925,16 +873,15 @@ handle_undo_move :: (window: *GLFWwindow, chess: *Chess, moves_arr: *[..] Move16
       undo_key_state = .UNDO_KEY_PRESS;
       if move_record {
         board_state := pop(*move_record);
-        unmake_move(chess, board_state.move, board_state.captured, board_state.flags);
+        unmake_move(chess, board_state.move, board_state.captured, board_state.flags, board_state.hash);
         
         while move_record && !w_human_turn(chess) && !b_human_turn(chess) {
           board_state := pop(*move_record);
-          reset_lines(chess.turn == Turn.WHITE);
-          unmake_move(chess, board_state.move, board_state.captured, board_state.flags);
+          unmake_move(chess, board_state.move, board_state.captured, board_state.flags, board_state.hash);
         }
 
         array_reset(moves_arr); // TODO:
-        <<moves_arr = generate_moves(chess, [..]Move16);
+        status := generate_moves(chess, moves_arr);
 
         highlight_the_square = 0;
         possible_moves_bb = 0;
@@ -946,7 +893,7 @@ handle_undo_move :: (window: *GLFWwindow, chess: *Chess, moves_arr: *[..] Move16
         } else {
           last_move_bb = 0;
         }
-        if check_bb != 0 {
+        if status == ChessFlags.Check {
           __game_status_text = "Check.";
         } else {
           __game_status_text = "";
@@ -972,11 +919,11 @@ reset :: (chess: *Chess, moves_arr: *[..]Move16) {
   timer_on = false;
   while move_record {
     board_state := pop(*move_record);
-    unmake_move(chess, board_state.move, board_state.captured, board_state.flags);
+    unmake_move(chess, board_state.move, board_state.captured, board_state.flags, board_state.hash);
   }
 
   array_reset(moves_arr); // TODO: is this a leak???
-  <<moves_arr = generate_moves(chess, [..]Move16);
+  generate_moves(chess, moves_arr);
   highlight_the_square = 0;
   possible_moves_bb = 0;
   promote_move = cast(Move16) 0;
@@ -990,8 +937,6 @@ reset :: (chess: *Chess, moves_arr: *[..]Move16) {
   __game_status_text = "";
   w_clock_time = 30.0*60.0;
   b_clock_time = 30.0*60.0;
-  engine_line_count[0] = 0;
-  engine_line_count[1] = 0;
 }
 
 
@@ -1018,19 +963,17 @@ handle_reset :: (window: *GLFWwindow, chess: *Chess, moves_arr: *[..] Move16) {
 }
 
 ui_handle_move_made :: (chess: *Chess, moves_arr: *[..] Move16, mov: Move16) {
-  before_pawn := chess.w_pawn | chess.b_pawn;
   timer_on = true;
-  status: ChessFlags;
   // record the move down 
   record_move: Board_States;
   record_move.move = mov;
+  record_move.hash = chess.hash;
   record_move.captured, record_move.flags = make_move(chess, mov);
   array_add(*move_record, record_move);
 
   array_reset(moves_arr);
   // TODO: FIX!!!
-  <<moves_arr, status = generate_moves(chess, [..] Move16);
-  after_pawn := chess.w_pawn | chess.b_pawn;
+  status := generate_moves(chess, moves_arr);
 
   if status == ChessFlags.Checkmate {
     __game_status_text = "Checkmate.";
@@ -1051,7 +994,6 @@ ui_handle_move_made :: (chess: *Chess, moves_arr: *[..] Move16, mov: Move16) {
   highlight_the_square = 0;
   possible_moves_bb = 0;
   promote_move = cast(Move16) 0;
-
 }
 
 last_move_bb: u64 = 0;
@@ -1088,6 +1030,7 @@ Board_States :: struct {
   move: Move16;
   flags: Castling;
   captured: Piece;
+  hash: u64;
 }
 
 uci_position_command :: () -> string {
@@ -1158,7 +1101,6 @@ uci_ai_loop :: (using engine: *UCI_Engine, chess: *Chess, moves_arr: *[..]Move16
     }
 
   case .UCI_NEWGAME;
-    uci_write_command(engine, "ucinewgame\n");
     uci_state = .UCI_IDLE;
   case .UCI_IDLE;
     for message: uci_messages(engine) {
@@ -1172,30 +1114,11 @@ uci_ai_loop :: (using engine: *UCI_Engine, chess: *Chess, moves_arr: *[..]Move16
       
       if reset_key_state == .RESET_PRESS then {
         uci_state = .UCI_NEWGAME;
-      }
-
-      cmd_str := uci_position_command();
-      uci_write_command(engine, cmd_str);
-      uci_state = .UCI_POS_CMD;
-
-      /*else if openings_on == true && equal(fen_string, "startpos") && (cast(int)(random_get()) % 100) < 90 {
+      } else {
         cmd_str := uci_position_command();
         uci_write_command(engine, cmd_str);
-        TF, mov := pick_random_opening(move_record, opening_book);
-        if TF && mov != 0 {
-          ui_handle_move_made(chess, flags, ep_sq, moves_arr, mov);
-          f, fbb, tbb := decode_move16(mov);
-          from := cast(u64)(1 << fbb);
-          to   := cast(u64)(1 << tbb);
-          last_move_bb = from|to;
-        } else {
-          cmd_str := uci_position_command();
-          uci_write_command(engine, cmd_str);
-          uci_state = .UCI_POS_CMD;
-        }
-      } else {
-      }*/
-
+        uci_state = .UCI_POS_CMD;
+      }
     }
 
   case .UCI_POS_CMD;
@@ -1210,13 +1133,11 @@ uci_ai_loop :: (using engine: *UCI_Engine, chess: *Chess, moves_arr: *[..]Move16
 
   case .UCI_GO_TURN;
 
-    can_make_move := true;
     // need to make sure AI does not transform into human halfway.
     if !(((equal(w_engine_name, engine.name) && !w_is_human && chess.turn == Turn.WHITE)) || 
         ((equal(b_engine_name, engine.name) && !b_is_human && chess.turn == Turn.BLACK))) {
       uci_write_command(engine, "stop\n");
       timeout_timer = 0.0;
-      can_make_move = false;
     }
 
     timeout_timer += delta_time;
@@ -1227,24 +1148,14 @@ uci_ai_loop :: (using engine: *UCI_Engine, chess: *Chess, moves_arr: *[..]Move16
       print("timeout!\n");
     } else if timeout_timer >= timeout_limit {
       uci_write_command(engine, "stop\n");
-      print("timeout!\n");
       timeout_timer = 0.0;
+      print("timeout!\n");
     } 
 
     for message: uci_messages(engine) {
-      if reset_key_state == .RESET_PRESS {
-        continue;
-      }
-      if !can_make_move
-        continue;
-      if starts_with(message, "info ") {
-        handle_engine_info(engine, message);
-      }
-
       if starts_with(message, "bestmove ") {
         parse_token(*message);
         TF, from, to, type := parse_move(message);
-        // TODO: parse best move could fail, what to do if that happens????
         assert(TF, "null move.\n");
         actual_move := find_move(<<moves_arr, from, to, type);
         if actual_move {
@@ -1366,6 +1277,7 @@ init_uci_engine :: (engine_name: string, ai_path: string) -> UCI_Engine, bool {
 }
 
 uci_write_command :: (using engine: *UCI_Engine, command: string) {
+  print("writing:\n%\n", command);
   write(write_pipe, command.data, xx command.count);
 }
 
@@ -1443,247 +1355,6 @@ UCI_Engine :: struct {
 
 
 font : *Dynamic_Font;
-
-BookNode :: struct {
-  name : string;
-  moves: [..] Move16;
-  nodes: [..] *BookNode;
-}
-
-pick_random_opening :: (move_record: [..] Board_States, opening_book: *BookNode) -> bool, Move16 {
-  /*iter := opening_book;
-
-  for re: move_record {
-    move := re.move;
-
-    found, idx := array_find(iter.moves, move);
-    if !found then {
-      return false, Move16.Quiet;
-    }
-
-    iter = iter.nodes[idx];
-  }
-
-  if iter.moves.count == 0 then
-    return false, Move16.Quiet;
-
-  r := cast(int)random_get() % iter.moves.count;
-  return true, iter.moves[0];*/
-  return true, Move16.Quiet;
-}
-
-get_opening_name :: (move_record: [..] Board_States, opening_book: *BookNode) -> bool, string {
-  iter := opening_book;
-  ret := iter.name;
-  for re: move_record {
-    move := re.move;
-    found, idx := array_find(iter.moves, move);
-    if !found then {
-      return false, "bad";
-    }
-    iter = iter.nodes[idx];
-    ret = iter.name;
-  }
-
-  return true, ret;
-}
-
-handle_engine_info :: (engine: *UCI_Engine, message: string) {
-  /*while message {
-    tok, success := parse_token(*message);
-    if !success break;
-    if equal(tok, "pv") {   // TODO: FIX FIX FIX
-      reset_lines(whose_turn);
-      while message {
-        tok, success := parse_token(*message);
-        if !success break;
-        TF, from, to, type := parse_move(tok);
-        add_move(to_move16(from, to, type), whose_turn);
-      }
-    }
-  }*/
-}
-
-/*
-// TODO: This function leaks memory!
-load_opening_book :: (file_path: string) -> *BookNode {
-  text := read_entire_file(file_path);
-  lines := split(text, "\n");
-
-  opening_book: *BookNode = New(BookNode);
-
-  for line, i: lines {
-    if i == 0 || !line continue;
-
-    if line[0] == #char "#" continue; // TODO: Skip bugs for now...
-    advance(*line, 4);
-
-    t1_start := 0;
-    t1_end   := 0;
-
-    t2_start := 0;
-    t2_end   := 0;
-
-    j := 0;
-    if line[j] == #char "\"" {
-      j += 1;
-      t1_start = 1;
-      while line[j] != #char "\"" {
-        j += 1;
-      }
-      t1_end = j;
-    } else {
-      t1_start = 0;
-      while line[j] != #char "," {
-        j += 1;
-      }
-      t1_end = j;
-    }
-
-    t2_start = t1_end + 1;
-    t2_end   = line.count;
-    opening_name := slice(line, t1_start, t1_end - t1_start); 
-    moves := slice(line, t2_start, t2_end - t2_start);
-
-    pieces, whose_turn, castling, ep := chess_start_pos();
-    // TODO: this code is sloppy, need to fix.
-    node := opening_book;
-    for move_string : split(moves, " ") {
-      if !move_string continue;
-      capture := PieceType.None;
-      mov := parse_algebraic_notation(move_string, pieces, whose_turn, castling, ep);
-      make_move(*pieces, *castling, *ep, *capture, mov, whose_turn);
-      whose_turn = !whose_turn;
-
-      //node.name = opening_name;
-
-      found, idx := array_find(node.moves, mov);
-      if found then {
-        //node.name = opening_name;
-        node = node.nodes[idx];
-      } else {
-        // Add the move to the opening book
-        next_node := New(BookNode);
-        next_node.name = copy_string(opening_name);
-
-        array_add(*node.moves, mov);
-        array_add(*node.nodes, next_node);
-
-        node = next_node;
-      }
-    }
-  }
-
-  return opening_book;
-
-  parse_algebraic_notation :: (move_string: string, using chess: Chess) -> Move16 {
-
-    if move_string[0] == #char "," then    // TODO: parsing needs to be fixed!
-      advance(*move_string, 1);
-
-    if equal(move_string, "O-O") {
-      // castle kingside.
-      if turn == Turn.WHITE {
-        return to_move16(xx e1, xx g1, Move16.King_Castle);
-      } else {
-        return to_move16(xx e8, xx g8, Move16.King_Castle);
-      }
-    } else if equal(move_string, "O-O-O") {
-      if turn == Turn.WHITE {
-        return to_move16(xx e1, xx c1, Move16.Queen_Castle);
-      } else {
-        return to_move16(xx e8, xx c8, Move16.Queen_Castle);
-      }
-    }
-
-    from_bitboard : u64 = ~0;
-    to_bitboard   : u64 = ~0;
-
-    if move_string[0] == {
-    case #char "K";
-      from_bitboard &= ifx turn == Turn.WHITE w_king else b_king;
-      advance(*move_string, 1);
-    case #char "Q";
-      from_bitboard &= ifx turn == Turn.WHITE w_queen else b_queen;
-      advance(*move_string, 1);
-    case #char "R";
-      from_bitboard &= ifx turn == Turn.WHITE w_rook else b_rook;
-      advance(*move_string, 1);
-    case #char "B";
-      from_bitboard &= ifx turn == Turn.WHITE w_bishop else b_bishop;
-      advance(*move_string, 1);
-    case #char "N";
-      from_bitboard &= ifx turn == Turn.WHITE w_knight else b_knight;
-      advance(*move_string, 1);
-    case;
-      from_bitboard &= ifx turn == Turn.WHITE w_pawn else b_pawn;
-    }
-
-    bb: u64 = ~0;
-    if move_string[0] >= #char "a" && move_string[0] <= #char "h" {
-      bb &= file_of(move_string[0] - #char "a");
-      advance(*move_string, 1);
-    }
-
-    if move_string[0] >= #char "1" && move_string[0] <= #char "8" {
-      bb &= rank_of(move_string[0] - #char "1");
-      advance(*move_string, 1);
-    }
-
-    if !move_string || move_string[0] == #char "+" {
-      to_bitboard &= bb;
-    }
-
-    if move_string && move_string[0] == #char "x" {
-      from_bitboard &= bb;
-      advance(*move_string, 1);
-    }
-
-    if move_string && move_string[0] >= #char "a" && move_string[0] <= #char "h" {
-      from_bitboard &= bb;
-      to_bitboard &= file_of(move_string[0] - #char "a");
-      advance(*move_string, 1);
-    }
-
-    if move_string && move_string[0] >= #char "1" && move_string[0] <= #char "8" {
-      from_bitboard &= bb;
-      to_bitboard &= rank_of(move_string[0] - #char "1");
-      advance(*move_string, 1);
-    }
-
-    moves_arr: [..] Move16;
-    defer array_free(moves_arr);
-    array_reserve(*moves_arr, 50);
-
-    moves_arr := generate_moves(*chess);
-
-    // linear search through the legal moves
-    for mov : moves_arr {
-      f, from, to := decode_move16(mov);
-      from_mov_bb := cast(u64) (1 << from);
-      to_mov_bb   := cast(u64) (1 << to);
-      if (from_mov_bb & from_bitboard) && (to_mov_bb == to_bitboard) {
-        return mov;
-      }
-    }
-    // TODO: some of these WILL NOT load correctly!
-    //assert(false);
-    return Move16.Quiet;
-  }
-
-  file_of :: inline (i: int) -> u64 {
-    file: u64 = (cast(u64) file_a) << i;
-    return file;
-  }
-
-  rank_of :: inline (i: int) -> u64 {
-    rank: u64 = (cast(u64) rank_1) << (8*i);
-    return rank;
-  }
-}
-
-opening_book : *BookNode;
-*/
 
 find_move :: (moves: [..]Move16, from: int, to: int, typ: Move16=Move16.Quiet) -> Move16 {
   if typ == Move16.Quiet {

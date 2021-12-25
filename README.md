@@ -31,41 +31,45 @@ The chess GUI uses the glfw3 and gl libraries.
 * Console command-line
 
 ## AI Chess Engine Features
-* AI Estimated Rating: 2700 (based on playing chess.com bots)
-* Aspiration Window Search
+* Estimated AI Rating: 2700
+* Supports UCI protocol
 * Parse and load FEN strings
-* Iterative Deepening
-* Internal Iterative Deepening
-* Implements UCI (Universal Chess Interface) Protocol to communicate with a UI
-* Legal move generation and detection
-* Magic Bitboards
+
+### Board Representation
+* 8x8 Board
+* Bitboards with Little Endian Rank-File Mapping
+* Magic bitboards
 * Kogge-Stone Algorithm
-* Passes all perft tests
-* Implements Bitboards for fast move generation
-* Move generator can generate approximately 65 million positions per second
-* Uses https://github.com/dshawul/nnue-probe for NNUE (Efficiently Updatable Neural Networks) for chess evaluation function
+* Move generator can generate 55 million positions per second
+* Moves represented as 16-bit integers
+
+### Search and Pruning
+* Iterative Deepening
+* Aspiration Window Search
+* Internal Iterative Deepening
 * Negamax search with Alpha-Beta Pruning
-* Encodes Moves as 16-bit integers
-* Move Ordering
-* Principle Variation Move Ordering
-* MVV-LVA (Most Valuable Victim, Least Valuable Attacker) Implementation
-* Hash Move
-* Killer Moves Move Ordering
-* History Moves Move Ordering
-* Zobrist Hashing w/ Incremental Update
-* Transposition Table 
-* 3-fold repetition & fifty-move rule (still some bugs.)
+* Principle Variation Search
+* SEE Quiescene Search Pruning
 * Late Move Reduction
 * Null Move Pruning 
 * Reverse Futility Pruning/Static Move Pruning
 * Razoring
-* Simple Mop-Up Endgame Evaluation.
-* Countermove Heuristic
 * Mate Distance Pruning
-* SEE Quiescene Search Pruning
+
+### Transposition Table
+* 3-fold repetition & fifty-move rule (still some bugs.)
+* Zobrist Hashing w/ Incremental Update
+
+### Move Ordering
+* MVV-LVA (Most Valuable Victim, Least Valuable Attacker) Implementation
+* Transposition Table Hash Move
+* Killer Moves Move Ordering
+* History Moves Move Ordering
+* Countermove Heuristic
+
+### Evaluation
+* [NNUE](https://github.com/dshawul/nnue-probe for NNUE) (Efficiently Updatable Neural Networks) for chess evaluation function
+* Simple Mop-Up Endgame Evaluation.
 
 ## Still needs to be implemented
 * NNUE Incremental Update: https://www.talkchess.com/forum3/viewtopic.php?f=7&t=75415&start=3
-
-## Some articles to read: 
-* https://www.codeproject.com/Articles/5313417/Worlds-fastest-Bitboard-Chess-Movegenerator
