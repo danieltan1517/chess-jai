@@ -138,9 +138,8 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
 
   // null move pruning.
   NULL_MOVE_MAX :: 4;
-  // check for zugwang before null move pruning && TODO: make sure engine doesn't bug out at en paesant.
   if !pv_node && null_flag && depth >= NULL_MOVE_MAX && status == ChessFlags.Normal {
-    R := min((static_eval - beta) / 205, 2) + depth / 3 + 3;
+    R := min(math.abs(static_eval - beta) / 205, 2) + depth / 3 + 3;
     ep, hash := make_null_move(chess);
     score := -negamax(chess, depth-R-1, false, -beta, -beta + 1, fifty);
     unmake_null_move(chess, ep, hash);
@@ -455,9 +454,8 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
     return 0 + ply;
   case Checkmate;
     return -INF + ply;
-  case Check;
-    // no standing pat while in check.
   case Normal;
+    // no standing pat while in check, only when position is normal
     eval := evaluate(chess, fifty);
     if eval >= beta then
       return beta;
