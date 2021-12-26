@@ -1865,5 +1865,9 @@ get_pawn :: (chess: *Chess, $turn: Turn) -> u64 #expand {
     return chess.b_pawn;
 }
 
-
+zugzwang :: inline (using c: *Chess) -> bool {
+  w_pieces := w_queen|w_rook|w_bishop|w_knight;
+  b_pieces := b_queen|b_rook|b_bishop|b_knight;
+  return w_pieces == 0 || b_pieces == 0;
+}
 

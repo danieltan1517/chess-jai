@@ -71,9 +71,6 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
 }
 
 negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, beta := INF, fifty: int) -> int {
-  FULL_DEPTH_MOVES :: 4;
-  REDUCTION_LIMIT  :: 4;
-
   ply := chess.ply;
   pv_node := alpha != beta-1;
   h_move := transposition_table_lookup(chess.hash);
@@ -124,7 +121,8 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
   case ChessFlags.Stalemate;
     return 0 + ply;
   case ChessFlags.Fifty;
-    return 0 + ply;
+    if ply then
+      return 0 + ply;
   }
 
   // reverse futility pruning.
@@ -136,13 +134,14 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
     }
   }
 
-  // null move pruning.
-  NULL_MOVE_MAX :: 4;
-  if !pv_node && null_flag && depth >= NULL_MOVE_MAX && status == ChessFlags.Normal {
+  // null move pruning. check for zugzwang before searching.
+  if !pv_node && null_flag && depth > 3 && status == ChessFlags.Normal && !zugzwang(chess) then {
     R := min(math.abs(static_eval - beta) / 205, 2) + depth / 3 + 3;
+    chess.ply += 1;
     ep, hash := make_null_move(chess);
     score := -negamax(chess, depth-R-1, false, -beta, -beta + 1, fifty);
     unmake_null_move(chess, ep, hash);
+    chess.ply -= 1;
     if score >= beta then {
       return beta;
     }
@@ -168,7 +167,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
   ep := chess.en_passant;
   hash_flag := TFLAGS.ALPHA;
 
-  for move, moves_searched : move_gen {
+  for move, move_count : move_gen {
     flags, from, to := decode_move16(move);
 
     // piece
@@ -183,7 +182,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
     }
 
     eval := 0;
-    if moves_searched == 0 {
+    if move_count == 0 {
       eval = -negamax(chess, depth-1, null_flag, -beta, -alpha, next_fifty);
     } else {
       // captures. promotions. checks.
@@ -197,13 +196,15 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
       }
 
       // Late Move Reduction when not in check and not giving check.
-      else if ply && moves_searched > FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT 
+      else if ply && move_count > 3 && depth > 3 
          && status == ChessFlags.Normal && flags <= Move16.Double_Pawn_Push {
 
         // do late move reduction when not in check and making "quiet moves" 
-        R := LateMoveReduction[min(depth,63)][min(moves_searched,63)];
+        R := LateMoveReduction[min(depth,63)][min(move_count,63)];
         eval = -negamax(chess, depth-R-1, null_flag, -alpha-1, -alpha, next_fifty);
-      } else {
+      } 
+
+      else {
         // do normal search.
         eval = -negamax(chess, depth-1, null_flag, -alpha-1, -alpha, next_fifty);
       }
@@ -213,6 +214,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
         eval = -negamax(chess, depth-1, null_flag, -beta, -alpha, next_fifty);
       } 
     }
+
     unmake_move(chess, move, cap, castling, hash);
     chess.en_passant = ep;
 
@@ -249,7 +251,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
     } 
   }
 
-  if status == ChessFlags.Threefold_Repetition then {
+  if status == ChessFlags.Threefold_Repetition || status == ChessFlags.Fifty then {
     alpha = 0 + ply;
     depth = 100;
   }
