@@ -6,7 +6,8 @@ main :: () {
   nnue_init();
   init_global_bitboards();
   initialize_ai_globals();
-  chess: Chess;
+  chess: ChessGame;
+  initialize_chess_game_memory(*chess);
   chess_startpos(*chess);
   fifty := 0;
 
@@ -36,6 +37,7 @@ main :: () {
   }
 
   setup_position :: (input: string) #expand {
+    clear(*chess);
     // TODO: this does not guard against incoherent IO, this is just
     // to get it working... 
     fifty = 0;
@@ -91,10 +93,16 @@ main :: () {
       move_type := get_move_type(*chess, cast(u64) (1<<from), cast(u64) (1<<to), promote);
       move := to_move16(from, to, move_type);
       make_move(*chess, move);
+
+      if (piece_at(*chess,to) != Piece.W_PAWN && piece_at(*chess,to) != Piece.B_PAWN) && move_type == Move16.Quiet {
+        fifty += 1;
+      } else {
+        fifty = 0;
+      }
     }
   }
 
-  go_command :: (input: string, chess: *Chess, fifty: int) {
+  go_command :: (input: string, chess: *ChessGame, fifty: int) {
     parse_token(*input);
     token := parse_token(*input);
     if token == {

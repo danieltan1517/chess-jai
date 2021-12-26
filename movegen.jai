@@ -202,14 +202,20 @@ chess_startpos :: (chess: *Chess) {
   }
 }
 
-make_null_move :: (chess: *Chess) #expand {
+make_null_move :: (chess: *Chess) -> ep: u64, hash: u64 #expand {
+  hash := chess.hash;
+  ep   := chess.en_passant;
   chess.turn ^= 1;
   chess.hash ^= zobrist_turn;
   chess.hash ^= zobrist_en_passant(chess.en_passant);
+  chess.en_passant = 0;
+  return ep, hash;
 }
 
-unmake_null_move :: (chess: *Chess) #expand {
+unmake_null_move :: (chess: *Chess, ep: u64, hash: u64) #expand {
   chess.turn ^= 1;
+  chess.hash = hash;
+  chess.en_passant = ep;
 }
 
 make_move :: (chess: *Chess, move: Move16) -> captured: Piece, Castling, hash: u64 {
@@ -286,8 +292,8 @@ make_move :: (chess: *Chess, move: Move16) -> captured: Piece, Castling, hash: u
 unmake_move :: (chess: *Chess, move: Move16, cap: Piece, castling: Castling, hash: u64) {
   NONE : int : cast(int) Piece.NONE;
 
-  // we incremental update on make move, but when undoing, just collect the hash
-  // and assign it rather than do an incremental update calculation.
+  // we incremental update on make move, but in undo, just assign 
+  // hash rather than do an incremental update calculation.
   chess.hash = hash;
   flags, sq, to_sq := decode_move16(move);
   from := cast(u64) (1 << sq);
@@ -441,6 +447,11 @@ castling_move_table :: #run -> [64] Castling {
 to_move16 :: inline (from: int, to: int, flags: Move16) -> Move16 {
   ret  := (from << 10) | (to << 4) | (xx flags);
   return cast, trunc(Move16) ret;
+}
+
+get_move16_to :: (mov: Move16) -> to: int {
+  cast_mov := cast(int) mov;
+  return  xx (cast_mov & 0x03F0) >> 4;
 }
 
 // Type of move, From, To.
@@ -602,6 +613,7 @@ ChessFlags :: enum {
   Stalemate;
   Insufficent_Material;
   Threefold_Repetition;
+  Fifty;
 }
 
 init_global_bitboards :: () {
@@ -1351,7 +1363,6 @@ find_magic_number :: (attack_mask: u64, sq: int, relevant_bits: u64, $moves: (u6
     occ[i] = set_occ(i, relevant_bits, attack_mask);
     attacks[i] = moves(bitboard, occ[i]);
   }
-
 
   while true {
     magic_number := generate_magic_number(*prng);

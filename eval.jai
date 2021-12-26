@@ -54,7 +54,6 @@ trivial_evaluation :: (using chess: *Chess, fifty: int) -> bool, int {
     if w_bishop|w_knight == w_pieces && popcount(w_pieces) == 1
       return true, 0;
 
-
     if w_pieces & (~(w_pawn|w_knight)) {
       side := ifx turn == Turn.WHITE then 1 else -1; 
       eval := eval_winning_position(w_king, q=w_queen, r=w_rook, b=w_bishop, n=w_knight, p=bit_reverse64(w_pawn), b_king) * side;
@@ -86,8 +85,8 @@ trivial_evaluation :: (using chess: *Chess, fifty: int) -> bool, int {
 
     distance   := math.abs(winx - losx) + math.abs(winy - losy);
     push_close := 140 - 20 * distance;
-    edge       := king_endgame[los];
-    mat        := popcount(q)*90000 + popcount(r)*50000 + popcount(b)*35000 + popcount(n)*30000;
+    edge       := push_to_edge(los);
+    mat        := popcount(q)*9000 + popcount(r)*5000 + popcount(b)*3500 + popcount(n)*3000;
     pawn_points:= 0;
     while p {
       i := bit_scan_forward(p);
@@ -97,15 +96,13 @@ trivial_evaluation :: (using chess: *Chess, fifty: int) -> bool, int {
 
     return WIN_SCORE + push_close + edge + mat + pawn_points;
 
-    king_endgame :: int.[
-      500,400,300,200,200,300,400,500,
-      400,300,200,200,200,200,300,400,
-      300,200,100,100,100,100,200,300,
-      300,200,100,  0,  0,100,200,300,
-      300,200,100,  0,  0,100,200,300,
-      300,200,100,100,100,100,200,300,
-      400,300,200,200,200,200,300,400,
-      500,400,300,300,300,300,400,500];
+    push_to_edge :: (sq: int) -> int {
+      r := sq / 8;
+      f := sq % 8;
+      fd := min(f, 7-f);
+      rd := min(r, 7-r);
+      return 90 - (7 * fd * fd / 2 + 7 * rd * rd / 2);
+    }
 
     eg_pawn_table :: int.[
       0,   0,   0,   0,   0,   0,   0,   0,
@@ -117,7 +114,6 @@ trivial_evaluation :: (using chess: *Chess, fifty: int) -> bool, int {
      25,  25,  25,  25,  25,  25,  25,  25,
       0,   0,   0,   0,   0,   0,   0,   0,
     ];
-
   }
 }
 

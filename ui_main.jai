@@ -91,7 +91,7 @@ main :: () {
   
   chess_startpos(*chess);
   moves_arr: [..] Move16;
-  array_reserve(*moves_arr, 80);
+  array_reserve(*moves_arr, 100);
   generate_moves(*chess, *moves_arr);
   while !glfwWindowShouldClose(window) {
     ftime := cast(float)get_time();

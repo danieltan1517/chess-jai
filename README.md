@@ -66,6 +66,7 @@ The chess GUI uses the glfw3 and gl libraries.
 * Killer Moves Move Ordering
 * History Moves Move Ordering
 * Countermove Heuristic
+* Follow Up Heuristic
 
 ### Evaluation
 * [NNUE](https://github.com/dshawul/nnue-probe) (Efficiently Updatable Neural Networks) for chess evaluation function
