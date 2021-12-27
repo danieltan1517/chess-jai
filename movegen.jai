@@ -456,6 +456,11 @@ get_move16_to :: (mov: Move16) -> to: int {
   return  xx (cast_mov & 0x03F0) >> 4;
 }
 
+get_move16_from :: (mov: Move16) -> from: int {
+  cast_mov := cast(int) mov;
+  return  xx (cast_mov & 0xFC00) >> 10;
+}
+
 // Type of move, From, To.
 decode_move16 :: inline (mov: Move16) -> flags: Move16, from: int, to: int {
   // NOTE: this cast is neccesssary to prevent the release build from doing something stupid...

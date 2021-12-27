@@ -116,16 +116,10 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
     }
   }
 
-  prev_move := previous_move(chess);
-  cont_move := Move16.Quiet;
-  if ply >= 6 {
-    to1 := continuation_moves(chess, 4);
-    to2 := continuation_moves(chess, 2);
-    cont_move = __follow_up[cast(int)chess.turn][to1][to2];
-  }
-
+  counter  := get_counter_move(chess);
+  followup := get_follow_up_move(chess);
   auto_release_temp();
-  move_gen := init_negamax(pv_table[ply][0], h_move, __killer_moves[ply][0], __killer_moves[ply][1], prev_move, cont_move);
+  move_gen := init_negamax(pv_table[ply][0], h_move, __killer_moves[ply][0], __killer_moves[ply][1], counter, followup);
   status := generate_moves(chess, *move_gen, fifty);
 
   if status == {
@@ -254,15 +248,14 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
 
       // non-captures == Quiet|Pawn Push Moves
       if flags <= Move16.Double_Pawn_Push {
+        // update history heuristic
         __history_moves[piece_type][to] += depth;
-        _pm_flag, pm_from, pm_to := decode_move16(prev_move);
-        prev_type := piece_at(chess, to);
-        __counter_moves[prev_type][pm_to] = move;
-        if ply >= 6 {
-          to1 := continuation_moves(chess, 4);
-          to2 := continuation_moves(chess, 2);
-          __follow_up[cast(int)chess.turn][to1][to2] = move;
-        }
+
+        // update countermove heuristic
+        update_countermove(chess, move);
+
+        // update follow up heuristic
+        update_followup(chess, move);
 
         if move != __killer_moves[ply][0] then {
           __killer_moves[ply][1] = __killer_moves[ply][0];
@@ -660,10 +653,10 @@ __nodes_searched := 0;
 __history_moves:   [13][64] int;
 __killer_moves:    [64][2] Move16;
 __counter_moves:   [13][64] Move16;
-__follow_up:       [2][64][64] Move16;
+__follow_up:       [13][64][13][64] Move16;
 
 // get something off the ground.
-TSIZE :: 0x1000;
+TSIZE :: 0x20000;
 
 ttable : struct {
   hash:     [TSIZE] u64;
@@ -689,15 +682,15 @@ Negamax :: struct {
   score: [] int;
   count: int;
 
-  pv     : Move16;
-  hmove  : Move16;
-  killer1: Move16;
-  killer2: Move16;
-  pmove  : Move16;
-  cont   : Move16;
+  pv       : Move16;
+  hmove    : Move16;
+  killer1  : Move16;
+  killer2  : Move16;
+  counter  : Move16;
+  follow_up: Move16;
 }
 
-init_negamax :: (pv: Move16, hmove: Move16, killer1: Move16, killer2: Move16, pmove: Move16, cont: Move16) -> Negamax {
+init_negamax :: (pv: Move16, hmove: Move16, killer1: Move16, killer2: Move16, counter: Move16, follow_up: Move16) -> Negamax {
   n: Negamax;
   n.items = NewArray(200, Move16);
   n.score = NewArray(200, int);
@@ -706,8 +699,8 @@ init_negamax :: (pv: Move16, hmove: Move16, killer1: Move16, killer2: Move16, pm
   n.hmove   = hmove;
   n.killer1 = killer1;
   n.killer2 = killer2;
-  n.pmove   = pmove;
-  n.cont    = cont;
+  n.counter = counter;
+  n.follow_up = follow_up;
   return n;
 }
 
@@ -934,18 +927,17 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
     } else {
       piece := cast(int) piece_at(chess, from);
       score = __history_moves[piece][to];
-    }
 
-    _, __, pto := decode_move16(heap.pmove);
-    prev_piece := cast(int) piece_at(chess, pto);
-    if move == heap.pmove then {
-      COUNTER_BONUS :: 20;
-      score += COUNTER_BONUS;
-    }
+      if move == heap.counter then {
+        COUNTER_BONUS :: 40;
+        score += COUNTER_BONUS;
+      }
 
-    if move == heap.cont then {
-      CONTINUE_BONUS :: 10;
-      score += CONTINUE_BONUS;
+      if move == heap.follow_up then {
+        CONTINUE_BONUS :: 30;
+        score += CONTINUE_BONUS;
+      }
+      //score = min(score, 9150);
     }
   }
 
@@ -1124,8 +1116,13 @@ PVALUE :: #run -> [13] int {
 ChessGame :: struct {
   using chess: Chess;
   ply: int;
-  moves: [..] Move16;
+  moves: [..] Move32;
   rtable: [..] u64;
+}
+
+Move32 :: struct {
+  mov16: Move16;
+  piece: Piece;
 }
 
 clear :: (using c: *ChessGame) {
@@ -1161,8 +1158,14 @@ generate_moves :: (using c: *ChessGame, movegen: *$T, fifty: int) -> ChessFlags 
 }
 
 make_move :: (c: *ChessGame, move: Move16) -> Piece, Castling, u64 {
+  from := get_move16_from(move);
+  piece := c.pieces[from];
+  move32: Move32;
+  move32.mov16 = move;
+  move32.piece = piece;
+
   cap, castling, hash := make_move(*c.chess, move);
-  array_add(*c.moves, move);
+  array_add(*c.moves, move32);
   array_add(*c.rtable, hash);
   c.ply += 1;
   return cap, castling, hash;
@@ -1176,24 +1179,67 @@ unmake_move :: (c: *ChessGame, move: Move16, cap: Piece, castling: Castling, has
 }
 
 // used for countermove heuristic.
-previous_move :: (c: *ChessGame) -> Move16 {
-  if c.ply > 0
-    return c.moves[c.moves.count-1];
+get_counter_move :: (c: *ChessGame) -> Move16 {
+  if c.ply > 0 {
+    prev := c.moves.count-1;
+    prev_move := c.moves[prev];
+    piece, to := piece_to(prev_move);
+    return __counter_moves[piece][to];
+  }
   return Move16.Quiet;
 }
 
-continuation_moves :: (c: *ChessGame, index: int) -> int {
-  move := c.moves[c.moves.count - index];
-  to := get_move16_to(move);
-  return to;
+update_countermove :: (c: *ChessGame, move: Move16) #expand {
+  if c.ply > 0 {
+    prev := c.moves.count-1;
+    prev_move := c.moves[prev];
+    piece, to := piece_to(prev_move);
+    __counter_moves[piece][to] = move;
+  }
+}
+
+update_followup :: (c: *ChessGame, move: Move16) #expand {
+  if c.ply >= 2 {
+    prev2 := c.moves.count-2;
+    piece1, to1 := piece_to(c.moves[prev2]);
+
+    // previous 1 move.
+    prev1 := c.moves.count-1;
+    piece2, to2 := piece_to(c.moves[prev1]);
+
+    __follow_up[piece1][to1][piece2][to2] = move;
+  }
+}
+
+get_follow_up_move :: (c: *ChessGame) -> Move16 {
+  if c.ply >= 2 {
+    // previous 2 move.
+    prev2 := c.moves.count-2;
+    piece1, to1 := piece_to(c.moves[prev2]);
+
+    // previous 1 move.
+    prev1 := c.moves.count-1;
+    piece2, to2 := piece_to(c.moves[prev1]);
+
+    return __follow_up[piece1][to1][piece2][to2];
+  }
+  return Move16.Quiet;
+
+}
+
+piece_to :: (mov: Move32) -> int, int #expand {
+  to := get_move16_to(mov.mov16);
+  return cast(int)mov.piece, to;
 }
 
 make_null_move :: (c: *ChessGame) -> ep: u64, hash: u64 {
   c.ply += 1;
   ep, hash := make_null_move(*c.chess);
-  array_add(*c.moves, Move16.Quiet);
+  array_add(*c.moves, NULL);
   array_add(*c.rtable, hash);
   return ep, hash;
+
+  NULL :: Move32.{Move16.Quiet, Piece.NONE};
 }
 
 unmake_null_move :: (c: *ChessGame, ep: u64, hash: u64) {
