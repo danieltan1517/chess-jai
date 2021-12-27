@@ -86,7 +86,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
   __nodes_searched += 1;
 
   // transposition lookup.
-  h_move := Move16.Quiet; //transposition_table_lookup(chess.hash);
+  h_move := transposition_table_lookup(chess.hash);
 
   if depth <= 0 then {
     pv_table_count[ply] = 0;
@@ -132,8 +132,12 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
   case ChessFlags.Fifty;
     if ply then
       return 0 + ply;
+  case ChessFlags.Threefold_Repetition; 
+    if !pv_node then 
+      return 0 + ply; 
+
   case ChessFlags.Normal;
-    if !pv_node && !zugzwang(chess) then {
+    if ply>0 && !pv_node && !zugzwang(chess) then {
       static_eval := evaluate(chess, fifty);
       // reverse futility pruning.
       if depth < 3 && math.abs(beta-1) > -INF+100 then {
@@ -177,7 +181,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
   hash_flag := TFLAGS.ALPHA;
 
   // simple search extension, extend if only one move can be played.
-  if move_gen.count == 1
+  if move_gen.count == 1  then 
     depth += 1;
 
   for move, move_count : move_gen {
@@ -270,7 +274,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
     depth = 100;
   }
 
-  //transposition_table_store(chess.hash);
+  transposition_table_store(chess.hash);
   return alpha;
 
   transposition_table_lookup :: (hash: u64) -> h_move: Move16 #expand {

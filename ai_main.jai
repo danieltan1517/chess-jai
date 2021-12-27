@@ -93,7 +93,6 @@ main :: () {
       move_type := get_move_type(*chess, cast(u64) (1<<from), cast(u64) (1<<to), promote);
       move := to_move16(from, to, move_type);
       make_move(*chess, move);
-
       if (piece_at(*chess,to) != Piece.W_PAWN && piece_at(*chess,to) != Piece.B_PAWN) && move_type == Move16.Quiet {
         fifty += 1;
       } else {

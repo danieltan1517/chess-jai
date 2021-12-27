@@ -172,6 +172,8 @@ move_is_promotion :: inline (using m: Move16) -> bool {
 }
 
 chess_startpos :: (chess: *Chess) {
+  memset(chess, 0, size_of(Chess));
+
   chess.occupied = xx (rank_1|rank_2|rank_7|rank_8);
   add_piece(Piece.W_KING, xx e1);
   add_piece(Piece.W_QUEEN, xx d1);
@@ -1870,4 +1872,55 @@ zugzwang :: inline (using c: *Chess) -> bool {
   b_pieces := b_queen|b_rook|b_bishop|b_knight;
   return w_pieces == 0 || b_pieces == 0;
 }
+
+print_chess :: (chess: *Chess) {
+  loop(xx serialized_bb.a8, "8 ");
+  loop(xx serialized_bb.a7, "7 ");
+  loop(xx serialized_bb.a6, "6 ");
+  loop(xx serialized_bb.a5, "5 ");
+  loop(xx serialized_bb.a4, "4 ");
+  loop(xx serialized_bb.a3, "3 ");
+  loop(xx serialized_bb.a2, "2 ");
+  loop(xx serialized_bb.a1, "1 ");
+  print("  a b c d e f g h\n");
+
+  loop :: (x: int, s: string) #expand {
+    print(s);
+    for i: x..x+7 {
+      p := chess.pieces[i];
+      if #complete p == {
+      case Piece.NONE;
+        print("- ");
+      case Piece.W_KING;
+        print("K ");
+      case Piece.W_QUEEN;
+        print("Q ");
+      case Piece.W_ROOK;
+        print("R ");
+      case Piece.W_BISHOP;
+        print("B ");
+      case Piece.W_KNIGHT;
+        print("N ");
+      case Piece.W_PAWN;
+        print("P ");
+
+      case Piece.B_KING;
+        print("k ");
+      case Piece.B_QUEEN;
+        print("q ");
+      case Piece.B_ROOK;
+        print("r ");
+      case Piece.B_BISHOP;
+        print("b ");
+      case Piece.B_KNIGHT;
+        print("n ");
+      case Piece.B_PAWN;
+        print("p ");
+      }
+    }
+    print("\n");
+  }
+
+}
+
 

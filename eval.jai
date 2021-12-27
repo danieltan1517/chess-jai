@@ -5,7 +5,6 @@ nnue_init :: () {
 }
 
 evaluate :: (using chess: *Chess, fifty: int) -> int {
-  // attempt trivial eval. else use NNUE.
   TF, score := trivial_evaluation(chess, fifty); 
   if TF return score;
   return nnue_evaluate(chess, fifty);
@@ -20,7 +19,6 @@ nnue_evaluate :: (chess: *Chess, fifty: int) -> int {
   squares: [40] s32;
   pieces[0] = xx Piece.W_KING;
   squares[0] = xx bit_scan_forward(chess.w_king);
-
   pieces[1] = xx Piece.W_KING;
   squares[1] = xx bit_scan_forward(chess.b_king);
   index := 2;
@@ -35,7 +33,6 @@ nnue_evaluate :: (chess: *Chess, fifty: int) -> int {
   }
   pieces[index] = 0;
   squares[index] = 0;
-  
   eval := __nnue_evaluate(xx chess.turn, pieces.data, squares.data);
   return (eval * (100 - fifty)) / 100;
 }
