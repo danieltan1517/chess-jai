@@ -470,7 +470,7 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
   __nodes_searched += 1;
   ply := chess.ply;
   auto_release_temp();
-  moves := init_quiescene();
+  moves := init_quiescene(pv_table[ply][0]);
   status := generate_moves(chess, *moves, fifty);
   using ChessFlags;
   if status == {
@@ -525,8 +525,12 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
 
     if score >= beta then
       return beta;
-    if score > alpha then
+    if score > alpha then {
       alpha = score;
+      pv_table[ply][0] = move;
+      memcpy(*pv_table[ply][1], *pv_table[ply+1][0], pv_table_count[ply+1] * size_of(Move16));
+      pv_table_count[ply] = pv_table_count[ply+1] + 1;
+    }
   }
 
   return alpha;
@@ -662,21 +666,23 @@ init_negamax :: (pv: Move16, hmove: Move16, killer1: Move16, killer2: Move16, pm
   return n;
 }
 
-init_quiescene :: () -> Quiescene(Move16) {
-  q: Quiescene(Move16);
+init_quiescene :: (pv: Move16) -> Quiescene {
+  q: Quiescene;
+  q.pv = pv;
   q.items = NewArray(30, Move16);
   q.score = NewArray(30, int);
   q.count = 0;
   return q;
 }
 
-Quiescene :: struct(T: Type) {
-  items: [] T;
+Quiescene :: struct {
+  items: [] Move16;
   score: [] int;
   count: int;
+  pv: Move16;
 }
 
-heap_pop :: (using heap: *$Q/Quiescene) -> Q.T, int {
+heap_pop :: (using heap: *Quiescene) -> Move16, int {
   it := items[0];
   sc := score[0];
 
@@ -710,7 +716,7 @@ heap_pop :: (using heap: *$Q/Quiescene) -> Q.T, int {
   }
 }
 
-heap_add :: (using heap: *$Q/Quiescene, item: Q.T, num: int) {
+heap_add :: (using heap: *Quiescene, item: Move16, num: int) {
   child  := count;
   parent := (child-1) / 2;
   items[count] = item;
@@ -784,11 +790,17 @@ heap_add :: (using heap: *Negamax, item: Move16, num: int) {
   }
 }
 
-add_move :: (chess: *Chess, heap: *$Q/Quiescene, from: int, to: int, $flags: Move16, $in_check: bool) {
+add_move :: (chess: *Chess, heap: *Quiescene, from: int, to: int, $flags: Move16, $in_check: bool) {
   using Move16;
 
   score := 0;
   move := to_move16(from, to, flags);
+  if move == heap.pv {
+    score = INF;
+    heap_add(heap, move, score);
+    return;
+  }
+
   #if flags == Capture {
     att := piece_at(chess, from);
     vic := piece_at(chess, to);
