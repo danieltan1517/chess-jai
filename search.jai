@@ -15,6 +15,7 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
   best_move : Move16;
   alpha: int = -INF;
   beta:  int =  INF;
+  delta := 50;
   cur_depth := 1;
   push_allocator(temp);
   while cur_depth <= depth { 
@@ -22,19 +23,24 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
     clear_hash_table();
     chess.ply = 0;
     score = negamax(chess, cur_depth, alpha=alpha, beta=beta, fifty=fifty);
-    if score <= alpha || score >= beta then {
-      beta  =  INF;
-      alpha = -INF; 
+
+    if score <= alpha then {
+      print("info depth % lowerbound %\n", cur_depth, score);
+      beta = (alpha + beta) / 2;
+      alpha = max(score - delta, -INF);
+      delta += delta / 4 + 5;
       continue;
     }
 
-    if score > -50_000 && score < 50_000 {
-      alpha = score - 50;
-      beta  = score + 50;
-    } else {
-      alpha = -INF;
-      beta  =  INF; 
+    if score >= beta then {
+      print("info depth % upperbound %\n", cur_depth, score);
+      beta = min(score + delta, INF);
+      delta += delta / 4 + 5;
+      continue;
     }
+
+    alpha = score - delta;
+    beta  = score + delta;
 
     time_taken := get_time() - time_begin;
     if stop_signal_triggered() then 
@@ -50,7 +56,12 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
     t_ms := cast(int)(`time_taken*1000.0); // convert secs to ms
     nps  := cast(int)(__nodes_searched/(`time_taken+0.0001));
     print_to_builder(*builder, "info depth % ", depth);
-    print_to_builder(*builder, "nodes % time % score cp % nps % pv ", __nodes_searched, t_ms, score, nps);
+    if score >= -INF+20 && score <= INF-20 then {
+      print_to_builder(*builder, "nodes % time % score cp % nps % pv ", __nodes_searched, t_ms, score, nps);
+    } else {
+      mate := INF - math.abs(score);
+      print_to_builder(*builder, "nodes % time % score mate % nps % pv ", __nodes_searched, t_ms, mate, nps);
+    }
     count := pv_table_count[0] - 1;
     for i: 0..count {
       mv := pv_table[0][i];
@@ -74,12 +85,13 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
     return 0;
   __nodes_searched += 1;
 
-  h_move := transposition_table_lookup(chess.hash);
+  // transposition lookup.
+  h_move := Move16.Quiet; //transposition_table_lookup(chess.hash);
+
   if depth <= 0 then {
     pv_table_count[ply] = 0;
     pv_table[ply][0] = 0;
-    eval := quiescene(chess, alpha, beta, fifty);
-    return eval;
+    return quiescene(chess, alpha, beta, fifty);
   }
 
   // mate distance pruning
@@ -134,11 +146,9 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
       // null move pruning. check for zugzwang before searching.
       if null_flag && depth > 3 then {
         R := min(math.abs(static_eval - beta) / 205, 2) + depth / 3 + 3;
-        chess.ply += 1;
         ep, hash := make_null_move(chess);
         score := -negamax(chess, depth-R-1, false, -beta, -beta + 1, fifty);
         unmake_null_move(chess, ep, hash);
-        chess.ply -= 1;
         if score >= beta then {
           return beta;
         }
@@ -260,9 +270,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
     depth = 100;
   }
 
-  transposition_table_store(chess.hash);
-  best_move := pv_table[ply][0];
-  _, from, to := decode_move16(best_move);
+  //transposition_table_store(chess.hash);
   return alpha;
 
   transposition_table_lookup :: (hash: u64) -> h_move: Move16 #expand {
@@ -1112,3 +1120,20 @@ continuation_moves :: (c: *ChessGame, index: int) -> int {
   to := get_move16_to(move);
   return to;
 }
+
+make_null_move :: (c: *ChessGame) -> ep: u64, hash: u64 {
+  c.ply += 1;
+  ep, hash := make_null_move(*c.chess);
+  array_add(*c.moves, Move16.Quiet);
+  array_add(*c.rtable, hash);
+  return ep, hash;
+}
+
+unmake_null_move :: (c: *ChessGame, ep: u64, hash: u64) {
+  unmake_null_move(*c.chess, ep, hash);
+  pop(*c.moves);
+  pop(*c.rtable);
+  c.ply -= 1;
+}
+
+
