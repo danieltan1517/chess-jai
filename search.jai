@@ -38,9 +38,13 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
       delta += delta / 4 + 5;
       continue;
     }
-
-    alpha = score - delta;
-    beta  = score + delta;
+    if score >= -50_000 && score <= 50_000 then {
+      alpha = score - delta;
+      beta  = score + delta;
+    } else {
+      alpha = -INF;
+      beta  =  INF;
+    }
 
     time_taken := get_time() - time_begin;
     if stop_signal_triggered() then 
@@ -470,11 +474,13 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
   status := generate_moves(chess, *moves, fifty);
   using ChessFlags;
   if status == {
+  case Threefold_Repetition; #through;
   case Stalemate;
     return 0 + ply;
+
   case Checkmate;
     return -INF + ply;
-  case Threefold_Repetition; #through;
+
   case Normal;
     // no standing pat while in check, only when position is normal
     eval := evaluate(chess, fifty);

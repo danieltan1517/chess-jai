@@ -1918,7 +1918,8 @@ print_chess :: (chess: *Chess) {
         print("p ");
       }
     }
-    print("\n");
+    print("\n\n");
+    print("Castling: %\n\n", chess.castling);
   }
 
 }
