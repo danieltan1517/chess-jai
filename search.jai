@@ -469,9 +469,13 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
     return 0;
   __nodes_searched += 1;
   ply := chess.ply;
+  pv_node := alpha != beta-1;
+  transposition_table_lookup(chess.hash);
+
   auto_release_temp();
   moves := init_quiescene(pv_table[ply][0]);
   status := generate_moves(chess, *moves, fifty);
+  hash_flag := TFLAGS.ALPHA;
   using ChessFlags;
   if status == {
   case Threefold_Repetition; #through;
@@ -497,8 +501,10 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
         return alpha; 
       }
     }
-    if alpha < eval then
+    if alpha < eval then {
+      hash_flag = TFLAGS.EXACT;
       alpha = eval; 
+    }
   }
   // search captures only, captures negate the fifty move rule
   ep := chess.en_passant;
@@ -523,9 +529,13 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
     unmake_move(chess, move, cap, flags, hash);
     chess.en_passant = ep;
 
-    if score >= beta then
+    if score >= beta then {
+      hash_flag = TFLAGS.BETA;
+      transposition_table_store(chess.hash);
       return beta;
+    }
     if score > alpha then {
+      hash_flag = TFLAGS.EXACT;
       alpha = score;
       pv_table[ply][0] = move;
       memcpy(*pv_table[ply][1], *pv_table[ply+1][0], pv_table_count[ply+1] * size_of(Move16));
@@ -533,6 +543,7 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
     }
   }
 
+  transposition_table_store(chess.hash);
   return alpha;
 
   can_delta_prune :: (using chess: *Chess) -> bool #expand {
@@ -552,6 +563,40 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
     if PVALUE[pfrom] > PVALUE[pto] then
       return see(chess, move) < 0;
     return false;
+  }
+
+  transposition_table_lookup :: (hash: u64) #expand {
+    key  := hash % TSIZE;
+    if !pv_node && ttable.hash[key] == hash then {
+      entry := *ttable.entries[key];
+      value := entry.score;
+      flag  := entry.flag;
+      if flag == {
+      case TFLAGS.EXACT;
+      `return value;
+      
+      case TFLAGS.ALPHA;
+      if value <= alpha then
+        `return alpha; 
+      
+      case TFLAGS.BETA;
+      if value >= beta then
+        `return beta; 
+      }
+    }
+  }
+
+  // quiescene TT
+  transposition_table_store :: (hash: u64) #expand {
+    key  := hash % TSIZE;
+    entry := *ttable.entries[key];
+    if entry.depth <= 0 then {
+      ttable.hash[key] = hash;
+      entry.score = xx alpha;
+      entry.flag = hash_flag;
+      entry.depth = 0;
+      entry.bmove = Move16.Quiet;
+    }
   }
 }
 
