@@ -929,15 +929,16 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
       score = __history_moves[piece][to];
 
       if move == heap.counter then {
-        COUNTER_BONUS :: 40;
+        COUNTER_BONUS :: 30;
         score += COUNTER_BONUS;
       }
 
       if move == heap.follow_up then {
-        CONTINUE_BONUS :: 30;
+        CONTINUE_BONUS :: 20;
         score += CONTINUE_BONUS;
       }
-      //score = min(score, 9150);
+      // a hack to prevent history from overpowering killer moves.
+      score = min(score, 9150);
     }
   }
 
