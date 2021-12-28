@@ -64,7 +64,7 @@ main :: () {
   }
 
   {
-    engine_name := "lion-tulip";
+    engine_name := "dol";
     ai_chess_engine_path := join(#filepath, "resources/", engine_name);
     engine, success := init_uci_engine(engine_name, ai_chess_engine_path);
     if !success then {
@@ -144,7 +144,7 @@ handle_command_line :: () #expand {
       w_is_human = true;
       b_is_human = false;
       `white_side = true;
-      b_engine_name = "lion-tulip";
+      b_engine_name = "dol";
     case "hh";
       w_is_human = true;
       b_is_human = true;
@@ -153,13 +153,13 @@ handle_command_line :: () #expand {
       w_is_human = false;
       b_is_human = false;
       `white_side = true;
-      w_engine_name = "lion-tulip";
-      b_engine_name = "lion-tulip";
+      w_engine_name = "dol";
+      b_engine_name = "dol";
     case "ch";
       w_is_human = false;
       b_is_human = true;
       `white_side = false;
-      w_engine_name = "lion-tulip";
+      w_engine_name = "dol";
     }
   }
 }
@@ -1254,7 +1254,6 @@ init_uci_engine :: (engine_name: string, ai_path: string) -> UCI_Engine, bool {
 }
 
 uci_write_command :: (using engine: *UCI_Engine, command: string) {
-  print("writing:\n%\n", command);
   write(write_pipe, command.data, xx command.count);
 }
 

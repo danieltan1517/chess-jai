@@ -75,4 +75,5 @@ The chess GUI uses the glfw3 and gl libraries.
 ## Still needs to be implemented
 * Better History Move Ordering
 * NNUE Incremental Update: https://www.talkchess.com/forum3/viewtopic.php?f=7&t=75415&start=3
-* UCI not fully supported
+* UCI not fully supported 
+* Check out Berserk Chess Engine. [Berserk](https://github.com/jhonnold/berserk)

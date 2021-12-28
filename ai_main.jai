@@ -3,6 +3,7 @@
 #import "String";
 
 main :: () {
+  print("Den of Lions UCI Chess Engine\n");
   nnue_init();
   init_global_bitboards();
   initialize_ai_globals();
@@ -178,7 +179,7 @@ reset_stop_signal :: () #expand {
 
 uci_response :: #string DONE
 uciok
-id name lion-tulip
+id name dol
 id author Daniel Tan
 DONE;
 
@@ -363,7 +364,6 @@ get_move_type :: (using chess: *Chess, from: u64, to: u64, promote: int)->Move16
 
   return Move16.Quiet;
 }
-
 
 setup_stdin :: () #expand {
   flags := fcntl(STDIN_FILENO, F_GETFL, 0) | O_NONBLOCK;
