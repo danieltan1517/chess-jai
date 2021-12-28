@@ -3,7 +3,6 @@
 #import "String";
 
 main :: () {
-  print("Den of Lions UCI Chess Engine\n");
   nnue_init();
   init_global_bitboards();
   initialize_ai_globals();
@@ -179,7 +178,7 @@ reset_stop_signal :: () #expand {
 
 uci_response :: #string DONE
 uciok
-id name dol
+id name Den of Lions
 id author Daniel Tan
 DONE;
 

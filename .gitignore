@@ -11,6 +11,7 @@ jai-chess
 jai-chess-ai
 ai-jai-chess
 ai
+dol
 *.nnue
 nnue-probe/
 eval
