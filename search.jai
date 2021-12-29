@@ -508,7 +508,7 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
     pfrom := piece_at(chess, from);
 
     // skip bap captures. SEE algorithm.
-    if status == ChessFlags.Normal && is_bad_capture(move) then {
+    if is_bad_capture(move, status) then {
       continue;
     }
 
@@ -549,7 +549,11 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
     return ((w_pawn|b_pawn) & xx (rank_7|rank_2)) != 0;
   }
 
-  is_bad_capture :: (move: Move16) -> bool #expand {
+  // a bad capture => true, a good capture => false
+  is_bad_capture :: (move: Move16, status: ChessFlags) -> bool #expand {
+    if status != ChessFlags.Normal then
+      return false;
+
     _, from, to := decode_move16(move);
     pfrom := cast(int) piece_at(chess, from);
     pto   := cast(int) piece_at(chess, to);
@@ -885,10 +889,14 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
   }
 
   #if flags == Capture {
+    // TODO: try different capture move scoring techniques.
     vic := piece_at(chess, to);
     att := piece_at(chess, from);
+    score = mvv_lva(vic, att);
+
+
     // good capture
-    if PVALUE[att] <= PVALUE[vic] then {
+    /*if PVALUE[att] <= PVALUE[vic] then {
       score = mvv_lva(vic, att);
     } else {
       if see(chess, move) < 0 then {
@@ -898,7 +906,7 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
         // good capture.
         score = mvv_lva(vic, att);
       }
-    }
+    }*/
   }
   #if flags == Ep_Capture {
     score = mvv_lva(Piece.W_PAWN, Piece.W_PAWN);
