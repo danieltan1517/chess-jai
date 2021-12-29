@@ -135,7 +135,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
       return 0 + ply; 
 
   case ChessFlags.Normal;
-    if ply>0 && !pv_node && !zugzwang(chess) then {
+    if ply>0 && !pv_node then {
       static_eval := evaluate(chess, fifty);
       // reverse futility pruning.
       if depth < 3 && math.abs(beta-1) > -INF+100 then {
@@ -146,7 +146,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
       }
  
       // null move pruning. check for zugzwang before searching.
-      if null_flag && depth > 3 then {
+      if null_flag && depth > 3 && !zugzwang(chess) then {
         R := min(math.abs(static_eval - beta) / 205, 2) + depth / 3 + 3;
         ep, hash := make_null_move(chess);
         score := -negamax(chess, depth-R-1, false, -beta, -beta + 1, fifty);
@@ -553,8 +553,9 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
     _, from, to := decode_move16(move);
     pfrom := cast(int) piece_at(chess, from);
     pto   := cast(int) piece_at(chess, to);
-    if PVALUE[pfrom] > PVALUE[pto] then
+    if PVALUE[pfrom] > PVALUE[pto] then {
       return see(chess, move) < 0;
+    }
     return false;
   }
 
@@ -1018,7 +1019,7 @@ see :: (chess: *Chess, move: Move16) -> eval: int {
     from_set, apiece = get_least_valuable_piece(attadef, turn);
   }
 
-  for < i: d..1 {
+  for < i: d-1..1 {
     gain[i-1]= -max(-gain[i-1], gain[i]);
   }
 
