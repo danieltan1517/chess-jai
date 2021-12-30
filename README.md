@@ -77,3 +77,4 @@ The chess GUI uses the glfw3 and gl libraries.
 * NNUE Incremental Update: https://www.talkchess.com/forum3/viewtopic.php?f=7&t=75415&start=3
 * UCI not fully supported 
 * Check out Berserk Chess Engine. [Berserk](https://github.com/jhonnold/berserk)
+* Check out [NNUE-pytorch](https://github.com/glinscott/nnue-pytorch/blob/master/docs/nnue.md)
