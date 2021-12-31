@@ -239,8 +239,8 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
       continue;
 
     moves_searched += 1;
-    // Late Move Pruning.
-    if moves_searched > LateMovePruning[depth][cast(int)pv_node] then {
+    // Late Move Pruning. Search the Root Plies Exhuastively
+    if ply>3 && moves_searched > LateMovePruning[depth][cast(int)pv_node] then {
       break;
     }
 
