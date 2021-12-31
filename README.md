@@ -67,13 +67,13 @@ The chess GUI uses the glfw3 and gl libraries.
 * History Moves Move Ordering
 * Countermove Heuristic
 * Follow Up Heuristic
+* Relative History Move Ordering
 
 ### Evaluation
 * [NNUE](https://github.com/dshawul/nnue-probe) (Efficiently Updatable Neural Networks) for chess evaluation function
 * Simple Mop-Up Endgame Evaluation.
 
 ## Still needs to be implemented
-* Better History Move Ordering
 * NNUE Incremental Update: https://www.talkchess.com/forum3/viewtopic.php?f=7&t=75415&start=3
 * UCI not fully supported 
 * Check out Berserk Chess Engine. [Berserk](https://github.com/jhonnold/berserk)

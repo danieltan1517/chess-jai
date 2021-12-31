@@ -172,17 +172,27 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
           }
         }
       }
+
+      // prob cut implement TODO:
+      /*prob_beta := beta + 110;
+      if depth > 4 && math.abs(beta) > 20_000 {
+      }*/
     }
   }
 
   ep := chess.en_passant;
   hash_flag := TFLAGS.ALPHA;
 
+
+  quiet_moves := NewArray(64, Move16);
+  num_quiets := 0;
+
   // simple search extension, extend if only one move can be played.
   if move_gen.count == 1  then 
     depth += 1;
 
   for move, move_count : move_gen {
+
     flags, from, to := decode_move16(move);
 
     // piece
@@ -196,8 +206,14 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
       next_fifty = fifty + 1;
     }
 
+    if flags <= Move16.Double_Pawn_Push {
+      quiet_moves[num_quiets] = move;
+      num_quiets += 1;
+    }
+
     eval := 0;
     if move_count == 0 {
+      
       eval = -negamax(chess, depth-1, null_flag, -beta, -alpha, next_fifty);
     } else {
       // captures. promotions. checks.
@@ -248,8 +264,18 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
 
       // non-captures == Quiet|Pawn Push Moves
       if flags <= Move16.Double_Pawn_Push {
+
+        // decrement all quiet moves which < alpha.
+        for i: 0..num_quiets-1 {
+          prev_move := quiet_moves[i];
+          if prev_move != move {
+            _, from_move, to_move := decode_move16(prev_move);
+            piece_type := piece_at(chess, from_move);
+            __history_moves[piece_type][to_move] -= xx (depth * depth);
+          }
+        }
         // update history heuristic
-        __history_moves[piece_type][to] += depth;
+        __history_moves[piece_type][to] += xx (depth * depth);
 
         // update countermove heuristic
         update_countermove(chess, move);
@@ -546,7 +572,7 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
   }
 
   is_promoting_pawn :: inline (using chess: *Chess) -> bool {
-    return ((w_pawn|b_pawn) & xx (rank_7|rank_2)) != 0;
+    return (w_pawn & cast(u64)rank_7) != 0 || (b_pawn & cast(u64)rank_2) != 0; 
   }
 
   // a bad capture => true, a good capture => false
@@ -655,7 +681,7 @@ mvv_lva :: (victim: Piece, attacker: Piece) -> score: int {
 }
 
 __nodes_searched := 0;
-__history_moves:   [13][64] int;
+__history_moves:   [13][64] s16;
 __killer_moves:    [64][2] Move16;
 __counter_moves:   [13][64] Move16;
 __follow_up:       [13][64][13][64] Move16;
@@ -893,21 +919,8 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
     vic := piece_at(chess, to);
     att := piece_at(chess, from);
     score = mvv_lva(vic, att);
-
-
-    // good capture
-    /*if PVALUE[att] <= PVALUE[vic] then {
-      score = mvv_lva(vic, att);
-    } else {
-      if see(chess, move) < 0 then {
-        // bad capture.
-        score = 8000;
-      } else {
-        // good capture.
-        score = mvv_lva(vic, att);
-      }
-    }*/
   }
+
   #if flags == Ep_Capture {
     score = mvv_lva(Piece.W_PAWN, Piece.W_PAWN);
   }
