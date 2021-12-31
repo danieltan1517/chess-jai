@@ -639,7 +639,7 @@ draw_chess :: (width: float, height: float, chess: *Chess, texture: *Texture, hi
   }
 }
 
-timeout_limit := 20.0;
+timeout_limit := 1.75;
 mouse_position_x: float = 0.0;
 mouse_position_y: float = 0.0;
 mouse_button_1_state: enum {MOUSE_IDLE; MOUSE_PRESSED; MOUSE_HOLD; MOUSE_RELEASE; } = .MOUSE_IDLE;
@@ -1326,7 +1326,7 @@ UCI_Engine :: struct {
   pid: pid_t;
   read_pipe:  s32;
   write_pipe: s32;
-  depth: int = 8;
+  depth: int = 20;
 }
 
 
