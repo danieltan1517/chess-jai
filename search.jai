@@ -20,8 +20,8 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
   push_allocator(temp);
   while cur_depth <= depth { 
     reset_temporary_storage();
-    clear_hash_table();
     chess.ply = 0;
+    chess.maxply =  0; 
     score = negamax(chess, cur_depth, alpha=alpha, beta=beta, fifty=fifty);
 
     if score <= alpha then {
@@ -59,7 +59,7 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
     builder: String_Builder;
     t_ms := cast(int)(`time_taken*1000.0); // convert secs to ms
     nps  := cast(int)(__nodes_searched/(`time_taken+0.0001));
-    print_to_builder(*builder, "info depth % ", depth);
+    print_to_builder(*builder, "info depth % seldepth % ", depth, chess.maxply);
     if score >= -INF+20 && score <= INF-20 then {
       print_to_builder(*builder, "nodes % time % score cp % nps % pv ", __nodes_searched, t_ms, score, nps);
     } else {
@@ -69,6 +69,7 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
     count := pv_table_count[0] - 1;
     for i: 0..count {
       mv := pv_table[0][i];
+      if mv == Move16.Quiet break;  // do not print out NULL moves.
       print_move_to_buffer(mv);
     }
     str := builder_to_string(*builder, allocator=__temporary_allocator);
@@ -80,6 +81,14 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
     }
   }
 
+}
+
+#no_reset LateMovePruning: [64][2] int;
+#run {
+  for i: 0..63 {
+    LateMovePruning[i][0] = (3 + i * i) / 2;
+    LateMovePruning[i][1] = (3 + i * i);
+  }
 }
 
 negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, beta := INF, fifty: int) -> int {
@@ -138,7 +147,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
     if ply>0 && !pv_node then {
       static_eval := evaluate(chess, fifty);
       // reverse futility pruning.
-      if depth < 3 && math.abs(beta-1) > -INF+100 then {
+      if depth < 7 && math.abs(beta-1) > -INF+100 then {
         futility_margin := 214 * depth; // stockfish has its futility_margin at 214 * depth.
         if static_eval - futility_margin >= beta then {
           return static_eval - futility_margin;
@@ -210,7 +219,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
 
   quiet_moves := NewArray(64, Move16);
   num_quiets := 0;
-
+  moves_searched := 0;
   // simple search extension, extend if only one move can be played.
   if move_gen.count == 1  then 
     depth += 1;
@@ -219,6 +228,20 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
     flags, from, to := decode_move16(move);
     // piece
     pfrom := piece_at(chess, from);
+    att := piece_at(chess, from);
+    vic := piece_at(chess, to);
+
+    if move_count != 0 && depth < 5 && flags == Move16.Capture && PVALUE[att] > PVALUE[vic]
+    && see(chess,move) < -218*depth  then
+      continue;
+    
+    if move_count != 0 && depth < 5 && flags <= Move16.Double_Pawn_Push && see(chess,move) < -20*depth*depth then
+      continue;
+
+    moves_searched += 1;
+    if moves_searched > LateMovePruning[depth][cast(int)pv_node] then {
+      break;
+    }
 
     // make move.
     cap, castling, hash := make_move(chess, move);
@@ -235,7 +258,6 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
 
     eval := 0;
     if move_count == 0 {
-      
       eval = -negamax(chess, depth-1, null_flag, -beta, -alpha, next_fifty);
     } else {
       // captures. promotions. checks.
@@ -265,6 +287,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
       // re-search the move that has failed to be proved to be bad with normal alpha beta score bounds
       if eval > alpha then {
         eval = -negamax(chess, depth-1, null_flag, -beta, -alpha, next_fifty);
+        //print("re-searching... depth %\n", depth);
       } 
     }
 
@@ -973,7 +996,7 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
     score = 90000;
   } 
   #if flags == King_Castle || flags == Queen_Castle {
-    score = 8000;
+    score = 10000;
   }
 
   #if flags == Quiet || flags == Double_Pawn_Push {
@@ -1174,6 +1197,7 @@ PVALUE :: #run -> [13] int {
 ChessGame :: struct {
   using chess: Chess;
   ply: int;
+  maxply: int;
   moves: [..] Move32;
   rtable: [..] u64;
 }
@@ -1292,6 +1316,7 @@ piece_to :: (mov: Move32) -> int, int #expand {
 
 make_null_move :: (c: *ChessGame) -> ep: u64, hash: u64 {
   c.ply += 1;
+  c.maxply = max(c.maxply, c.ply);
   ep, hash := make_null_move(*c.chess);
   array_add(*c.moves, NULL);
   array_add(*c.rtable, hash);
