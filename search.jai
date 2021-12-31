@@ -173,16 +173,40 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
         }
       }
 
-      // prob cut implement TODO:
-      /*prob_beta := beta + 110;
-      if depth > 4 && math.abs(beta) > 20_000 {
-      }*/
+      // prob cut implement TODO: make this better...currently we copy twice.
+      prob_beta := beta + 110;
+      if depth > 4 && math.abs(beta) < 20_000 {
+        movegen_copy := copy_negamax(move_gen);
+        ep := chess.en_passant;
+        for move, move_count: movegen_copy {
+          flags, from, to := decode_move16(move);
+          pfrom := piece_at(chess, from);
+         
+          // make move.
+          cap, castling, hash := make_move(chess, move);
+          next_fifty := 0;
+          // not a capture/pawn move.
+          if pfrom != Piece.W_PAWN && pfrom != Piece.B_PAWN && flags == Move16.Quiet {
+            next_fifty = fifty + 1;
+          }
+
+          score := -quiescene(chess, -prob_beta, -prob_beta+1, next_fifty);
+          if score >= prob_beta then
+            score = -negamax(chess, depth-4, false, -prob_beta, -prob_beta + 1, next_fifty);
+
+          unmake_move(chess, move, cap, castling, hash);
+          chess.en_passant = ep;
+
+          if score >= prob_beta then {
+            return score;
+          }
+        }
+      }
     }
   }
 
   ep := chess.en_passant;
   hash_flag := TFLAGS.ALPHA;
-
 
   quiet_moves := NewArray(64, Move16);
   num_quiets := 0;
@@ -192,9 +216,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
     depth += 1;
 
   for move, move_count : move_gen {
-
     flags, from, to := decode_move16(move);
-
     // piece
     pfrom := piece_at(chess, from);
 
@@ -261,7 +283,6 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
       hash_flag = TFLAGS.BETA;
       alpha = ifx (eval>(INF-20)) then eval else  beta;
       piece_type := piece_at(chess, from);
-
       // non-captures == Quiet|Pawn Push Moves
       if flags <= Move16.Double_Pawn_Push {
 
@@ -733,6 +754,20 @@ init_negamax :: (pv: Move16, hmove: Move16, killer1: Move16, killer2: Move16, co
   n.counter = counter;
   n.follow_up = follow_up;
   return n;
+}
+
+copy_negamax :: (neg: Negamax) -> Negamax {
+  ret: Negamax;
+  ret.items     = array_copy(neg.items);
+  ret.score     = array_copy(neg.score);
+  ret.count     = neg.count;
+  ret.pv        = neg.pv;
+  ret.hmove     = neg.hmove;
+  ret.killer1   = neg.killer1;
+  ret.killer2   = neg.killer2;
+  ret.counter   = neg.counter;
+  ret.follow_up = neg.follow_up;
+  return ret;
 }
 
 init_quiescene :: (pv: Move16) -> Quiescene {

@@ -50,6 +50,7 @@ The chess GUI uses the glfw3 and gl libraries.
 * Negamax search with Alpha-Beta Pruning
 * Principle Variation Search
 * SEE Quiescene Search Pruning
+* Prob Cut
 * Late Move Reduction
 * Null Move Pruning 
 * Reverse Futility Pruning/Static Move Pruning
