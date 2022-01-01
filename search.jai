@@ -83,11 +83,10 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
 
 }
 
-#no_reset LateMovePruning: [64][2] int;
+#no_reset LateMovePruning: [64] int;
 #run {
   for i: 0..63 {
-    LateMovePruning[i][0] = (3 + i * i) / 2;
-    LateMovePruning[i][1] = (3 + i * i);
+    LateMovePruning[i] = (3 + i * i) * 3 / 5;
   }
 }
 
@@ -241,7 +240,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
      
       moves_searched += 1;
       // Late Move Pruning. Search the Root Plies Exhuastively
-      if moves_searched > LateMovePruning[depth][cast(int)pv_node] then {
+      if moves_searched > LateMovePruning[depth] then {
         break;
       }
     }
