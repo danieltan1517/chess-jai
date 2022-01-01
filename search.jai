@@ -66,7 +66,7 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
       mate := INF - math.abs(score);
       print_to_builder(*builder, "nodes % time % score mate % nps % pv ", __nodes_searched, t_ms, mate, nps);
     }
-    count := pv_table_count[0] - 1;
+    count := pv_table[0].move_count - 1;
     for i: 0..count {
       mv := pv_table[0][i];
       if mv == Move16.Quiet break;  // do not print out NULL moves.
@@ -101,8 +101,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
   h_move := transposition_table_lookup(chess.hash);
 
   if depth <= 0 then {
-    pv_table_count[ply] = 0;
-    pv_table[ply][0] = 0;
+    pv_table[ply].move_count = 0;
     return quiescene(chess, alpha, beta, fifty);
   }
 
@@ -298,9 +297,9 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
 
     if eval > alpha {
       hash_flag = TFLAGS.EXACT;
-      pv_table[ply][0] = move;
-      memcpy(*pv_table[ply][1], *pv_table[ply+1][0], pv_table_count[ply+1] * size_of(Move16));
-      pv_table_count[ply] = pv_table_count[ply+1] + 1;
+      pv_table[ply].argmove[0] = move;
+      memcpy(*pv_table[ply].argmove[1], *pv_table[ply+1].argmove[0], pv_table[ply+1].move_count * size_of(Move16));
+      pv_table[ply].move_count = pv_table[ply+1].move_count + 1;
       alpha = eval;
     } 
 
@@ -602,9 +601,9 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
     if score > alpha then {
       hash_flag = TFLAGS.EXACT;
       alpha = score;
-      pv_table[ply][0] = move;
-      memcpy(*pv_table[ply][1], *pv_table[ply+1][0], pv_table_count[ply+1] * size_of(Move16));
-      pv_table_count[ply] = pv_table_count[ply+1] + 1;
+      pv_table[ply].argmove[0] = move;
+      memcpy(*pv_table[ply].argmove[1], *pv_table[ply+1].argmove[0], pv_table[ply+1].move_count * size_of(Move16));
+      pv_table[ply].move_count = pv_table[ply+1].move_count + 1;
     }
   }
 
@@ -670,8 +669,16 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
   }
 }
 
-pv_table: [64][64] Move16;
-pv_table_count: [64] int;
+PV_Line :: struct {
+  argmove: [64] Move16;
+  move_count: u16;
+}
+
+operator [] :: (using p: PV_Line, index: int) -> Move16 {
+  return argmove[index];
+}
+
+pv_table: [64] PV_Line;
 
 // performance test
 // walks the move generation tree of strictly legal moves to count the leaf nodes

@@ -476,7 +476,7 @@ bishop_moves :: (sq: int, occ: u64) -> u64 #expand {
   return bishop_attacks[sq][occ];
 }
 
-rook_moves :: (sq: int, occ: u64) -> u64 #expand {
+rook_moves :: (sq: int, occ: u64) -> u64 {
   using magic_rook[sq];
   occ &= mask;
   occ *= magic;
@@ -484,14 +484,14 @@ rook_moves :: (sq: int, occ: u64) -> u64 #expand {
   return rook_attacks[sq][occ];
 }
 
-king_moves :: (bitboard: u64) -> u64 #expand {
+king_moves :: (bitboard: u64) -> u64 {
   l := (bitboard << 1) & xx ~file_a;
   r := (bitboard >> 1) & xx ~file_h;
   k := bitboard | l | r;
   return l | r | (k << 8) | (k >> 8);
 }
 
-knight_moves :: (bitboard: u64) -> u64 #expand {
+knight_moves :: (bitboard: u64) -> u64 {
   l1 := (bitboard << 1) & xx (~file_a);
   r1 := (bitboard >> 1) & xx (~file_h);
   l2 := (l1 << 1) & xx (~file_a);
@@ -501,7 +501,7 @@ knight_moves :: (bitboard: u64) -> u64 #expand {
   return (s2 << 8) | (s2 >> 8) | (s1 << 16) | (s1 >> 16);
 }
 
-pawn_captures :: (bitboard: u64, $turn: Turn) -> u64 #expand {
+pawn_captures :: (bitboard: u64, $turn: Turn) -> u64 {
   using Turn;
   #if turn == WHITE then {
     l := (bitboard << 7) & xx ~file_h;
@@ -515,7 +515,7 @@ pawn_captures :: (bitboard: u64, $turn: Turn) -> u64 #expand {
   }
 }
 
-pawn_advance :: (bitboard: u64, $t: Turn) -> u64 #expand {
+pawn_advance :: (bitboard: u64, $t: Turn) -> u64 {
   using Turn;
   #if t == WHITE then {
     return bitboard << 8;
