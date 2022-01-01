@@ -776,8 +776,8 @@ Negamax :: struct {
 
 init_negamax :: (pv: Move16, hmove: Move16, killer1: Move16, killer2: Move16, counter: Move16, follow_up: Move16) -> Negamax {
   n: Negamax;
-  n.items = NewArray(200, Move16);
-  n.score = NewArray(200, int);
+  n.items = NewArray(80, Move16);
+  n.score = NewArray(80, int);
   n.count = 0;
   n.pv      = pv;
   n.hmove   = hmove;
