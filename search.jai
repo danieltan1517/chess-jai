@@ -101,7 +101,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
   h_move := transposition_table_lookup(chess.hash);
 
   if depth <= 0 then {
-    pv_table[ply].move_count = 0;
+    //pv_table[ply].move_count = 0;
     return quiescene(chess, alpha, beta, fifty);
   }
 

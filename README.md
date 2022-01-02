@@ -51,7 +51,7 @@ The chess GUI uses the glfw3 and gl libraries.
 * Principle Variation Search
 * SEE Quiescene Search Pruning
 * Prob Cut
-* Late Move Reduction
+* Late Move Reduction/Pruning
 * Null Move Pruning 
 * Reverse Futility Pruning/Static Move Pruning
 * Razoring
