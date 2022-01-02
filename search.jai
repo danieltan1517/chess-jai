@@ -1257,6 +1257,7 @@ make_move :: (c: *ChessGame, move: Move16) -> Piece, Castling, u64 {
   array_add(*c.moves, move32);
   array_add(*c.rtable, hash);
   c.ply += 1;
+  c.maxply = max(c.maxply, c.ply);
   return cap, castling, hash;
 }
 
