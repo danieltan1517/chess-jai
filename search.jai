@@ -236,14 +236,13 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
       
       if move_count != 0 && depth < 5 && flags <= Move16.Double_Pawn_Push && see(chess,move) < -20*depth*depth then
         continue;
-     
-      moves_searched += 1;
       // Late Move Pruning. Search the Root Plies Exhuastively
       if moves_searched > LateMovePruning[depth] then {
         break;
       }
     }
-
+     
+    moves_searched += 1;
     // make move.
     cap, castling, hash := make_move(chess, move);
     next_fifty := 0;
@@ -288,7 +287,6 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
       // re-search the move that has failed to be proved to be bad with normal alpha beta score bounds
       if eval > alpha then {
         eval = -negamax(chess, depth-1, null_flag, -beta, -alpha, next_fifty);
-        //print("re-searching... depth %\n", depth);
       } 
     }
 
