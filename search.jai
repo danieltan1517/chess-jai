@@ -86,7 +86,7 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
 #no_reset LateMovePruning: [64] int;
 #run {
   for i: 0..63 {
-    LateMovePruning[i] = (3 + i * i) * 3 / 5;
+    LateMovePruning[i] = (3 + i * i);
   }
 }
 
@@ -668,7 +668,7 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
 }
 
 PV_Line :: struct {
-  argmove: [64] Move16;
+  argmove: [40] Move16;
   move_count: u16;
 }
 
