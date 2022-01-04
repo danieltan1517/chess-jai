@@ -285,7 +285,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
       }
 
       // re-search the move that has failed to be proved to be bad with normal alpha beta score bounds
-      if eval > alpha then {
+      if pv_node && eval > alpha then {
         eval = -negamax(chess, depth-1, null_flag, -beta, -alpha, next_fifty);
       } 
     }
@@ -333,6 +333,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
       } 
       break;
     } 
+
   }
 
   if status == ChessFlags.Threefold_Repetition || status == ChessFlags.Fifty then {
