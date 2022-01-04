@@ -183,23 +183,20 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
       // prob cut implement TODO: make this better...currently we copy twice.
       prob_beta := beta + 110;
       if depth > 4 && math.abs(beta) < 20_000 {
-        movegen_copy := copy_negamax(move_gen);
+        prob_movegen := init_quiescene(pv_table[ply][0]);
+        generate_moves(chess, *prob_movegen, fifty);
         ep := chess.en_passant;
-        for move, move_count: movegen_copy {
+        for move, move_count: prob_movegen {
           flags, from, to := decode_move16(move);
           pfrom := piece_at(chess, from);
          
-          // make move.
+          // make capture move.
           cap, castling, hash := make_move(chess, move);
           next_fifty := 0;
-          // not a capture/pawn move.
-          if pfrom != Piece.W_PAWN && pfrom != Piece.B_PAWN && flags == Move16.Quiet {
-            next_fifty = fifty + 1;
-          }
 
-          score := -quiescene(chess, -prob_beta, -prob_beta+1, next_fifty);
+          score := -quiescene(chess, -prob_beta, -prob_beta+1, 0);
           if score >= prob_beta then
-            score = -negamax(chess, depth-4, false, -prob_beta, -prob_beta + 1, next_fifty);
+            score = -negamax(chess, depth-4, false, -prob_beta, -prob_beta + 1, 0);
 
           unmake_move(chess, move, cap, castling, hash);
           chess.en_passant = ep;
