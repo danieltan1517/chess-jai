@@ -226,12 +226,11 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
     att := piece_at(chess, from);
     vic := piece_at(chess, to);
 
-    if ply > 3 {
-      if move_count != 0 && depth < 5 && flags == Move16.Capture && PVALUE[att] > PVALUE[vic]
-      && see(chess,move) < -218*depth  then
+    if ply > 3 && move_count>0 {
+      if depth < 3 && flags == Move16.Capture && PVALUE[att] > PVALUE[vic] && see(chess,move) < -218*depth  then
         continue;
       
-      if move_count != 0 && depth < 5 && flags <= Move16.Double_Pawn_Push && see(chess,move) < -20*depth*depth then
+      if depth < 3 && flags <= Move16.Double_Pawn_Push && see(chess,move) < -20*depth*depth then
         continue;
       // Late Move Pruning. Search the Root Plies Exhuastively
       if moves_searched > LateMovePruning[depth] then {
