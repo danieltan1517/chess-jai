@@ -97,11 +97,12 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
     return 0;
   __nodes_searched += 1;
 
+  defer memset(*pv_table[ply+1], 0, size_of(PV_Line));
+
   // transposition lookup.
   h_move := transposition_table_lookup(chess.hash);
 
   if depth <= 0 then {
-    //pv_table[ply].move_count = 0;
     return quiescene(chess, alpha, beta, fifty);
   }
 
@@ -115,8 +116,9 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
   }
 
   // internal iterative deepening.
-  if pv_node && h_move == Move16.Quiet && depth > 8 && pv_table[ply][0] == 0 { 
-    for cur_depth: 1..depth-3 {
+  if pv_node && h_move == Move16.Quiet && depth > 9 && pv_table[ply][0] == 0 { 
+    depth -= 3;
+    for cur_depth: 1..depth-4 {
       negamax(chess, cur_depth, null_flag=null_flag, alpha=alpha, beta=beta, fifty=fifty);
       if stop_signal_triggered() then 
         return 0;

@@ -1888,6 +1888,7 @@ print_chess :: (chess: *Chess) {
   loop(xx serialized_bb.a2, "2 ");
   loop(xx serialized_bb.a1, "1 ");
   print("  a b c d e f g h\n");
+  print("Castling: %\n\n", chess.castling);
 
   loop :: (x: int, s: string) #expand {
     print(s);
@@ -1923,8 +1924,7 @@ print_chess :: (chess: *Chess) {
         print("p ");
       }
     }
-    print("\n\n");
-    print("Castling: %\n\n", chess.castling);
+    print("\n");
   }
 
 }

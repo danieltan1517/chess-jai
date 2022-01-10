@@ -29,7 +29,6 @@ rnbqkb1r/pppp1pp1/4pn1p/6B1/3P4/5N2/PPP1PPPP/RN1QKB1R w KQkq - 0 4
 rnb1k2r/ppp2ppp/5n2/2b5/2P5/1NN5/PP3PPP/R1B1KB1R b KQkq - 2 9   ### blundering the bishop
 8/8/p4pp1/1p6/2p1k1Pp/P1P1P2P/1P2KP2/8 w - - 2 43 ### stupid pawn move KP vs KP endgame.
 8/p7/1p4p1/2P1k1Pp/8/P2K4/2P4P/8 b - - 0 43  ### Another stupid pawn endgame blundering..
-8/1k6/8/8/5Q2/7P/2r3PK/8 w - - 2 54  ### Misses an obvious fork to win the Rook against Nelson bot...
 3R4/6p1/1N3pkp/8/4q3/4B1P1/4nP1P/5K2 b - - 3 40 ### blunders away a KNIGHT, WTF???
 
 8/p5Rp/8/1kp5/3p4/1P1Kn3/6P1/8 b - - 2 40 ### WTF??? The AI COMPLETELY BUGS OUT!
