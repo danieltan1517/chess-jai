@@ -83,10 +83,11 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
 
 }
 
-#no_reset LateMovePruning: [64] int;
+#no_reset LateMovePruning: [64][2] int;
 #run {
   for i: 0..63 {
-    LateMovePruning[i] = (3 + i * i) / 2;
+    LateMovePruning[i][0] = (3 + i * i) / 2;
+    LateMovePruning[i][1] = (3 + i * i);
   }
 }
 
@@ -117,12 +118,16 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
 
   // internal iterative deepening.
   if pv_node && depth > 9 && h_move == Move16.Quiet && pv_table[ply][0] == 0 { 
-    for cur_depth: 1..depth-1 {
+    depth -= 4;
+    /*for cur_depth: 1..depth-1 {
       negamax(chess, cur_depth, null_flag=null_flag, alpha=alpha, beta=beta, fifty=fifty);
       if stop_signal_triggered() then 
         return 0;
-    }
+    }*/
   }
+
+  array_add(*chess.eval, cast(s32)INF);
+  defer pop(*chess.eval);
 
   counter  := get_counter_move(chess);
   followup := get_follow_up_move(chess);
@@ -138,6 +143,8 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
   case ChessFlags.Fifty;
     if ply then
       return 0 + ply;
+  case ChessFlags.Check;
+
   case ChessFlags.Threefold_Repetition; 
     if !pv_node then 
       return 0 + ply; 
@@ -145,6 +152,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
   case ChessFlags.Normal;
     if ply>0 && !pv_node then {
       static_eval := evaluate(chess, fifty);
+      chess.eval[chess.eval.count-1] = cast(s32) static_eval;
       // reverse futility pruning.
       if depth < 7 && math.abs(beta-1) > -INF+100 then {
         futility_margin := 214 * depth; // stockfish has its futility_margin at 214 * depth.
@@ -220,6 +228,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
   if move_gen.count == 1  then 
     depth += 1;
 
+  improving := get_improving(chess);
   for move, move_count : move_gen {
     flags, from, to := decode_move16(move);
     // piece
@@ -227,14 +236,14 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
     att := piece_at(chess, from);
     vic := piece_at(chess, to);
 
-    if ply > 3 && move_count>0 {
+    if ply > 1 && move_count>0 {
       if depth < 3 && flags == Move16.Capture && PVALUE[att] > PVALUE[vic] && see(chess,move) < -218*depth  then
         continue;
       
       if depth < 3 && flags <= Move16.Double_Pawn_Push && see(chess,move) < -218*depth then
         continue;
       // Late Move Pruning. Search the Root Plies Exhuastively
-      if flags <= Move16.Double_Pawn_Push && moves_searched > (LateMovePruning[depth] * (1+cast(int)pv_node)) then {
+      if flags <= Move16.Double_Pawn_Push && moves_searched > LateMovePruning[depth][improving] then {
         break;
       }
     }
@@ -1208,6 +1217,7 @@ ChessGame :: struct {
   maxply: int;
   moves: [..] Move32;
   rtable: [..] u64;
+  eval: [..] s32;
 }
 
 Move32 :: struct {
@@ -1218,12 +1228,14 @@ Move32 :: struct {
 clear :: (using c: *ChessGame) {
   array_reset(*moves);
   array_reset(*rtable);
+  array_reset(*eval);
 }
 
 // init chess game
 initialize_chess_game_memory :: (using c: *ChessGame) {
   array_reserve(*moves, MAX);
   array_reserve(*rtable, MAX);
+  array_reserve(*eval, MAX);
   MAX :: 1000;
 }
 
@@ -1316,6 +1328,13 @@ get_follow_up_move :: (c: *ChessGame) -> Move16 {
   }
   return Move16.Quiet;
 
+}
+
+get_improving :: (using c: *ChessGame) -> int {
+  if ply>1 && eval[eval.count-1] > eval[eval.count-3] then 
+    return 1;
+  else
+    return 0;
 }
 
 piece_to :: (mov: Move32) -> int, int #expand {
