@@ -153,12 +153,10 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
     if ply>0 && !pv_node then {
       static_eval := evaluate(chess, fifty);
       chess.eval[chess.eval.count-1] = cast(s32) static_eval;
-      // reverse futility pruning.
-      if depth < 7 && math.abs(beta-1) > -INF+100 then {
-        futility_margin := 214 * depth; // stockfish has its futility_margin at 214 * depth.
-        if static_eval - futility_margin >= beta then {
-          return static_eval - futility_margin;
-        }
+
+      // reverse futility pruning. stockfish has margin at 214*depth
+      if depth < 9 && (static_eval - 214*depth) >= beta then {
+        return static_eval;
       }
  
       // null move pruning. check for zugzwang before searching.
@@ -167,9 +165,8 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
         ep, hash := make_null_move(chess);
         score := -negamax(chess, depth-R-1, false, -beta, -beta + 1, fifty);
         unmake_null_move(chess, ep, hash);
-        if score >= beta then {
+        if score >= beta then 
           return beta;
-        }
       }
  
       // razoring.
@@ -237,10 +234,10 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
     vic := piece_at(chess, to);
 
     if ply > 3 && move_count>0 {
-      if depth < 3 && flags == Move16.Capture && PVALUE[att] > PVALUE[vic] && see(chess,move) < -218*depth  then
+      if flags == Move16.Capture && PVALUE[att] > PVALUE[vic] && see(chess,move) < -218*depth  then
         continue;
       
-      if depth < 3 && flags <= Move16.Double_Pawn_Push && see(chess,move) < -218*depth then
+      if flags <= Move16.Double_Pawn_Push && see(chess,move) < -218*depth then
         continue;
       // Late Move Pruning. Search the Root Plies Exhuastively
       if flags <= Move16.Double_Pawn_Push && moves_searched > LateMovePruning[depth][improving] then {
@@ -1088,7 +1085,7 @@ see :: (chess: *Chess, move: Move16) -> eval: int {
   target := cast(int) piece_at(chess, to);
   apiece := cast(int) piece_at(chess, from);
 
-  gain: [32] int;
+  gain: [16] int;
   d := 0;
   may_x_ray: u64 = chess.w_pawn | chess.w_bishop | chess.w_rook | chess.w_queen
                  | chess.b_pawn | chess.b_bishop | chess.b_rook | chess.b_queen;
@@ -1250,10 +1247,15 @@ generate_moves :: (using c: *ChessGame, movegen: *$T, fifty: int) -> ChessFlags 
   }
 
   hash_val := c.hash;
+  count := 0;
   for < repeat : c.rtable {
     if hash_val == repeat then {
       return ChessFlags.Threefold_Repetition;
     }
+
+    count += 1;
+    if count > fifty
+      break;
   }
 
   return status;

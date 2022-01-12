@@ -31,6 +31,8 @@ rnb1k2r/ppp2ppp/5n2/2b5/2P5/1NN5/PP3PPP/R1B1KB1R b KQkq - 2 9   ### blundering t
 8/p7/1p4p1/2P1k1Pp/8/P2K4/2P4P/8 b - - 0 43  ### Another stupid pawn endgame blundering..
 3R4/6p1/1N3pkp/8/4q3/4B1P1/4nP1P/5K2 b - - 3 40 ### blunders away a KNIGHT, WTF???
 
+8/4R3/4r3/1K4k1/8/8/7Q/8 w - - 7 71  ### Does not take the free rook...
+
 8/p5Rp/8/1kp5/3p4/1P1Kn3/6P1/8 b - - 2 40 ### WTF??? The AI COMPLETELY BUGS OUT!
 
 8/8/4R3/6p1/6P1/3r1k1P/8/7K w - - 7 63 ###????
