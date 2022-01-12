@@ -684,6 +684,9 @@ perft :: (chess: *Chess, depth: int) -> int {
   num_nodes := 0;
   movegen: Perft(80);
   generate_moves(chess, *movegen);
+
+  if depth == 1 then return movegen.count;
+
   ep := chess.en_passant;
   for move : movegen {
     piece, flags, hash := make_move(chess, move);

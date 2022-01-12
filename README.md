@@ -40,7 +40,7 @@ The chess GUI uses the glfw3 and gl libraries.
 * Bitboards with Little Endian Rank-File Mapping
 * Magic bitboards
 * Kogge-Stone Algorithm
-* Move generator can generate 55 million positions per second
+* Move generator can generate 210 million positions per second (benchmarked from perft 6 from the initial position)
 * Moves represented as 16-bit integers
 
 ### Search and Pruning
