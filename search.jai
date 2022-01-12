@@ -236,7 +236,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
     att := piece_at(chess, from);
     vic := piece_at(chess, to);
 
-    if ply > 1 && move_count>0 {
+    if ply > 3 && move_count>0 {
       if depth < 3 && flags == Move16.Capture && PVALUE[att] > PVALUE[vic] && see(chess,move) < -218*depth  then
         continue;
       
