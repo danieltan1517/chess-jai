@@ -117,8 +117,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
 
   // internal iterative deepening.
   if pv_node && h_move == Move16.Quiet && depth > 9 && pv_table[ply][0] == 0 { 
-    depth -= 3;
-    for cur_depth: 1..depth-4 {
+    for cur_depth: 1..depth-1 {
       negamax(chess, cur_depth, null_flag=null_flag, alpha=alpha, beta=beta, fifty=fifty);
       if stop_signal_triggered() then 
         return 0;
@@ -261,7 +260,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
       // captures. promotions. checks.
       if in_check(chess) {
         // do not reduce depth on check.
-        eval = -negamax(chess, depth, null_flag, -alpha-1, -alpha, next_fifty);
+        eval = -negamax(chess, depth-1, null_flag, -alpha-1, -alpha, next_fifty);
       }
 
       else if cap != Piece.NONE || flags > Move16.Double_Pawn_Push {
@@ -269,7 +268,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
       }
 
       // Late Move Reduction when not in check and not giving check.
-      else if ply && move_count > 3 && depth > 3 
+      else if ply && moves_searched > 3 && depth > 3 
          && status == ChessFlags.Normal && flags <= Move16.Double_Pawn_Push {
 
         // do late move reduction when not in check and making "quiet moves" 
@@ -592,8 +591,8 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
 
     if score >= beta then {
       hash_flag = TFLAGS.BETA;
-      transposition_table_store(chess.hash);
-      return beta;
+      alpha = beta;
+      break;
     }
     if score > alpha then {
       hash_flag = TFLAGS.EXACT;
