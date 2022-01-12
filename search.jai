@@ -116,7 +116,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
   }
 
   // internal iterative deepening.
-  if pv_node && h_move == Move16.Quiet && depth > 9 && pv_table[ply][0] == 0 { 
+  if pv_node && depth > 9 && h_move == Move16.Quiet && pv_table[ply][0] == 0 { 
     for cur_depth: 1..depth-1 {
       negamax(chess, cur_depth, null_flag=null_flag, alpha=alpha, beta=beta, fifty=fifty);
       if stop_signal_triggered() then 
@@ -588,18 +588,18 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
     score := -quiescene(chess, -beta, -alpha, fifty=next_fifty);
     unmake_move(chess, move, cap, flags, hash);
     chess.en_passant = ep;
-
-    if score >= beta then {
-      hash_flag = TFLAGS.BETA;
-      alpha = beta;
-      break;
-    }
     if score > alpha then {
       hash_flag = TFLAGS.EXACT;
       alpha = score;
       pv_table[ply].argmove[0] = move;
       memcpy(*pv_table[ply].argmove[1], *pv_table[ply+1].argmove[0], pv_table[ply+1].move_count * size_of(Move16));
       pv_table[ply].move_count = pv_table[ply+1].move_count + 1;
+    }
+
+    if score >= beta then {
+      hash_flag = TFLAGS.BETA;
+      alpha = beta;
+      break;
     }
   }
 

@@ -6,7 +6,7 @@ nnue_init :: () {
 evaluate :: (using chess: *Chess, fifty: int) -> int {
   TF, score := trivial_evaluation(chess, fifty); 
   if TF return score;
-  return nnue_evaluate(chess, fifty);
+  return nnue_evaluate(chess, fifty) / 2;
 }
 
 WIN_SCORE :: 10_000;
