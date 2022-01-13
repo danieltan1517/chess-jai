@@ -170,7 +170,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
           // null move w/ verification at higher depths.
           if depth>12 || zugzwang(chess) then {
             score = negamax(chess, depth-R-1, false, beta-1, beta, fifty);
-            if score >= beta
+            if score >= beta then
               return beta;
           } else {
             return beta;
@@ -252,7 +252,6 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
         break;
       }
       if !pv_node && move_score < -250 then {
-        //print("move_score=%, depth=%, ply=%\n", move_score, depth, ply);
         continue;
       }
     }
@@ -330,6 +329,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
             _, from_move, to_move := decode_move16(prev_move);
             piece_type := piece_at(chess, from_move);
             __history_moves[piece_type][to_move] -= xx (depth * depth);
+            __history_moves[piece_type][to_move] = max(__history_moves[piece_type][to_move], -9150);
           }
         }
         // update history heuristic
@@ -752,7 +752,7 @@ mvv_lva :: (victim: Piece, attacker: Piece) -> score: int {
 }
 
 __nodes_searched := 0;
-__history_moves:   [13][64] s32;
+__history_moves:   [13][64] s16;
 __killer_moves:    [64][2] Move16;
 __counter_moves:   [13][64] Move16;
 __follow_up:       [13][64][13][64] Move16;
