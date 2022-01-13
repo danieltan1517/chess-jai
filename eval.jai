@@ -80,7 +80,7 @@ trivial_evaluation :: (using chess: *Chess, fifty: int) -> bool, int {
 
     distance   := math.abs(winx - losx) + math.abs(winy - losy);
     push_close := 140 - 20 * distance;
-    edge       := push_to_edge(los)*2;
+    edge       := push_to_edge(los);
     mat        := popcount(q)*9000 + popcount(r)*5000 + popcount(b)*3500 + popcount(n)*3000;
     pawn_points:= 0;
     while p {

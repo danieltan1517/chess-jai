@@ -117,8 +117,8 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
   }
 
   // internal iterative deepening.
-  if pv_node && depth > 9 && h_move == Move16.Quiet && pv_table[ply][0] == 0 { 
-    depth -= 4;
+  if pv_node && depth > 4 && h_move == Move16.Quiet && pv_table[ply][0] == 0 { 
+    depth -= 1;
     /*for cur_depth: 1..depth-1 {
       negamax(chess, cur_depth, null_flag=null_flag, alpha=alpha, beta=beta, fifty=fifty);
       if stop_signal_triggered() then 
@@ -155,29 +155,38 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
       chess.eval[chess.eval.count-1] = cast(s32) static_eval;
 
       // reverse futility pruning. stockfish has margin at 214*depth
-      if depth < 9 && (static_eval - 214*depth) >= beta then {
+      if depth < 11 && (static_eval - 214*depth) >= beta then {
         return static_eval;
       }
  
       // null move pruning. check for zugzwang before searching.
-      if null_flag && depth > 3 && !zugzwang(chess) then {
+      if null_flag && ply>0 && depth > 3 then {
         R := min(math.abs(static_eval - beta) / 205, 2) + depth / 3 + 3;
         ep, hash := make_null_move(chess);
         score := -negamax(chess, depth-R-1, false, -beta, -beta + 1, fifty);
         unmake_null_move(chess, ep, hash);
-        if score >= beta then 
-          return beta;
+
+        if score >= beta then {
+          // null move w/ verification at higher depths.
+          if depth>12 || zugzwang(chess) then {
+            score = negamax(chess, depth-R-1, false, beta-1, beta, fifty);
+            if score >= beta
+              return beta;
+          } else {
+            return beta;
+          }
+
+        }
       }
  
       // razoring.
-      // taken from BBC chess engine...
       if depth <= 3 then {
-        score := static_eval + 250;
+        score := static_eval + 125;
         if score < beta && depth == 1 {
           new_score := quiescene(chess, alpha, beta, fifty);
           return ifx new_score > score then new_score else score;
         }
-        score += 350;
+        score += 250;
         if score < beta && depth <= 2 {
           new_score := quiescene(chess, alpha, beta, fifty);
           if new_score < beta {
@@ -287,7 +296,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
         eval = -negamax(chess, depth-1, null_flag, -alpha-1, -alpha, next_fifty);
       }
 
-      // re-search the move that has failed to be proved to be bad with normal alpha beta score bounds
+      // search the move again that has failed to be proved to be bad with normal alpha beta score bounds
       if pv_node && eval > alpha then {
         eval = -negamax(chess, depth-1, null_flag, -beta, -alpha, next_fifty);
       } 
