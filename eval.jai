@@ -52,7 +52,7 @@ trivial_evaluation :: (using chess: *Chess, fifty: int) -> bool, int {
     if w_pieces & (~(w_pawn|w_knight)) {
       side := ifx turn == Turn.WHITE then 1 else -1; 
       eval := eval_winning_position(w_king, q=w_queen, r=w_rook, b=w_bishop, n=w_knight, p=bit_reverse64(w_pawn), b_king) * side;
-      return true, (eval * (100 - fifty)) / 100;
+      return true, eval;
     } 
   }
 
@@ -63,7 +63,7 @@ trivial_evaluation :: (using chess: *Chess, fifty: int) -> bool, int {
     if b_pieces & (~(b_pawn|b_knight)) {
       side := ifx turn == Turn.WHITE then -1 else 1;
       eval := eval_winning_position(b_king, q=b_queen, r=b_rook, b=b_bishop, n=b_knight, p=b_pawn, w_king) * side;
-      return true, (eval * (100 - fifty)) / 100;
+      return true, eval;
     } 
   }
   return false, 0;

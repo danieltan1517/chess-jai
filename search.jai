@@ -241,7 +241,6 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
     pfrom := piece_at(chess, from);
     att := piece_at(chess, from);
     vic := piece_at(chess, to);
-
     if ply > 3 && move_count>0 {
       if flags == Move16.Capture && PVALUE[att] > PVALUE[vic] && see(chess,move) < -218*depth  then
         continue;
@@ -251,6 +250,10 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
       // Late Move Pruning. Search the Root Plies Exhuastively
       if flags <= Move16.Double_Pawn_Push && moves_searched > LateMovePruning[depth][improving] then {
         break;
+      }
+      if !pv_node && move_score < -250 then {
+        //print("move_score=%, depth=%, ply=%\n", move_score, depth, ply);
+        continue;
       }
     }
      
@@ -331,6 +334,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
         }
         // update history heuristic
         __history_moves[piece_type][to] += xx (depth * depth);
+        __history_moves[piece_type][to] %= 9150;
 
         // update countermove heuristic
         update_countermove(chess, move);
@@ -748,7 +752,7 @@ mvv_lva :: (victim: Piece, attacker: Piece) -> score: int {
 }
 
 __nodes_searched := 0;
-__history_moves:   [13][64] s16;
+__history_moves:   [13][64] s32;
 __killer_moves:    [64][2] Move16;
 __counter_moves:   [13][64] Move16;
 __follow_up:       [13][64][13][64] Move16;
@@ -1040,8 +1044,6 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
         CONTINUE_BONUS :: 100;
         score += CONTINUE_BONUS;
       }
-      // a hack to prevent history from overpowering killer moves.
-      score = min(score, 9150);
     }
   }
 
@@ -1068,6 +1070,7 @@ for_expansion :: (using heap: *Negamax, code: Code, f: For_Flags) #expand {
   while heap.count > 0 {
     mov, score := heap_pop(heap);
     `it, `it_index := mov, i;
+    `move_score := score;
     #insert code;
     i += 1;
   }
