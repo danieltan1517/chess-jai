@@ -251,7 +251,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
       if flags <= Move16.Double_Pawn_Push && moves_searched > LateMovePruning[depth][improving] then {
         break;
       }
-      if !pv_node && move_score < -5*depth*depth/2 then {
+      if !pv_node && move_score < -25*depth then {
         break;
       }
     }
