@@ -251,8 +251,8 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
       if flags <= Move16.Double_Pawn_Push && moves_searched > LateMovePruning[depth][improving] then {
         break;
       }
-      if !pv_node && move_score < -250 then {
-        continue;
+      if !pv_node && move_score < -5*depth*depth/2 then {
+        break;
       }
     }
      
@@ -538,7 +538,7 @@ initialize_ai_globals :: () {
   //zobrist_init_globals();
 }
 
-INF :: 0x7FF_FFFF; // Alias
+INF :: 0x7FFF; // Alias
 
 #scope_file
 // search capture moves only, we do this to avoid horizon effect
@@ -727,26 +727,26 @@ perft :: (chess: *Chess, depth: int) -> int {
 // most valuable victim, least valuable attacker.
 // see: https://www.chessprogramming.org/MVV-LVA
 mvv_lva :: (victim: Piece, attacker: Piece) -> score: int {
-  vs := piece_score[cast(int) victim] - piece_score[cast(int) attacker]/100;
+  vs := piece_score[cast(int) victim] - piece_score[cast(int) attacker]/1000;
   return vs;
 
   piece_score :: #run -> [13] int {
     using Piece;
     array: [13] int;
     array[cast(int)NONE     ] = 0;
-    array[cast(int)W_KING   ] = 100_000;
-    array[cast(int)W_QUEEN  ] =  90_000;
-    array[cast(int)W_ROOK   ] =  50_000;
-    array[cast(int)W_BISHOP ] =  30_000;
-    array[cast(int)W_KNIGHT ] =  30_000;
-    array[cast(int)W_PAWN   ] =  10_000;
+    array[cast(int)W_KING   ] = 30_000;
+    array[cast(int)W_QUEEN  ] = 20_000;
+    array[cast(int)W_ROOK   ] = 15_000;
+    array[cast(int)W_BISHOP ] = 12_000;
+    array[cast(int)W_KNIGHT ] = 12_000;
+    array[cast(int)W_PAWN   ] = 10_000;
 
-    array[cast(int)B_KING   ] = 100_000;
-    array[cast(int)B_QUEEN  ] =  90_000;
-    array[cast(int)B_ROOK   ] =  50_000;
-    array[cast(int)B_BISHOP ] =  30_000;
-    array[cast(int)B_KNIGHT ] =  30_000;
-    array[cast(int)B_PAWN   ] =  10_000;
+    array[cast(int)B_KING   ] = 30_000;
+    array[cast(int)B_QUEEN  ] = 20_000;
+    array[cast(int)B_ROOK   ] = 15_000;
+    array[cast(int)B_BISHOP ] = 12_000;
+    array[cast(int)B_KNIGHT ] = 12_000;
+    array[cast(int)B_PAWN   ] = 10_000;
     return array;
   }
 }
@@ -755,7 +755,7 @@ __nodes_searched := 0;
 __history_moves:   [13][64] s16;
 __killer_moves:    [64][2] Move16;
 __counter_moves:   [13][64] Move16;
-__follow_up:       [13][64][13][64] Move16;
+__follow_up:       [13][64][7][64] Move16;
 
 // get something off the ground.
 TSIZE :: 0x20000;
@@ -780,8 +780,8 @@ clear_hash_table :: () #expand {
 
 #scope_export
 Negamax :: struct {
-  items: [] Move16;
-  score: [] int;
+  items: [80] Move16;
+  score: [80] s16;
   count: int;
 
   pv       : Move16;
@@ -794,8 +794,8 @@ Negamax :: struct {
 
 init_negamax :: (pv: Move16, hmove: Move16, killer1: Move16, killer2: Move16, counter: Move16, follow_up: Move16) -> Negamax {
   n: Negamax;
-  n.items = NewArray(80, Move16);
-  n.score = NewArray(80, int);
+  //n.items = NewArray(80, Move16);
+  //n.score = NewArray(80, s16);
   n.count = 0;
   n.pv      = pv;
   n.hmove   = hmove;
@@ -806,9 +806,10 @@ init_negamax :: (pv: Move16, hmove: Move16, killer1: Move16, killer2: Move16, co
   return n;
 }
 
-copy_negamax :: (neg: Negamax) -> Negamax {
+/*copy_negamax :: (neg: Negamax) -> Negamax {
   ret: Negamax;
-  ret.items     = array_copy(neg.items);
+  memcpy(neg.items.data, ret.items.data, size_of(type_of(neg.items)));
+  //ret.items     = array_copy(neg.items);
   ret.score     = array_copy(neg.score);
   ret.count     = neg.count;
   ret.pv        = neg.pv;
@@ -818,20 +819,20 @@ copy_negamax :: (neg: Negamax) -> Negamax {
   ret.counter   = neg.counter;
   ret.follow_up = neg.follow_up;
   return ret;
-}
+}*/
 
 init_quiescene :: (pv: Move16) -> Quiescene {
   q: Quiescene;
   q.pv = pv;
-  q.items = NewArray(30, Move16);
-  q.score = NewArray(30, int);
+  //q.items = NewArray(30, Move16);
+  //q.score = NewArray(30, s16);
   q.count = 0;
   return q;
 }
 
 Quiescene :: struct {
-  items: [] Move16;
-  score: [] int;
+  items: [30] Move16;
+  score: [30] s16;
   count: int;
   pv: Move16;
 }
@@ -874,7 +875,7 @@ heap_add :: (using heap: *Quiescene, item: Move16, num: int) {
   child  := count;
   parent := (child-1) / 2;
   items[count] = item;
-  score[count] = num;
+  score[count] = xx num;
   count += 1;
   while child > 0 && score[parent] < score[child] {
     swap(score[parent], score[child]);
@@ -928,7 +929,7 @@ heap_add :: (using heap: *Negamax, item: Move16, num: int) {
   child  := count;
   parent := (child-1) / 2;
   items[count] = item;
-  score[count] = num;
+  score[count] = xx num;
   count += 1;
   while child > 0 && score[parent] < score[child] {
     swap(score[parent], score[child]);
@@ -966,7 +967,7 @@ add_move :: (chess: *Chess, heap: *Quiescene, from: int, to: int, $flags: Move16
     heap_add(heap, move, score);
   }
   #if flags == Queen_Promotion || flags == Queen_Promotion_Capture {
-    score = 90000;
+    score = 20000;
     heap_add(heap, move, score);
   }
 
@@ -1015,12 +1016,12 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
   }
 
   #if flags == Queen_Promotion {
-    score = 90000;
+    score = 20000;
   }
 
   #if flags == Queen_Promotion_Capture || flags == Bishop_Promotion_Capture 
     || flags == Knight_Promotion_Capture || flags == Rook_Promotion_Capture {
-    score = 90000;
+    score = 20000;
   } 
   #if flags == King_Castle || flags == Queen_Castle {
     score = 10000;
@@ -1324,6 +1325,9 @@ update_followup :: (c: *ChessGame, move: Move16) #expand {
     prev1 := c.moves.count-1;
     piece2, to2 := piece_to(c.moves[prev1]);
 
+    if piece2 > 6 then
+      piece2 -= 6;
+
     __follow_up[piece1][to1][piece2][to2] = move;
   }
 }
@@ -1337,6 +1341,9 @@ get_follow_up_move :: (c: *ChessGame) -> Move16 {
     // previous 1 move.
     prev1 := c.moves.count-1;
     piece2, to2 := piece_to(c.moves[prev1]);
+
+    if piece2 > 6 then
+      piece2 -= 6;
 
     return __follow_up[piece1][to1][piece2][to2];
   }
