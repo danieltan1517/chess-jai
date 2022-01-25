@@ -126,7 +126,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
     }*/
   }
 
-  array_add(*chess.eval, cast(s32)INF);
+  array_add(*chess.eval, cast(s16)INF);
   defer pop(*chess.eval);
 
   counter  := get_counter_move(chess);
@@ -152,7 +152,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
   case ChessFlags.Normal;
     if ply>0 && !pv_node then {
       static_eval := evaluate(chess, fifty);
-      chess.eval[chess.eval.count-1] = cast(s32) static_eval;
+      chess.eval[chess.eval.count-1] = cast(s16) static_eval;
 
       // reverse futility pruning. stockfish has margin at 214*depth
       if depth < 11 && (static_eval - 214*depth) >= beta then {
@@ -175,7 +175,6 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
           } else {
             return beta;
           }
-
         }
       }
  
@@ -251,6 +250,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
       if flags <= Move16.Double_Pawn_Push && moves_searched > LateMovePruning[depth][improving] then {
         break;
       }
+
       if !pv_node && move_score < -25*depth then {
         break;
       }
@@ -277,7 +277,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
       // captures. promotions. checks.
       if in_check(chess) {
         // do not reduce depth on check.
-        eval = -negamax(chess, depth-1, null_flag, -alpha-1, -alpha, next_fifty);
+        eval = -negamax(chess, depth, null_flag, -alpha-1, -alpha, next_fifty);
       }
 
       else if cap != Piece.NONE || flags > Move16.Double_Pawn_Push {
@@ -760,7 +760,7 @@ __follow_up:       [13][64][7][64] Move16;
 // get something off the ground.
 TSIZE :: 0x20000;
 
-ttable : struct {
+ttable: struct {
   hash:     [TSIZE] u64;
   entries:  [TSIZE] TTEntry;
 
@@ -1227,7 +1227,7 @@ ChessGame :: struct {
   maxply: int;
   moves: [..] Move32;
   rtable: [..] u64;
-  eval: [..] s32;
+  eval: [..] s16;
 }
 
 Move32 :: struct {
