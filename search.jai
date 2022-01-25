@@ -23,7 +23,6 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
     chess.ply = 0;
     chess.maxply =  0; 
     score = negamax(chess, cur_depth, alpha=alpha, beta=beta, fifty=fifty);
-
     if score <= alpha then {
       print("info depth % lowerbound %\n", cur_depth, score);
       beta = (alpha + beta) / 2;
@@ -131,7 +130,6 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
 
   counter  := get_counter_move(chess);
   followup := get_follow_up_move(chess);
-  auto_release_temp();
   move_gen := init_negamax(pv_table[ply][0], h_move, __killer_moves[ply][0], __killer_moves[ply][1], counter, followup);
   status := generate_moves(chess, *move_gen, fifty);
 
@@ -226,7 +224,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
   ep := chess.en_passant;
   hash_flag := TFLAGS.ALPHA;
 
-  quiet_moves := NewArray(64, Move16);
+  quiet_moves: [64] Move16;
   num_quiets := 0;
   moves_searched := 0;
   // simple search extension, extend if only one move can be played.
