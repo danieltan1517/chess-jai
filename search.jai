@@ -37,7 +37,7 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
       delta += delta / 4 + 5;
       continue;
     }
-    if score >= -50_000 && score <= 50_000 then {
+    if score >= -10_000 && score <= 10_000 then {
       alpha = score - delta;
       beta  = score + delta;
     } else {
