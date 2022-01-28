@@ -32,7 +32,7 @@ nnue_evaluate :: (chess: *Chess, fifty: int) -> int {
   pieces[index] = 0;
   squares[index] = 0;
   eval := __nnue_evaluate(xx chess.turn, pieces.data, squares.data);
-  return (eval * (100 - fifty)) / 200;
+  return (eval * (100 - fifty)) / 100;
 }
 
 // We use trivial evaluation to deal with endgame positions.

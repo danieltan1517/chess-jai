@@ -187,7 +187,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
 
       // prob cut implement TODO: make this better...currently we copy twice.
       prob_beta := beta + 110;
-      if depth > 4 && math.abs(beta) < 20_000 {
+      if depth > 4 && math.abs(beta) < 10_000 {
         prob_movegen := init_quiescene(pv_table[ply][0]);
         generate_moves(chess, *prob_movegen, fifty);
         ep := chess.en_passant;
@@ -250,7 +250,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
     pfrom := piece_at(chess, from);
     att := piece_at(chess, from);
     vic := piece_at(chess, to);
-    if ply>0 && move_count>0 {
+    if ply>2 && move_count>0 {
       if flags == Move16.Capture && PVALUE[att] > PVALUE[vic] && see(chess,move) < -218*depth  then
         continue;
       if flags <= Move16.Double_Pawn_Push && see(chess,move) < -150*depth then
