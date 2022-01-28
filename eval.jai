@@ -6,7 +6,7 @@ nnue_init :: () {
 evaluate :: (using chess: *Chess, fifty: int) -> int {
   TF, score := trivial_evaluation(chess, fifty); 
   if TF return score;
-  return nnue_evaluate(chess, fifty) / 2;
+  return nnue_evaluate(chess, fifty);
 }
 
 WIN_SCORE :: 10_000;
@@ -32,7 +32,7 @@ nnue_evaluate :: (chess: *Chess, fifty: int) -> int {
   pieces[index] = 0;
   squares[index] = 0;
   eval := __nnue_evaluate(xx chess.turn, pieces.data, squares.data);
-  return (eval * (100 - fifty)) / 100;
+  return (eval * (100 - fifty)) / 200;
 }
 
 // We use trivial evaluation to deal with endgame positions.

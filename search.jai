@@ -125,29 +125,22 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
     }*/
   }
 
-  array_add(*chess.eval, cast(s16)INF);
-  defer pop(*chess.eval);
-
-  counter  := get_counter_move(chess);
-  followup := get_follow_up_move(chess);
-  move_gen := init_negamax(pv_table[ply][0], h_move, __killer_moves[ply][0], __killer_moves[ply][1], counter, followup);
-  status := generate_moves(chess, *move_gen, fifty);
-
+  // TODO: this is NOT good code. inefficient.
+  status := check_for_repetition(chess, fifty);
   if status == {
-  case ChessFlags.Checkmate;
-    return -INF + ply;
-  case ChessFlags.Stalemate;
-    return 0 + ply;
   case ChessFlags.Fifty;
     if ply then
       return 0 + ply;
-  case ChessFlags.Check;
-
   case ChessFlags.Threefold_Repetition; 
     if !pv_node then 
       return 0 + ply; 
+  }
 
-  case ChessFlags.Normal;
+  array_add(*chess.eval, cast(s16)INF);
+  defer pop(*chess.eval);
+
+  // do pruning here. TODO:
+  if status == ChessFlags.Normal && !in_check(chess) {
     if ply>0 && !pv_node then {
       static_eval := evaluate(chess, fifty);
       chess.eval[chess.eval.count-1] = cast(s16) static_eval;
@@ -221,6 +214,26 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
     }
   }
 
+  counter  := get_counter_move(chess);
+  followup := get_follow_up_move(chess);
+  move_gen := init_negamax(pv_table[ply][0], h_move, __killer_moves[ply][0], __killer_moves[ply][1], counter, followup);
+  status = generate_moves(chess, *move_gen, fifty);
+
+  if status == {
+  case ChessFlags.Checkmate;
+    return -INF + ply;
+  case ChessFlags.Stalemate;
+    return 0 + ply;
+  case ChessFlags.Fifty;
+    if ply then
+      return 0 + ply;
+  case ChessFlags.Threefold_Repetition; 
+    if !pv_node then 
+      return 0 + ply; 
+
+  case ChessFlags.Normal;
+  }
+
   ep := chess.en_passant;
   hash_flag := TFLAGS.ALPHA;
 
@@ -237,18 +250,18 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
     pfrom := piece_at(chess, from);
     att := piece_at(chess, from);
     vic := piece_at(chess, to);
-    if ply > 3 && move_count>0 {
+    if ply>0 && move_count>0 {
       if flags == Move16.Capture && PVALUE[att] > PVALUE[vic] && see(chess,move) < -218*depth  then
         continue;
-      
-      if flags <= Move16.Double_Pawn_Push && see(chess,move) < -218*depth then
+      if flags <= Move16.Double_Pawn_Push && see(chess,move) < -150*depth then
         continue;
-      // Late Move Pruning. Search the Root Plies Exhuastively
-      if flags <= Move16.Double_Pawn_Push && moves_searched > LateMovePruning[depth][improving] then {
+
+      if !pv_node && move_score < -25*depth then {
         break;
       }
 
-      if !pv_node && move_score < -25*depth then {
+      // Late Move Pruning. Search the Root Plies Exhuastively
+      if flags <= Move16.Double_Pawn_Push && moves_searched > LateMovePruning[depth][improving] then {
         break;
       }
     }
@@ -1275,6 +1288,27 @@ generate_moves :: (using c: *ChessGame, movegen: *$T, fifty: int) -> ChessFlags 
 
   return status;
 }
+
+check_for_repetition :: (using c: *ChessGame, fifty: int) -> ChessFlags {
+  if fifty >= 100 {
+    return ChessFlags.Fifty;
+  }
+
+  hash_val := c.hash;
+  count := 0;
+  for < repeat : c.rtable {
+    if hash_val == repeat then {
+      return ChessFlags.Threefold_Repetition;
+    }
+
+    count += 1;
+    if count > fifty
+      break;
+  }
+
+  return ChessFlags.Normal;
+}
+
 
 make_move :: (c: *ChessGame, move: Move16) -> Piece, Castling, u64 {
   from := get_move16_from(move);

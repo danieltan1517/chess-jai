@@ -1327,7 +1327,7 @@ UCI_Engine :: struct {
   pid: pid_t;
   read_pipe:  s32;
   write_pipe: s32;
-  depth: int = 20;
+  depth: int = 30;
 }
 
 
