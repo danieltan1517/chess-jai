@@ -183,7 +183,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
           new_score := quiescene(chess, alpha, beta, fifty);
           return ifx new_score > score then new_score else score;
         }
-        score += 175;
+        score += 250;
         if score < beta && depth <= 2 {
           new_score := quiescene(chess, alpha, beta, fifty);
           if new_score < beta {
