@@ -183,7 +183,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
           new_score := quiescene(chess, alpha, beta, fifty);
           return ifx new_score > score then new_score else score;
         }
-        score += 250;
+        score += 175;
         if score < beta && depth <= 2 {
           new_score := quiescene(chess, alpha, beta, fifty);
           if new_score < beta {
@@ -230,7 +230,6 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
   // simple search extension, extend if only one move can be played.
   if move_gen.count == 1  then 
     depth += 1;
-
   improving := get_improving(chess);
   for move, move_count : move_gen {
     flags, from, to := decode_move16(move);
@@ -288,6 +287,12 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
 
         // do late move reduction when not in check and making "quiet moves" 
         R := LateMoveReduction[min(depth,63)][min(move_count,63)];
+        if !pv_node then
+          R += 1;
+        if improving == 0 then
+          R += 1;
+        if move_score < -12*depth then
+          R += 3;
         eval = -negamax(chess, depth-R-1, null_flag, -alpha-1, -alpha, next_fifty);
       } 
 
@@ -315,7 +320,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
 
     if eval >= beta then {
       hash_flag = TFLAGS.BETA;
-      alpha = ifx (eval>(INF-20)) then eval else  beta;
+      alpha = beta;
       piece_type := piece_at(chess, from);
       // non-captures == Quiet|Pawn Push Moves
       if flags <= Move16.Double_Pawn_Push {
@@ -378,7 +383,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
           `return beta; 
         }
       }
-      
+
       return entry.bmove;
     }
 
@@ -702,7 +707,6 @@ perft :: (chess: *Chess, depth: int) -> int {
   generate_moves(chess, *movegen);
 
   if depth == 1 then return movegen.count;
-
   ep := chess.en_passant;
   for move : movegen {
     piece, flags, hash := make_move(chess, move);
@@ -772,11 +776,11 @@ ttable: struct {
 
 TFLAGS :: enum u8 { EXACT; ALPHA; BETA; }
 
+#scope_export
 clear_hash_table :: () #expand {
   memset(*ttable, 0, size_of(type_of(ttable)));
 }
 
-#scope_export
 Negamax :: struct {
   items: [80] Move16;
   score: [80] s16;

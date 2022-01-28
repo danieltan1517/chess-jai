@@ -1079,6 +1079,7 @@ uci_ai_loop :: (using engine: *UCI_Engine, chess: *Chess, moves_arr: *[..]Move16
 
   case .UCI_NEWGAME;
     uci_state = .UCI_IDLE;
+    uci_write_command(engine, "ucinewgame\n");
   case .UCI_IDLE;
     for message: uci_messages(engine) {
       // getline and throw away input.

@@ -23,6 +23,7 @@ main :: () {
     } else if equal(input, "isready") {
       print("readyok\n");
     } else if equal(input, "ucinewgame") {
+      clear_hash_table();
       chess_startpos(*chess);
 
     } else if equal(input, "perft_all") {
