@@ -80,3 +80,5 @@ The chess GUI uses the glfw3 and gl libraries.
 * UCI not fully supported 
 * Check out Berserk Chess Engine. [Berserk](https://github.com/jhonnold/berserk)
 * Check out [NNUE-pytorch](https://github.com/glinscott/nnue-pytorch/blob/master/docs/nnue.md)
+* Search Extensions.
+* Attempt to move to staged move generation.
