@@ -56,6 +56,7 @@ The chess GUI uses the glfw3 and gl libraries.
 * Reverse Futility Pruning/Static Move Pruning
 * Razoring
 * Mate Distance Pruning
+* History Leaf Pruning
 
 ### Transposition Table
 * 3-fold repetition & fifty-move rule (still some bugs.)
