@@ -291,7 +291,16 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, alpha := -INF, be
       }
 
       else if cap != Piece.NONE || flags > Move16.Double_Pawn_Push {
-        eval = -negamax(chess, depth-1, null_flag, -alpha-1, -alpha, next_fifty);
+
+        // re-capture extension
+        prev := chess.moves.count-1;
+        prev_move := chess.moves[prev];
+        pto := get_move16_to(prev_move.mov16);
+        extension := 0;
+        if to == pto then
+          extension += 1;
+
+        eval = -negamax(chess, depth+extension-1, null_flag, -alpha-1, -alpha, next_fifty);
       }
 
       // Late Move Reduction when not in check and not giving check.
