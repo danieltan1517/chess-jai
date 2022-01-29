@@ -43,7 +43,7 @@ The chess GUI uses the glfw3 and gl libraries.
 * Move generator can generate 210 million positions per second (benchmarked from perft 6 from the initial position)
 * Moves represented as 16-bit integers
 
-### Search and Pruning
+### Search, Extensions Pruning
 * Iterative Deepening
 * Aspiration Window Search
 * Internal Iterative Deepening
@@ -57,6 +57,8 @@ The chess GUI uses the glfw3 and gl libraries.
 * Razoring
 * Mate Distance Pruning
 * History Leaf Pruning
+* Singular Search Extensions
+* Check Extensions
 
 ### Transposition Table
 * 3-fold repetition & fifty-move rule (still some bugs.)
@@ -80,5 +82,4 @@ The chess GUI uses the glfw3 and gl libraries.
 * UCI not fully supported 
 * Check out Berserk Chess Engine. [Berserk](https://github.com/jhonnold/berserk)
 * Check out [NNUE-pytorch](https://github.com/glinscott/nnue-pytorch/blob/master/docs/nnue.md)
-* Search Extensions.
 * Attempt to move to staged move generation.
