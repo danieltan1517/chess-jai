@@ -261,7 +261,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
       if flags <= Move16.Double_Pawn_Push && see(chess,move) < -21*depth*depth - 21 then
         continue;
 
-      if move_score < -2048*depth then
+      if move_score < -8192*depth then
         break;
 
       // Late Move Pruning. Search the Root Plies Exhuastively
