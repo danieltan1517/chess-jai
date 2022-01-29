@@ -118,7 +118,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
 
   // internal iterative deepening.
   if pv_node && depth > 4 && ttmove == Move16.Quiet && pv_table[ply][0] == 0 { 
-    depth -= 2;
+    depth -= 1;
   }
 
   // TODO: this is NOT good code. inefficient.
@@ -142,7 +142,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
       chess.eval[chess.eval.count-1] = cast(s16) static_eval;
 
       // reverse futility pruning. stockfish has margin at 214*depth
-      if depth < 12 && (static_eval - 90*depth) >= beta then {
+      if depth < 12 && (static_eval - 218*depth) >= beta then {
         return static_eval;
       }
  
@@ -261,7 +261,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
       if flags <= Move16.Double_Pawn_Push && see(chess,move) < -21*depth*depth - 21 then
         continue;
 
-      if move_score < -1024*depth then
+      if move_score < -2048*depth then
         break;
 
       // Late Move Pruning. Search the Root Plies Exhuastively
@@ -326,7 +326,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
         if improving == 0 then
           R += 1;
         if move_score < 0 then {
-          R += -move_score / 512;
+          R += -move_score / 2048;
         }
         eval = -negamax(chess, depth+ext-R-1, null_flag, single_ext, -alpha-1, -alpha, next_fifty);
       } 
