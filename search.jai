@@ -592,8 +592,9 @@ initialize_ai_globals :: () {
 }
 
 INF :: 0x7FFF; // Alias
-
+      
 #scope_file
+#import "Machine_X64";
 // search capture moves only, we do this to avoid horizon effect
 // see: https://www.chessprogramming.org/Quiescence_Search
 quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
@@ -704,6 +705,7 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
 
   transposition_table_lookup :: (hash: u64) #expand {
     key  := hash % TSIZE;
+    prefetch(*ttable.entries[key], Prefetch_Hint.T0);
     if !pv_node && ttable.hash[key] == hash then {
       entry := *ttable.entries[key];
       value := entry.score;
@@ -726,6 +728,7 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
   // quiescene TT
   transposition_table_store :: (hash: u64) #expand {
     key  := hash % TSIZE;
+    prefetch(*ttable.entries[key], Prefetch_Hint.T0);
     entry := *ttable.entries[key];
     if entry.depth <= 0 then {
       ttable.hash[key] = hash;
