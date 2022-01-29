@@ -3,7 +3,7 @@ math :: #import "Math";
 
 search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
   // this is basically a fancy wrapper around negamax, negamax does all the work, this just sets everything up.
-  time_begin := get_time();
+  time_begin = get_time();
   memset(pv_table.data, 0, size_of(type_of(pv_table)));
   memset(__history_moves.data, 0, size_of(type_of(__history_moves)));
   memset(__killer_moves.data,  0, size_of(type_of(__killer_moves)));
@@ -243,7 +243,6 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
 
   improving := get_improving(chess);
   for move, move_count : move_gen {
-
     #if single_ext == false {
       if move == chess.excluded_move then {
         continue;
@@ -251,6 +250,8 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
     }
 
     flags, from, to := decode_move16(move);
+    print_curr_move();
+
     // piece
     pfrom := piece_at(chess, from);
     att := piece_at(chess, from);
@@ -402,8 +403,9 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
   return alpha;
 
   print_curr_move :: () #expand {
-    if ply==0 && depth>20 then {
-      print("info depth %1 currmove %2%3 currmovenumber %4\n", depth, cast(serialized_bb)from, cast(serialized_bb)to, move_count+1);
+    time := get_time();
+    if ply==0 && (time-time_begin)>3 then {
+      print("info depth %1 currmove %2%3 currmovenumber %4\n", depth, cast(serialized_bb)`from, cast(serialized_bb)`to, `move_count+1);
     }
   }
 
@@ -594,6 +596,7 @@ initialize_ai_globals :: () {
 INF :: 0x7FFF; // Alias
       
 #scope_file
+
 #import "Machine_X64";
 // search capture moves only, we do this to avoid horizon effect
 // see: https://www.chessprogramming.org/Quiescence_Search
@@ -748,6 +751,8 @@ PV_Line :: struct {
 operator [] :: (using p: PV_Line, index: int) -> Move16 {
   return argmove[index];
 }
+
+time_begin: float64;
 
 pv_table: [64] PV_Line;
 
