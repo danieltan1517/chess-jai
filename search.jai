@@ -9,7 +9,6 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
   memset(__killer_moves.data,  0, size_of(type_of(__killer_moves)));
   memset(__counter_moves.data, 0, size_of(type_of(__counter_moves)));
   memset(__follow_up.data, 0, size_of(type_of(__follow_up)));
-  clear_hash_table();
   __nodes_searched = 0;
   score : int; 
   best_move : Move16;
@@ -52,6 +51,8 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
     print_stats(cur_depth);
     cur_depth += 1;
   }
+
+  search_age += 1;
   return best_move;
 
   print_stats :: (depth: int) #expand {
@@ -423,7 +424,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
     key  := hash % TSIZE;
     if ttable.hash[key] == hash then {
       entry := *ttable.entries[key];
-      if !pv_node && ply>0 && entry.depth >= depth {
+      if !pv_node && ply>0 && entry.age==search_age && entry.depth >= depth {
         value := entry.score;
         flag  := entry.flag;
         if flag == {
@@ -453,12 +454,13 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
     }
     key  := hash % TSIZE;
     entry := *ttable.entries[key];
-    if depth >= entry.depth then {
+    if depth >= entry.depth || entry.age != search_age then {
       ttable.hash[key] = hash;
       entry.score = xx alpha;
       entry.flag = hash_flag;
       entry.depth = xx depth;
       entry.ttmove = ttmove;
+      entry.age = search_age;
     }
   }
 
@@ -838,9 +840,11 @@ ttable: struct {
     flag : TFLAGS;
     depth: u8;
     ttmove: Move16;
-    score: s32;
+    score: s16;
+    age  : u8;
   }
 }
+search_age : u8 = 0;
 
 TFLAGS :: enum u8 { EXACT; ALPHA; BETA; }
 

@@ -64,6 +64,7 @@ The chess GUI uses the glfw3 and gl libraries.
 * 3-fold repetition & fifty-move rule (still some bugs.)
 * Zobrist Hashing w/ Incremental Update
 * Prefetch Transposition Table Entries
+* Aging
 
 ### Move Ordering
 * MVV-LVA (Most Valuable Victim, Least Valuable Attacker) Implementation
