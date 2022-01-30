@@ -9,7 +9,7 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
   memset(__killer_moves.data,  0, size_of(type_of(__killer_moves)));
   memset(__counter_moves.data, 0, size_of(type_of(__counter_moves)));
   memset(__follow_up.data, 0, size_of(type_of(__follow_up)));
-  //clear_hash_table();
+  clear_hash_table();
   __nodes_searched = 0;
   score : int; 
   best_move : Move16;
