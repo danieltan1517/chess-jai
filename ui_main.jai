@@ -204,7 +204,7 @@ console_input :: (engines: *[..] UCI_Engine, window: *GLFWwindow, chess: *Chess,
 
     if console_paste_key == {
     case .PASTE_PRESS; 
-      if glfwGetKey(window, GLFW_KEY_V) == GLFW_PRESS && (l_ctrl_key == GLFW_RELEASE || r_ctrl_key == GLFW_RELEASE) {
+      if glfwGetKey(window, GLFW_KEY_V) == GLFW_PRESS && (l_ctrl_key == GLFW_PRESS || r_ctrl_key == GLFW_PRESS) {
         str: string;
         str.data  = glfwGetClipboardString(window);
         str.count = c_style_strlen(str.data);
