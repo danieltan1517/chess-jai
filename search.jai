@@ -169,12 +169,12 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
  
       // razoring.
       if depth <= 3 then {
-        score := static_eval + 150;
+        score := static_eval + 250;
         if score < beta && depth == 1 {
           new_score := quiescene(chess, alpha, beta, fifty);
           return ifx new_score > score then new_score else score;
         }
-        score += 250;
+        score += 350;
         if score < beta && depth <= 3 {
           new_score := quiescene(chess, alpha, beta, fifty);
           if new_score < beta {
