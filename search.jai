@@ -147,32 +147,34 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
       }
  
       // null move pruning. check for zugzwang before searching.
-      if null_flag && ply>0 && depth > 3 then {
-        R := min(max(-depth/3, (static_eval - beta)/205), 2) + depth / 3 + 3;
-        ep, hash := make_null_move(chess);
-        score := -negamax(chess, depth-R-1, false, single_ext, -beta, -beta + 1, fifty);
-        unmake_null_move(chess, ep, hash);
-
-        if score >= beta then {
-          // null move w/ verification at higher depths.
-          if depth>12 || zugzwang(chess) then {
-            score = negamax(chess, depth-R-1, false, single_ext, beta-1, beta, fifty);
-            if score >= beta then
+      #if null_flag == true then {
+        if depth > 3 then {
+          R := min(max(-depth/3, (static_eval - beta)/205), 2) + depth / 3 + 3;
+          ep, hash := make_null_move(chess);
+          score := -negamax(chess, depth-R-1, false, single_ext, -beta, -beta + 1, fifty);
+          unmake_null_move(chess, ep, hash);
+       
+          if score >= beta then {
+            // null move w/ verification at higher depths.
+            if depth>12 || zugzwang(chess) then {
+              score = negamax(chess, depth-R-1, false, single_ext, beta-1, beta, fifty);
+              if score >= beta then
+                return beta;
+            } else {
               return beta;
-          } else {
-            return beta;
+            }
           }
         }
       }
  
       // razoring.
       if depth <= 3 then {
-        score := static_eval + 125;
+        score := static_eval + 135;
         if score < beta && depth == 1 {
           new_score := quiescene(chess, alpha, beta, fifty);
           return ifx new_score > score then new_score else score;
         }
-        score += 175;
+        score += 250;
         if score < beta && depth <= 3 {
           new_score := quiescene(chess, alpha, beta, fifty);
           if new_score < beta {
@@ -274,20 +276,22 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
     // if one move is better than all the rest, then we consider this singular
     // "singular" is determined by checking all other moves at a shallow depth on a nullwindow
     ext := 0;
-    if ply>0 && depth>=7 && move == ttmove && cast(int)ttentry.depth >= depth-3 
-       && math.abs(ttentry.score) < 10_000 && ttentry.flag == TFLAGS.ALPHA {
-
-       singular_beta := ttentry.score - 3*depth;
-       chess.excluded_move = move;
-       score := negamax(chess, depth-(depth/2)-1, null_flag, false, singular_beta-1, singular_beta, fifty);
-       chess.excluded_move = Move16.Quiet;
-       if score < singular_beta then {
-         ext = 1;
-       } else if singular_beta >= beta then {
-         return singular_beta;
-       } else if ttentry.score >= beta then {
-         ext = -2;
-       }
+    #if single_ext == true {
+      if ply>0 && depth>=7 && move == ttmove && cast(int)ttentry.depth >= depth-3 
+         && math.abs(ttentry.score) < 10_000 && ttentry.flag == TFLAGS.ALPHA {
+     
+         singular_beta := ttentry.score - 3*depth;
+         chess.excluded_move = move;
+         score := negamax(chess, depth-(depth/2)-1, null_flag, false, singular_beta-1, singular_beta, fifty);
+         chess.excluded_move = Move16.Quiet;
+         if score < singular_beta then {
+           ext = 1;
+         } else if singular_beta >= beta then {
+           return singular_beta;
+         } else if ttentry.score >= beta then {
+           ext = -2;
+         }
+      }
     }
      
     moves_searched += 1;
