@@ -246,7 +246,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
   improving := get_improving(chess);
   for move, move_count : move_gen {
     #if single_ext == false {
-      if move == chess.excluded_move then {
+      if ply == chess.exply && move == chess.excluded_move then {
         continue;
       }
     }
@@ -282,8 +282,10 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
      
          singular_beta := ttentry.score - 3*depth;
          chess.excluded_move = move;
+         chess.exply = ply;
          score := negamax(chess, depth-(depth/2)-1, null_flag, false, singular_beta-1, singular_beta, fifty);
          chess.excluded_move = Move16.Quiet;
+         chess.exply = INF;
          if score < singular_beta then {
            ext = 1;
          } else if singular_beta >= beta then {
@@ -415,7 +417,8 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
 
   transposition_table_lookup :: (hash: u64) -> *ttable.TTEntry #expand {
     #if single_ext == false {
-      return null;
+      if ply == chess.exply then
+        return null;
     }
     key  := hash % TSIZE;
     if ttable.hash[key] == hash then {
@@ -445,7 +448,8 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
 
   transposition_table_store :: (hash: u64) #expand {
     #if single_ext == false {
-      return;
+      if ply == chess.exply then
+        return;
     }
     key  := hash % TSIZE;
     entry := *ttable.entries[key];
@@ -1277,6 +1281,7 @@ ChessGame :: struct {
   ply: int;
   maxply: int;
   excluded_move: Move16;
+  exply: int;
   moves: [..] Move32;
   rtable: [..] u64;
   eval: [..] s16;
