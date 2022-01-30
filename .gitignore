@@ -12,6 +12,7 @@ jai-chess-ai
 ai-jai-chess
 ai
 dol
+leviathan
 *.nnue
 nnue-probe/
 eval

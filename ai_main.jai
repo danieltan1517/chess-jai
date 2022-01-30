@@ -179,7 +179,7 @@ reset_stop_signal :: () #expand {
 
 uci_response :: #string DONE
 uciok
-id name Den of Lions
+id name leviathan
 id author Daniel Tan
 DONE;
 
