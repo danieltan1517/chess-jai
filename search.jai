@@ -141,9 +141,11 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
     if ply>0 && !pv_node then {
       static_eval := evaluate(chess, fifty);
       chess.eval[chess.eval.count-1] = cast(s16) static_eval;
+      improving := get_improving(chess);
 
       // reverse futility pruning. stockfish has margin at 214*depth
-      if depth < 12 && (static_eval - 218*depth) >= beta then {
+      futility_mult := ifx improving==1 then 218 else 150;
+      if depth < 12 && (static_eval - futility_mult*depth) >= beta then {
         return static_eval;
       }
  
@@ -170,12 +172,13 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
  
       // razoring.
       if depth <= 3 then {
-        score := static_eval + 150;
+        razor_margin := ifx improving==1 then 250 else 150;
+        score := static_eval + razor_margin;
         if score < beta && depth == 1 {
           new_score := quiescene(chess, alpha, beta, fifty);
           return ifx new_score > score then new_score else score;
         }
-        score += 350;
+        score += ifx improving==1 350 else 175;
         if score < beta && depth <= 3 {
           new_score := quiescene(chess, alpha, beta, fifty);
           if new_score < beta {
@@ -360,6 +363,8 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
       memcpy(*pv_table[ply].argmove[1], *pv_table[ply+1].argmove[0], pv_table[ply+1].move_count * size_of(Move16));
       pv_table[ply].move_count = pv_table[ply+1].move_count + 1;
       alpha = eval;
+      if moves_searched>0 then
+        depth -= 1;
     } 
 
     if eval >= beta then {
