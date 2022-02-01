@@ -119,7 +119,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
 
   // internal iterative deepening.
   if pv_node && depth > 4 && ttmove == Move16.Quiet && pv_table[ply][0] == 0 { 
-    depth -= 1;
+    depth -= 2;
   }
 
   // TODO: this is NOT good code. inefficient.
@@ -170,7 +170,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
  
       // razoring.
       if depth <= 3 then {
-        score := static_eval + 250;
+        score := static_eval + 150;
         if score < beta && depth == 1 {
           new_score := quiescene(chess, alpha, beta, fifty);
           return ifx new_score > score then new_score else score;
@@ -214,8 +214,8 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
   }
 
   counter  := get_counter_move(chess);
-  followup := get_follow_up_move(chess);
-  move_gen := init_negamax(pv_table[ply][0], ttmove, __killer_moves[ply][0], __killer_moves[ply][1], counter, followup);
+  followup1, followup2 := get_follow_up_move(chess);
+  move_gen := init_negamax(pv_table[ply][0], ttmove, __killer_moves[ply][0], __killer_moves[ply][1], counter, followup1, followup2);
   status = generate_moves(chess, *move_gen, fifty);
 
   if status == {
@@ -827,7 +827,7 @@ __nodes_searched := 0;
 __history_moves:   [13][64] s16;
 __killer_moves:    [64][2] Move16;
 __counter_moves:   [13][64] Move16;
-__follow_up:       [13][64][7][64] Move16;
+__follow_up:       [13][64][13][64] Move16;
 
 // get something off the ground.
 TSIZE :: 0x20000;
@@ -858,15 +858,16 @@ Negamax :: struct {
   score: [80] s16;
   count: int;
 
-  pv       : Move16;
-  ttmove   : Move16;
-  killer1  : Move16;
-  killer2  : Move16;
-  counter  : Move16;
-  follow_up: Move16;
+  pv        : Move16;
+  ttmove    : Move16;
+  killer1   : Move16;
+  killer2   : Move16;
+  counter   : Move16;
+  follow_up1: Move16;
+  follow_up2: Move16;
 }
 
-init_negamax :: (pv: Move16, ttmove: Move16, killer1: Move16, killer2: Move16, counter: Move16, follow_up: Move16) -> Negamax {
+init_negamax :: (pv: Move16, ttmove: Move16, killer1: Move16, killer2: Move16, counter: Move16, follow_up1: Move16, follow_up2: Move16) -> Negamax {
   n: Negamax;
   //n.items = NewArray(80, Move16);
   //n.score = NewArray(80, s16);
@@ -876,7 +877,8 @@ init_negamax :: (pv: Move16, ttmove: Move16, killer1: Move16, killer2: Move16, c
   n.killer1 = killer1;
   n.killer2 = killer2;
   n.counter = counter;
-  n.follow_up = follow_up;
+  n.follow_up1 = follow_up1;
+  n.follow_up2 = follow_up2;
   return n;
 }
 
@@ -1100,8 +1102,13 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
         score += COUNTER_BONUS;
       }
 
-      if move == heap.follow_up then {
+      if move == heap.follow_up1 then {
         CONTINUE_BONUS :: 576;
+        score += CONTINUE_BONUS;
+      }
+
+      if move == heap.follow_up2 then {
+        CONTINUE_BONUS :: 300;
         score += CONTINUE_BONUS;
       }
     }
@@ -1406,15 +1413,24 @@ update_followup :: (c: *ChessGame, move: Move16) #expand {
     // previous 1 move.
     prev1 := c.moves.count-1;
     piece2, to2 := piece_to(c.moves[prev1]);
-
-    if piece2 > 6 then
-      piece2 -= 6;
-
     __follow_up[piece1][to1][piece2][to2] = move;
   }
+
+  if c.ply >= 4 {
+    prev2 := c.moves.count-4;
+    piece1, to1 := piece_to(c.moves[prev2]);
+
+    // previous 1 move.
+    prev1 := c.moves.count-2;
+    piece2, to2 := piece_to(c.moves[prev1]);
+    __follow_up[piece1][to1][piece2][to2] = move;
+  }
+
 }
 
-get_follow_up_move :: (c: *ChessGame) -> Move16 {
+get_follow_up_move :: (c: *ChessGame) -> Move16, Move16 {
+  follow1 := Move16.Quiet;
+  follow2 := Move16.Quiet;
   if c.ply >= 2 {
     // previous 2 move.
     prev2 := c.moves.count-2;
@@ -1424,13 +1440,20 @@ get_follow_up_move :: (c: *ChessGame) -> Move16 {
     prev1 := c.moves.count-1;
     piece2, to2 := piece_to(c.moves[prev1]);
 
-    if piece2 > 6 then
-      piece2 -= 6;
-
-    return __follow_up[piece1][to1][piece2][to2];
+    follow1 = __follow_up[piece1][to1][piece2][to2];
   }
-  return Move16.Quiet;
 
+  if c.ply >= 4 {
+    prev2 := c.moves.count-4;
+    piece1, to1 := piece_to(c.moves[prev2]);
+
+    // previous 1 move.
+    prev1 := c.moves.count-2;
+    piece2, to2 := piece_to(c.moves[prev1]);
+    follow2 = __follow_up[piece1][to1][piece2][to2];
+  }
+
+  return follow1, follow2;
 }
 
 get_improving :: (using c: *ChessGame) -> int {
