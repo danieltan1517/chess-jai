@@ -363,8 +363,6 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
       memcpy(*pv_table[ply].argmove[1], *pv_table[ply+1].argmove[0], pv_table[ply+1].move_count * size_of(Move16));
       pv_table[ply].move_count = pv_table[ply+1].move_count + 1;
       alpha = eval;
-      if moves_searched>0 then
-        depth -= 1;
     } 
 
     if eval >= beta then {
@@ -381,14 +379,18 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
           if prev_move != move {
             _, from_move, to_move := decode_move16(prev_move);
             piece_type := piece_at(chess, from_move);
-            __history_moves[piece_type][to_move] -= ((64*inc) - cast(s16)(__history_moves[piece_type][to_move]*inc / 1024));
-            __history_moves[piece_type][to_move] = max(__history_moves[piece_type][to_move], -19225);
+            value : int = xx __history_moves[piece_type][to_move];
+            value -= ((64*inc) - cast(s16)(value*inc / 1024));
+            value = max(value, -19225);
+            __history_moves[piece_type][to_move] = xx value;
           }
         }
 
         // update history heuristic
-        __history_moves[piece_type][to] += ((64*inc)-cast(s16)(__history_moves[piece_type][to]*inc/1024));
-        __history_moves[piece_type][to] %= 19225;
+        value : int = xx __history_moves[piece_type][to];
+        value += ((64*inc)-cast(s16)(value*inc/1024));
+        value %= 19225;
+        __history_moves[piece_type][to] = xx value;
 
         // update countermove heuristic
         update_countermove(chess, move);
