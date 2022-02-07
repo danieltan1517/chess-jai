@@ -430,8 +430,9 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
         return null;
     }
     key  := hash % TSIZE;
-    if ttable.hash[key] == hash then {
-      entry := *ttable.entries[key];
+    prefetch(*ttable.entries[key], Prefetch_Hint.T0);
+    entry := *ttable.entries[key];
+    if entry.hash == hash then {
       if !pv_node && ply>0 && entry.age==search_age && entry.depth >= depth {
         value := entry.score;
         flag  := entry.flag;
@@ -461,14 +462,15 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
         return;
     }
     key  := hash % TSIZE;
+    prefetch(*ttable.entries[key], Prefetch_Hint.T0);
     entry := *ttable.entries[key];
     if depth >= entry.depth || entry.age != search_age then {
-      ttable.hash[key] = hash;
-      entry.score = xx alpha;
-      entry.flag = hash_flag;
-      entry.depth = xx depth;
+      entry.hash   = hash;
+      entry.score  = xx alpha;
+      entry.flag   = hash_flag;
+      entry.depth  = xx depth;
       entry.ttmove = ttmove;
-      entry.age = search_age;
+      entry.age    = search_age;
     }
   }
 
@@ -727,8 +729,8 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
   transposition_table_lookup :: (hash: u64) #expand {
     key  := hash % TSIZE;
     prefetch(*ttable.entries[key], Prefetch_Hint.T0);
-    if !pv_node && ttable.hash[key] == hash then {
-      entry := *ttable.entries[key];
+    entry := *ttable.entries[key];
+    if !pv_node && entry.hash == hash then {
       value := entry.score;
       flag  := entry.flag;
       if flag == {
@@ -752,10 +754,10 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
     prefetch(*ttable.entries[key], Prefetch_Hint.T0);
     entry := *ttable.entries[key];
     if entry.depth <= 0 then {
-      ttable.hash[key] = hash;
-      entry.score = xx alpha;
-      entry.flag = hash_flag;
-      entry.depth = 0;
+      entry.hash   = hash;
+      entry.score  = xx alpha;
+      entry.flag   = hash_flag;
+      entry.depth  = 0;
       entry.ttmove = Move16.Quiet;
     }
   }
@@ -841,15 +843,15 @@ __follow_up:       [13][64][13][64] Move16;
 TSIZE :: 0x20000;
 
 ttable: struct {
-  hash:     [TSIZE] u64;
   entries:  [TSIZE] TTEntry;
 
   TTEntry :: struct {
-    flag : TFLAGS;
-    depth: u8;
+    hash  :  u64;
+    flag  : TFLAGS;
+    depth : u8;
     ttmove: Move16;
-    score: s16;
-    age  : u8;
+    score : s16;
+    age   : u8;
   }
 }
 search_age : u8 = 0;
