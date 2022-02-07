@@ -140,6 +140,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
   if status == ChessFlags.Normal && !in_check(chess) {
     if ply>0 && !pv_node then {
       static_eval := evaluate(chess, fifty);
+      //print_chess(chess);
       chess.eval[chess.eval.count-1] = cast(s16) static_eval;
       improving := get_improving(chess);
 
