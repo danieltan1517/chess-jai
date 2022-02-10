@@ -68,13 +68,6 @@ nnue_evaluate :: (chess: *ChessGame, fifty: int) -> int {
     }
   }
   eval := __nnue_evaluate_incr(xx chess.turn, pieces.data, squares.data, a_nnue.data);
-  /*eval2 := __nnue_evaluate(xx chess.turn, pieces.data, squares.data);
-  if eval1 != eval2 {
-    print("error incr=%, full=%\n", eval1, eval2);
-    print_chess(chess);
-    assert(false);
-  }*/
-  
   return (eval * (100 - fifty)) / 200;
 }
 
@@ -157,11 +150,9 @@ trivial_evaluation :: (using chess: *Chess, fifty: int) -> bool, int {
 
 nnue :: #foreign_library "nnue-probe/src/libnnueprobe";
 
-//eval_file :: #run join(#filepath, "resources/nn-fb50f1a2b1-20210705.nnue");
 eval_file :: #run join(#filepath, "resources/nn-04cf2b4ed1da.nnue");
-//eval_file :: #run join(#filepath, "resources/nn-eba324f53044.nnue");
 
 __nnue_init :: (eval_file: *u8) #foreign nnue "nnue_init"; 
-__nnue_evaluate :: (player: s32, pieces: *s32, squares: *s32) -> s32 #foreign nnue "nnue_evaluate";
 __nnue_evaluate_incr :: (player: s32, pieces: *s32, squares: *s32, nnue_data: **NNUEdata) -> s32 #foreign nnue "nnue_evaluate_incremental";
 
+//__nnue_evaluate :: (player: s32, pieces: *s32, squares: *s32) -> s32 #foreign nnue "nnue_evaluate";

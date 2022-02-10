@@ -100,7 +100,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
   pv_node := alpha != beta-1;
   if (__nodes_searched & 1024) && stdin_stop_signal()
     return 0;
-  __nodes_searched += 1;
+  //__nodes_searched += 1;
 
   defer memset(*pv_table[ply+1], 0, size_of(PV_Line));
 
@@ -153,7 +153,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
       improving := get_improving(chess);
 
       // reverse futility pruning. stockfish has margin at 214*depth
-      margin := 150*depth;
+      margin := 150*(depth-improving);
       if depth < 12 && (static_eval-margin) >= beta then {
         return static_eval;
       }
@@ -331,7 +331,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
       // captures. promotions. checks.
       if in_check(chess) {
         // do not reduce depth on check.
-        eval = -negamax(chess, depth+ext, null_flag, single_ext, -alpha-1, -alpha, next_fifty);
+        eval = -negamax(chess, depth, null_flag, single_ext, -alpha-1, -alpha, next_fifty);
       }
 
       else if cap != Piece.NONE || flags > Move16.Double_Pawn_Push {
@@ -637,7 +637,7 @@ INF :: 0x7FFF; // Alias
 quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
   if (__nodes_searched & 1024) && stdin_stop_signal()
     return 0;
-  __nodes_searched += 1;
+  //__nodes_searched += 1;
   ply := chess.ply;
   pv_node := alpha != beta-1;
   entry := transposition_table_lookup(chess.hash);
@@ -1369,9 +1369,13 @@ generate_moves :: (using c: *ChessGame, movegen: *$T, fifty: int) -> ChessFlags 
 
   hash_val := c.hash;
   count := 0;
+  repeating := 0;
   for < repeat : c.rtable {
     if hash_val == repeat then {
-      return ChessFlags.Threefold_Repetition;
+      repeating += 1;
+      if repeating > 1 then {
+        return ChessFlags.Threefold_Repetition;
+      }
     }
 
     count += 1;
@@ -1403,6 +1407,7 @@ check_for_repetition :: (using c: *ChessGame, fifty: int) -> ChessFlags {
 }
 
 make_move :: (c: *ChessGame, move: Move16) -> Piece, Castling, u64 {
+  __nodes_searched += 1;
   from := get_move16_from(move);
   piece := c.pieces[from];
   move32: Move32;
