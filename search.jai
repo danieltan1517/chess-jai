@@ -192,7 +192,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
       // prob cut implement TODO: make this better...currently we copy twice.
       prob_beta := beta + 110;
       if depth > 4 && math.abs(beta) < 20_000 {
-        prob_movegen := init_quiescene(pv_table[ply][0]);
+        prob_movegen := init_quiescene(pv_table[ply][0], ttmove);
         generate_moves(chess, *prob_movegen, fifty);
         ep := chess.en_passant;
         for move, move_count: prob_movegen {
@@ -246,8 +246,9 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
   moves_searched := 0;
 
   // search extension: extend if only one move can be played.
-  if move_gen.count == 1  then 
+  if move_gen.count == 1  then {
     depth += 1;
+  }
 
   improving := get_improving(chess);
   for move, move_count : move_gen {
@@ -339,7 +340,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
         if improving == 0 then
           R += 1;
         if move_score < 0 then {
-          R += -move_score / 2048;
+          R += -move_score / 4096;
         }
         eval = -negamax(chess, depth+ext-R-1, null_flag, single_ext, -alpha-1, -alpha, next_fifty);
       } 
@@ -628,10 +629,11 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
   __nodes_searched += 1;
   ply := chess.ply;
   pv_node := alpha != beta-1;
-  transposition_table_lookup(chess.hash);
+  entry := transposition_table_lookup(chess.hash);
+  best_move := ifx entry != null then entry.ttmove else Move16.Quiet;
 
   auto_release_temp();
-  moves := init_quiescene(pv_table[ply][0]);
+  moves := init_quiescene(pv_table[ply][0], best_move);
   status := generate_moves(chess, *moves, fifty);
   hash_flag := TFLAGS.ALPHA;
   using ChessFlags;
@@ -688,6 +690,7 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
     chess.en_passant = ep;
     if score > alpha then {
       hash_flag = TFLAGS.EXACT;
+      best_move = move;
       alpha = score;
       pv_table[ply].argmove[0] = move;
       memcpy(*pv_table[ply].argmove[1], *pv_table[ply+1].argmove[0], pv_table[ply+1].move_count * size_of(Move16));
@@ -728,10 +731,11 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
     return false;
   }
 
-  transposition_table_lookup :: (hash: u64) #expand {
+  transposition_table_lookup :: (hash: u64) -> *ttable.TTEntry #expand {
     key  := hash % TSIZE;
     prefetch(*ttable.entries[key], Prefetch_Hint.T0);
     entry := *ttable.entries[key];
+    entry.age = search_age;
     if !pv_node && entry.hash == hash then {
       value := entry.score;
       flag  := entry.flag;
@@ -747,7 +751,10 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
       if value >= beta then
         `return beta; 
       }
+      return entry;
     }
+
+    return null;
   }
 
   // quiescene TT
@@ -760,7 +767,7 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
       entry.score  = xx alpha;
       entry.flag   = hash_flag;
       entry.depth  = 0;
-      entry.ttmove = Move16.Quiet;
+      entry.ttmove = best_move;
     }
   }
 }
@@ -894,11 +901,10 @@ init_negamax :: (pv: Move16, ttmove: Move16, killer1: Move16, killer2: Move16, c
   return n;
 }
 
-init_quiescene :: (pv: Move16) -> Quiescene {
+init_quiescene :: (pv: Move16, ttmove: Move16) -> Quiescene {
   q: Quiescene;
   q.pv = pv;
-  //q.items = NewArray(30, Move16);
-  //q.score = NewArray(30, s16);
+  q.ttmove = ttmove;
   q.count = 0;
   return q;
 }
@@ -908,6 +914,7 @@ Quiescene :: struct {
   score: [30] s16;
   count: int;
   pv: Move16;
+  ttmove: Move16;
 }
 
 heap_pop :: (using heap: *Quiescene) -> Move16, int {
@@ -1025,6 +1032,10 @@ add_move :: (chess: *Chess, heap: *Quiescene, from: int, to: int, $flags: Move16
   move := to_move16(from, to, flags);
   if move == heap.pv {
     score = INF;
+    heap_add(heap, move, score);
+    return;
+  } else if move == heap.ttmove {
+    score = INF - 1;
     heap_add(heap, move, score);
     return;
   }
