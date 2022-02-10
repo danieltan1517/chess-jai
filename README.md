@@ -76,7 +76,7 @@ The chess GUI uses the glfw3 and gl libraries.
 * Relative History Move Ordering
 
 ### Evaluation
-* [NNUE](https://github.com/dshawul/nnue-probe) (Efficiently Updatable Neural Networks) for chess evaluation function
+* Efficiently Updatable Neural Networks with Incremental Update
 * Simple Mop-Up Endgame Evaluation.
 
 ## Still needs to be implemented

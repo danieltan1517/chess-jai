@@ -143,7 +143,6 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
   if status == ChessFlags.Normal && !in_check(chess) {
     if ply>0 && !pv_node then {
       static_eval := evaluate(chess, fifty);
-      //print_chess(chess);
       chess.eval[chess.eval.count-1] = cast(s16) static_eval;
       improving := get_improving(chess);
 
@@ -1181,7 +1180,6 @@ add_move :: (chess: *Chess, using perft: *$P/Perft, from: int, to: int, $flags: 
   count += 1;
 }
 
-// TODO: handle pins for more accurate SEE values.
 see :: (chess: *Chess, move: Move16) -> eval: int {
   _, from, to := decode_move16(move);
   target := cast(int) piece_at(chess, to);
@@ -1312,6 +1310,7 @@ PVALUE :: #run -> [13] int {
 
 ChessGame :: struct {
   using chess: Chess;
+  nnue: [] NNUEdata;
   ply: int;
   maxply: int;
   excluded_move: Move16;
@@ -1319,7 +1318,7 @@ ChessGame :: struct {
   moves: [..] Move32;
   rtable: [..] u64;
   eval: [..] s16;
-}
+} 
 
 Move32 :: struct {
   mov16: Move16;
@@ -1337,7 +1336,17 @@ initialize_chess_game_memory :: (using c: *ChessGame) {
   array_reserve(*moves, MAX);
   array_reserve(*rtable, MAX);
   array_reserve(*eval, MAX);
-  MAX :: 1000;
+
+  // hacky mchack hack.
+  nnue = NewArray(MAX+1, NNUEdata);
+  nnue.data += 1;
+
+  pointer := cast(int) nnue.data;
+  pointer &= ~63;
+  nnue.data = cast(*NNUEdata) pointer;
+  assert((cast(s64)nnue.data % 64) == 0);
+
+  MAX :: 500;
 }
 
 generate_moves :: (using c: *ChessGame, movegen: *$T, fifty: int) -> ChessFlags {
@@ -1385,20 +1394,84 @@ check_for_repetition :: (using c: *ChessGame, fifty: int) -> ChessFlags {
   return ChessFlags.Normal;
 }
 
-
 make_move :: (c: *ChessGame, move: Move16) -> Piece, Castling, u64 {
   from := get_move16_from(move);
   piece := c.pieces[from];
   move32: Move32;
   move32.mov16 = move;
   move32.piece = piece;
+  make_move_nnue(c, move);
 
   cap, castling, hash := make_move(*c.chess, move);
   array_add(*c.moves, move32);
   array_add(*c.rtable, hash);
+
   c.ply += 1;
   c.maxply = max(c.maxply, c.ply);
   return cap, castling, hash;
+
+  make_move_nnue :: (using c: *ChessGame, move: Move16) #expand {
+    flags, from, to := decode_move16(move);
+    dp := *nnue[ply+1].dirtyPiece;
+    nnue[ply+1].accumulator.computedAccumulation = 0;
+    dp.dirtyNum = 1;
+    // remove captured piece.
+    if flags == Move16.Capture || flags >= Move16.Knight_Promotion_Capture {
+      dp.dirtyNum = 2;
+      dp.pc[1] = xx piece_at(c, to);
+      dp.from[1] = xx to;
+      dp.to[1] = 64;
+    } else if flags == Move16.Ep_Capture {
+      epto := bit_scan_forward(ifx c.turn==Turn.WHITE chess.en_passant>>8 else chess.en_passant<<8);
+      dp.dirtyNum = 2;
+      dp.pc[1] = xx piece_at(c, epto);
+      dp.from[1] = xx epto;
+      dp.to[1] = 64;
+    }
+
+    dp.pc[0] = xx piece_at(c, from);
+    dp.from[0] = xx from;
+    dp.to[0] = xx to;
+
+    if flags >= Move16.Knight_Promotion then {
+      pic : s32 = xx Piece.NONE;
+      if flags == Move16.Knight_Promotion || flags == Move16.Knight_Promotion_Capture {
+        pic = xx (ifx turn == Turn.WHITE Piece.W_KNIGHT else Piece.B_KNIGHT);
+      } else if flags == Move16.Bishop_Promotion || flags == Move16.Bishop_Promotion_Capture {
+        pic = xx (ifx turn == Turn.WHITE Piece.W_BISHOP else Piece.B_BISHOP);
+      } else if flags == Move16.Rook_Promotion || flags == Move16.Rook_Promotion_Capture {
+        pic = xx (ifx turn == Turn.WHITE Piece.W_ROOK else Piece.B_ROOK);
+      } else if flags == Move16.Queen_Promotion || flags == Move16.Queen_Promotion_Capture {
+        pic = xx (ifx turn == Turn.WHITE Piece.W_QUEEN else Piece.B_QUEEN);
+      }
+
+      dp.to[0] = 64;
+      dp.pc[dp.dirtyNum] = pic;
+      dp.from[dp.dirtyNum] = 64;
+      dp.to[dp.dirtyNum] = xx to;
+      dp.dirtyNum += 1;
+    }
+
+    if flags == Move16.King_Castle {
+      pic: s32 = xx (ifx turn == Turn.WHITE Piece.W_ROOK else Piece.B_ROOK);
+      from_castle: s32 = xx (ifx turn == Turn.WHITE serialized_bb.h1 else serialized_bb.h8);
+      to_castle: s32 = xx (ifx turn == Turn.WHITE serialized_bb.f1 else serialized_bb.f8);
+      dp.dirtyNum = 2;
+      dp.pc[1] = pic;
+      dp.from[1] = from_castle;
+      dp.to[1] = to_castle;
+    }
+
+    if flags == Move16.Queen_Castle {
+      pic : s32 = xx (ifx turn == Turn.WHITE Piece.W_ROOK else Piece.B_ROOK);
+      from_castle: s32 = xx (ifx turn == Turn.WHITE serialized_bb.a1 else serialized_bb.a8);
+      to_castle: s32 = xx (ifx turn == Turn.WHITE serialized_bb.d1 else serialized_bb.d8);
+      dp.dirtyNum = 2;
+      dp.pc[1] = pic;
+      dp.from[1] = from_castle;
+      dp.to[1] = to_castle;
+    }
+  }
 }
 
 unmake_move :: (c: *ChessGame, move: Move16, cap: Piece, castling: Castling, hash: u64) {
@@ -1492,13 +1565,14 @@ piece_to :: (mov: Move32) -> int, int #expand {
 }
 
 make_null_move :: (c: *ChessGame) -> ep: u64, hash: u64 {
+  memcpy(*c.nnue[c.ply+1].accumulator, *c.nnue[c.ply].accumulator, size_of(Accumulator));
+
   c.ply += 1;
   c.maxply = max(c.maxply, c.ply);
   ep, hash := make_null_move(*c.chess);
   array_add(*c.moves, NULL);
   array_add(*c.rtable, hash);
   return ep, hash;
-
   NULL :: Move32.{Move16.Quiet, Piece.NONE};
 }
 

@@ -3,16 +3,40 @@ nnue_init :: () {
   __nnue_init(eval_file=eval_file);
 }
 
-evaluate :: (using chess: *Chess, fifty: int) -> int {
+evaluate :: (chess: *ChessGame, fifty: int) -> int {
   TF, score := trivial_evaluation(chess, fifty); 
   if TF return score;
   return nnue_evaluate(chess, fifty);
 }
 
 WIN_SCORE :: 5_000;
+
+DirtyPiece :: struct {
+  dirtyNum: s32;
+  pc      : [3] s32;
+  from    : [3] s32;
+  to      : [3] s32;
+}
+
+Accumulator :: struct {
+  padding: [1088] u8;
+  #place padding;
+
+  accumulation: [2][256] s16 #align 64;
+  computedAccumulation: s32;
+} 
+
+NNUEdata :: struct {
+  padding: [1152] u8;
+  #place padding;
+
+  accumulator: Accumulator;
+  dirtyPiece: DirtyPiece;
+} 
+
 #scope_file
 
-nnue_evaluate :: (chess: *Chess, fifty: int) -> int {
+nnue_evaluate :: (chess: *ChessGame, fifty: int) -> int {
   pieces : [40] s32;
   squares: [40] s32;
   pieces[0] = xx Piece.W_KING;
@@ -31,7 +55,26 @@ nnue_evaluate :: (chess: *Chess, fifty: int) -> int {
   }
   pieces[index] = 0;
   squares[index] = 0;
-  eval := __nnue_evaluate(xx chess.turn, pieces.data, squares.data);
+
+  a_nnue: [3] *NNUEdata;
+  {
+    a_nnue[0] = null;
+    a_nnue[1] = null;
+    a_nnue[2] = null;
+    i := 0;
+    while i<3 && chess.ply >= i {
+      a_nnue[i] = chess.nnue.data + chess.ply - i;
+      i += 1;
+    }
+  }
+  eval := __nnue_evaluate_incr(xx chess.turn, pieces.data, squares.data, a_nnue.data);
+  /*eval2 := __nnue_evaluate(xx chess.turn, pieces.data, squares.data);
+  if eval1 != eval2 {
+    print("error incr=%, full=%\n", eval1, eval2);
+    print_chess(chess);
+    assert(false);
+  }*/
+  
   return (eval * (100 - fifty)) / 200;
 }
 
@@ -120,28 +163,5 @@ eval_file :: #run join(#filepath, "resources/nn-04cf2b4ed1da.nnue");
 
 __nnue_init :: (eval_file: *u8) #foreign nnue "nnue_init"; 
 __nnue_evaluate :: (player: s32, pieces: *s32, squares: *s32) -> s32 #foreign nnue "nnue_evaluate";
-__nnue_evaluate_fen :: (fen: *s8) -> int #foreign nnue "nnue_evaluate_fen";
+__nnue_evaluate_incr :: (player: s32, pieces: *s32, squares: *s32, nnue_data: **NNUEdata) -> s32 #foreign nnue "nnue_evaluate_incremental";
 
-/**
-* NOTES:
-* Evaluation subroutine suitable for chess engines.
-* -------------------------------------------------
-* Piece codes are
-*     wking=1, wqueen=2, wrook=3, wbishop= 4, wknight= 5, wpawn= 6,
-*     bking=7, bqueen=8, brook=9, bbishop=10, bknight=11, bpawn=12,
-* Squares are
-*     A1=0, B1=1 ... H8=63
-* Input format:
-*     piece[0] is white king, square[0] is its location
-*     piece[1] is black king, square[1] is its location
-*     ..
-*     piece[x], square[x] can be in any order
-*     ..
-*     piece[n+1] is set to 0 to represent end of array
-* Returns
-*   Score relative to side to move in approximate centi-pawns
-
-  player = white=0 black=1
-
-  NOTE: int=s32
-*/

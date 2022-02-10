@@ -1279,12 +1279,12 @@ Magics :: struct {
 }
 
 // magics
-magic_bishop: [64] Magics;
-magic_rook  : [64] Magics;
+magic_bishop: [64] Magics #align 64;
+magic_rook  : [64] Magics #align 64;
 
 // attacks
-bishop_attacks: [64][512]  u64;
-rook_attacks:   [64][4096] u64;
+bishop_attacks: [64][512]  u64 #align 64;
+rook_attacks:   [64][4096] u64 #align 64;
 
 init_magic_bitboard :: () {
   for i: 0..63 {
@@ -1772,10 +1772,10 @@ popbit :: (a: u64) -> u64 #expand {
   return a; 
 }
 
-#no_reset zobrist_piece_table : [13][64] u64;
-#no_reset zobrist_castling_table : [16] u64;
-#no_reset zobrist_ep: [64] u64;
-#no_reset zobrist_turn: u64;
+#no_reset zobrist_piece_table : [13][64] u64 #align 64;
+#no_reset zobrist_castling_table : [16] u64 #align 64;
+#no_reset zobrist_ep: [64] u64 #align 64;
+#no_reset zobrist_turn: u64 #align 64;
 
 #run initialize_zobrist_hashing();
 
