@@ -1136,12 +1136,12 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
       }
 
       if move == heap.follow_up1 then {
-        CONTINUE_BONUS :: 576;
+        CONTINUE_BONUS :: 200;
         score += CONTINUE_BONUS;
       }
 
       if move == heap.follow_up2 then {
-        CONTINUE_BONUS :: 300;
+        CONTINUE_BONUS :: 200;
         score += CONTINUE_BONUS;
       }
     }
