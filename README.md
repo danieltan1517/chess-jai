@@ -31,7 +31,7 @@ The chess GUI uses the glfw3 and gl libraries.
 * Console command-line
 
 ## AI Chess Engine Features
-* Estimated AI Rating: 2700
+* Estimated AI Rating: 3000 
 * Supports UCI protocol
 * Parse and load FEN strings
 

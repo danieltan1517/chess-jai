@@ -21,6 +21,7 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
     reset_temporary_storage();
     chess.ply = 0;
     chess.maxply =  0; 
+    chess.depth = cur_depth;
     score = negamax(chess, cur_depth, alpha=alpha, beta=beta, fifty=fifty);
     time_taken := get_time() - time_begin;
     if stop_signal_triggered() then 
@@ -105,7 +106,12 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
 
   // transposition lookup.
   ttentry := transposition_table_lookup(chess.hash);
-  ttmove  := ifx ttentry != null then ttentry.ttmove else Move16.Quiet;
+  ttmove  := Move16.Quiet;
+  if pv_table[ply][0] then {
+    ttmove = pv_table[ply][0];
+  } else if ttentry != null then {
+    ttmove = ttentry.ttmove;
+  }
 
   if depth <= 0 then {
     return quiescene(chess, alpha, beta, fifty);
@@ -121,7 +127,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
   }
 
   // internal iterative deepening.
-  if pv_node && depth > 4 && ttmove == Move16.Quiet && pv_table[ply][0] == 0 { 
+  if pv_node && depth > 4 && ttmove == Move16.Quiet { 
     depth -= 2;
   }
 
@@ -147,7 +153,8 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
       improving := get_improving(chess);
 
       // reverse futility pruning. stockfish has margin at 214*depth
-      if depth < 12 && (static_eval - 150*depth) >= beta then {
+      margin := 150*depth;
+      if depth < 12 && (static_eval-margin) >= beta then {
         return static_eval;
       }
  
@@ -219,7 +226,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
 
   counter  := get_counter_move(chess);
   followup1, followup2 := get_follow_up_move(chess);
-  move_gen := init_negamax(pv_table[ply][0], ttmove, __killer_moves[ply][0], __killer_moves[ply][1], counter, followup1, followup2);
+  move_gen := init_negamax(ttmove, __killer_moves[ply][0], __killer_moves[ply][1], counter, followup1, followup2);
   status = generate_moves(chess, *move_gen, fifty);
 
   if status == {
@@ -249,6 +256,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
     depth += 1;
   }
 
+  alpha_increase := 0;
   improving := get_improving(chess);
   for move, move_count : move_gen {
     #if single_ext == false {
@@ -283,7 +291,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
     // "singular" is determined by checking all other moves at a shallow depth on a nullwindow
     ext := 0;
     #if single_ext == true {
-      if ply>0 && depth>=7 && move == ttmove && cast(int)ttentry.depth >= depth-3 
+      if ply>0 && depth>=7 && move == ttmove && ttentry != null && cast(int)ttentry.depth >= depth-3 
          && math.abs(ttentry.score) < 20_000 && ttentry.flag == TFLAGS.ALPHA {
      
          singular_beta := ttentry.score - 3*depth;
@@ -365,6 +373,10 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
       memcpy(*pv_table[ply].argmove[1], *pv_table[ply+1].argmove[0], pv_table[ply+1].move_count * size_of(Move16));
       pv_table[ply].move_count = pv_table[ply+1].move_count + 1;
       alpha = eval;
+      alpha_increase += 1;
+      if alpha_increase > 2 then {
+        depth -= 1;
+      }
     } 
 
     if eval >= beta then {
@@ -382,7 +394,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
             _, from_move, to_move := decode_move16(prev_move);
             piece_type := piece_at(chess, from_move);
             value : int = xx __history_moves[piece_type][to_move];
-            value -= ((64*inc) - cast(s16)(value*inc / 1024));
+            value -= ((64*inc) - (value*inc / 1024));
             value = max(value, -19225);
             __history_moves[piece_type][to_move] = xx value;
           }
@@ -390,7 +402,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
 
         // update history heuristic
         value : int = xx __history_moves[piece_type][to];
-        value += ((64*inc)-cast(s16)(value*inc/1024));
+        value += ((64*inc)-(value*inc/1024));
         value %= 19225;
         __history_moves[piece_type][to] = xx value;
 
@@ -421,7 +433,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
   print_curr_move :: () #expand {
     time := get_time();
     if ply==0 && (time-time_begin)>3 then {
-      print("info depth %1 currmove %2%3 currmovenumber %4\n", depth, cast(serialized_bb)`from, cast(serialized_bb)`to, `move_count+1);
+      print("info depth %1 currmove %2%3 currmovenumber %4\n", chess.depth, cast(serialized_bb)`from, cast(serialized_bb)`to, `move_count+1);
     }
   }
 
@@ -877,7 +889,7 @@ Negamax :: struct {
   count: int;
 
   pv        : Move16;
-  ttmove    : Move16;
+  //ttmove    : Move16;
   killer1   : Move16;
   killer2   : Move16;
   counter   : Move16;
@@ -885,13 +897,12 @@ Negamax :: struct {
   follow_up2: Move16;
 }
 
-init_negamax :: (pv: Move16, ttmove: Move16, killer1: Move16, killer2: Move16, counter: Move16, follow_up1: Move16, follow_up2: Move16) -> Negamax {
+init_negamax :: (pv: Move16, killer1: Move16, killer2: Move16, counter: Move16, follow_up1: Move16, follow_up2: Move16) -> Negamax {
   n: Negamax;
   //n.items = NewArray(80, Move16);
   //n.score = NewArray(80, s16);
   n.count = 0;
   n.pv      = pv;
-  n.ttmove  = ttmove;
   n.killer1 = killer1;
   n.killer2 = killer2;
   n.counter = counter;
@@ -1077,11 +1088,11 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
     heap_add(heap, move, score);
     return;
   }
-  if move == heap.ttmove then {
+  /*if move == heap.ttmove then {
     score = INF-1;
     heap_add(heap, move, score);
     return;
-  }
+  }*/
 
   #if flags == Capture {
     // TODO: try different capture move scoring techniques.
@@ -1120,17 +1131,17 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
       score = __history_moves[piece][to];
 
       if move == heap.counter then {
-        COUNTER_BONUS :: 300;
+        COUNTER_BONUS :: 576;
         score += COUNTER_BONUS;
       }
 
       if move == heap.follow_up1 then {
-        CONTINUE_BONUS :: 300;
+        CONTINUE_BONUS :: 576;
         score += CONTINUE_BONUS;
       }
 
       if move == heap.follow_up2 then {
-        CONTINUE_BONUS :: 100;
+        CONTINUE_BONUS :: 300;
         score += CONTINUE_BONUS;
       }
     }
@@ -1313,6 +1324,7 @@ ChessGame :: struct {
   nnue: [] NNUEdata;
   ply: int;
   maxply: int;
+  depth: int;
   excluded_move: Move16;
   exply: int;
   moves: [..] Move32;
@@ -1337,13 +1349,9 @@ initialize_chess_game_memory :: (using c: *ChessGame) {
   array_reserve(*rtable, MAX);
   array_reserve(*eval, MAX);
 
-  // hacky mchack hack.
-  nnue = NewArray(MAX+1, NNUEdata);
-  nnue.data += 1;
-
-  pointer := cast(int) nnue.data;
-  pointer &= ~63;
-  nnue.data = cast(*NNUEdata) pointer;
+  // NOTE: We need to alignment=64 so that
+  // NNUE-probe library does not crash.
+  nnue = NewArray(MAX, NNUEdata, alignment=64);
   assert((cast(s64)nnue.data % 64) == 0);
 
   MAX :: 500;
