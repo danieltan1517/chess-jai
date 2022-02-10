@@ -9,7 +9,7 @@ evaluate :: (using chess: *Chess, fifty: int) -> int {
   return nnue_evaluate(chess, fifty);
 }
 
-WIN_SCORE :: 10_000;
+WIN_SCORE :: 5_000;
 #scope_file
 
 nnue_evaluate :: (chess: *Chess, fifty: int) -> int {

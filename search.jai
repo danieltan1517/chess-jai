@@ -22,6 +22,10 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
     chess.ply = 0;
     chess.maxply =  0; 
     score = negamax(chess, cur_depth, alpha=alpha, beta=beta, fifty=fifty);
+    time_taken := get_time() - time_begin;
+    if stop_signal_triggered() then 
+      break;
+
     if score <= alpha then {
       print("info depth % lowerbound %\n", cur_depth, score);
       beta = (alpha + beta) / 2;
@@ -36,17 +40,16 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
       delta += delta / 4 + 5;
       continue;
     }
-    if score >= -10_000 && score <= 10_000 then {
+    if score >= -5000 && score <= 5000 then {
       alpha = score - delta;
       beta  = score + delta;
-    } else {
+    } else if score < -5000 {
       alpha = -INF;
-      beta  =  INF;
+      beta  = score + delta;
+    } else {
+      alpha = score - delta;
+      beta  = INF;
     }
-
-    time_taken := get_time() - time_begin;
-    if stop_signal_triggered() then 
-      break;
     best_move = pv_table[0][0];
     print_stats(cur_depth);
     cur_depth += 1;
@@ -145,8 +148,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
       improving := get_improving(chess);
 
       // reverse futility pruning. stockfish has margin at 214*depth
-      futility_mult := ifx improving==1 then 218 else 150;
-      if depth < 12 && (static_eval - futility_mult*depth) >= beta then {
+      if depth < 12 && (static_eval - 214*depth) >= beta then {
         return static_eval;
       }
  
@@ -172,15 +174,14 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
       }
  
       // razoring.
-      if depth <= 3 then {
-        razor_margin := ifx improving==1 then 250 else 150;
-        score := static_eval + razor_margin;
+      if depth < 3 then {
+        score := static_eval + 175;
         if score < beta && depth == 1 {
           new_score := quiescene(chess, alpha, beta, fifty);
           return ifx new_score > score then new_score else score;
         }
-        score += ifx improving==1 350 else 175;
-        if score < beta && depth <= 3 {
+        score += 250;
+        if score < beta {
           new_score := quiescene(chess, alpha, beta, fifty);
           if new_score < beta {
             return ifx new_score > score then new_score else score;
@@ -190,7 +191,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
 
       // prob cut implement TODO: make this better...currently we copy twice.
       prob_beta := beta + 110;
-      if depth > 4 && math.abs(beta) < 10_000 {
+      if depth > 4 && math.abs(beta) < 20_000 {
         prob_movegen := init_quiescene(pv_table[ply][0]);
         generate_moves(chess, *prob_movegen, fifty);
         ep := chess.en_passant;
@@ -283,7 +284,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
     ext := 0;
     #if single_ext == true {
       if ply>0 && depth>=7 && move == ttmove && cast(int)ttentry.depth >= depth-3 
-         && math.abs(ttentry.score) < 10_000 && ttentry.flag == TFLAGS.ALPHA {
+         && math.abs(ttentry.score) < 20_000 && ttentry.flag == TFLAGS.ALPHA {
      
          singular_beta := ttentry.score - 3*depth;
          chess.excluded_move = move;
@@ -433,7 +434,8 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
     prefetch(*ttable.entries[key], Prefetch_Hint.T0);
     entry := *ttable.entries[key];
     if entry.hash == hash then {
-      if !pv_node && ply>0 && entry.age==search_age && entry.depth >= depth {
+      entry.age = search_age;
+      if !pv_node && ply>0 && entry.depth >= depth {
         value := entry.score;
         flag  := entry.flag;
         if flag == {
