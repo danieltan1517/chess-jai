@@ -148,7 +148,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
       improving := get_improving(chess);
 
       // reverse futility pruning. stockfish has margin at 214*depth
-      if depth < 12 && (static_eval - 214*depth) >= beta then {
+      if depth < 12 && (static_eval - 150*depth) >= beta then {
         return static_eval;
       }
  
@@ -1121,17 +1121,17 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
       score = __history_moves[piece][to];
 
       if move == heap.counter then {
-        COUNTER_BONUS :: 576;
+        COUNTER_BONUS :: 300;
         score += COUNTER_BONUS;
       }
 
       if move == heap.follow_up1 then {
-        CONTINUE_BONUS :: 576;
+        CONTINUE_BONUS :: 300;
         score += CONTINUE_BONUS;
       }
 
       if move == heap.follow_up2 then {
-        CONTINUE_BONUS :: 300;
+        CONTINUE_BONUS :: 100;
         score += CONTINUE_BONUS;
       }
     }
