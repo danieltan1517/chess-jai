@@ -466,7 +466,6 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
           `return beta; 
         }
       }
-
       return entry;
     }
 
@@ -863,7 +862,7 @@ __counter_moves:   [13][64] Move16;
 __follow_up:       [13][64][13][64] Move16;
 
 // get something off the ground.
-TSIZE :: 0x20000;
+TSIZE :: 0x8000;
 
 ttable: struct {
   entries:  [TSIZE] TTEntry;
