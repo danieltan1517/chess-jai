@@ -278,7 +278,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
       if flags <= Move16.Double_Pawn_Push && see(chess,move) < -21*depth*depth - 21 then
         continue;
 
-      if move_score < -8192*depth then
+      if move_score < min(depth * -8192, -15_000) then
         break;
 
       // Late Move Pruning. Search the Root Plies Exhuastively
@@ -349,6 +349,9 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
         if move_score < 0 then {
           R += -move_score / 4096;
         }
+        #if null_flag == false || single_ext == false {
+          R += 2; 
+        }
         eval = -negamax(chess, depth+ext-R-1, null_flag, single_ext, -alpha-1, -alpha, next_fifty);
       } 
 
@@ -395,7 +398,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
             piece_type := piece_at(chess, from_move);
             value : int = xx __history_moves[piece_type][to_move];
             value -= ((64*inc) - (value*inc / 1024));
-            value = max(value, -19225);
+            value = max(value, -25_000);
             __history_moves[piece_type][to_move] = xx value;
           }
         }
