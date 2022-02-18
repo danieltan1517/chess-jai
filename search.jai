@@ -170,7 +170,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
             // null move w/ verification at higher depths.
             if depth>12 || zugzwang(chess) then {
               score = negamax(chess, depth-R-1, false, single_ext, beta-1, beta, fifty);
-              if score >= beta then
+              if score >= beta then 
                 return beta;
             } else {
               return beta;
@@ -748,7 +748,9 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
     key  := hash % TSIZE;
     prefetch(*ttable.entries[key], Prefetch_Hint.T0);
     entry := *ttable.entries[key];
-    entry.age = search_age;
+    if entry.hash == hash then
+      entry.age = search_age;
+
     if !pv_node && entry.hash == hash then {
       value := entry.score;
       flag  := entry.flag;
