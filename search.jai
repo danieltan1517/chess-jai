@@ -399,6 +399,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
             value : int = xx __history_moves[piece_type][to_move];
             value -= ((64*inc) - (value*inc / 1024));
             value = max(value, -25_000);
+            value = min(value, 19224);
             __history_moves[piece_type][to_move] = xx value;
           }
         }
@@ -484,7 +485,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
       entry.hash   = hash;
       entry.score  = xx alpha;
       entry.flag   = hash_flag;
-      entry.depth  = xx depth;
+      entry.depth  = cast, trunc(u8) depth;
       entry.ttmove = ttmove;
       entry.age    = search_age;
     }
@@ -798,7 +799,7 @@ operator [] :: (using p: PV_Line, index: int) -> Move16 {
 
 time_begin: float64;
 
-pv_table: [64] PV_Line;
+pv_table: [128] PV_Line;
 
 // performance test
 // walks the move generation tree of strictly legal moves to count the leaf nodes
@@ -859,7 +860,7 @@ mvv_lva :: (victim: Piece, attacker: Piece) -> score: int {
 
 __nodes_searched := 0;
 __history_moves:   [13][64] s16;
-__killer_moves:    [64][2] Move16;
+__killer_moves:    [128][2] Move16;
 __counter_moves:   [13][64] Move16;
 __follow_up:       [13][64][13][64] Move16;
 
@@ -1140,12 +1141,12 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
       }
 
       if move == heap.follow_up1 then {
-        CONTINUE_BONUS :: 200;
+        CONTINUE_BONUS :: 400;
         score += CONTINUE_BONUS;
       }
 
       if move == heap.follow_up2 then {
-        CONTINUE_BONUS :: 200;
+        CONTINUE_BONUS :: 400;
         score += CONTINUE_BONUS;
       }
     }
