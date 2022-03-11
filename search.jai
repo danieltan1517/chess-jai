@@ -89,9 +89,15 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
 
 #no_reset LateMovePruning: [64][2] int;
 #run {
+
+  //fib :: int.[1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144];
+
   for i: 0..63 {
-    LateMovePruning[i][0] = (3 + i * i) / 2;
-    LateMovePruning[i][1] = (3 + i * i);
+    //index := min(i, fib.count-1);
+    //val := fib[index];
+    LateMovePruning[i][0] = (3 + i*i) / 2;
+    LateMovePruning[i][1] = (3 + i*i);
+    //print("%, %\n", LateMovePruning[i][0], LateMovePruning[i][1]);
   }
 }
 
@@ -157,6 +163,22 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
       if depth < 12 && (static_eval-margin) >= beta then {
         return static_eval;
       }
+
+      // razoring.
+      if depth < 3 then {
+        score := static_eval + 175;
+        if score < beta && depth == 1 {
+          new_score := quiescene(chess, alpha, beta, fifty);
+          return ifx new_score > score then new_score else score;
+        }
+        score += 250;
+        if score < beta {
+          new_score := quiescene(chess, alpha, beta, fifty);
+          if new_score < beta {
+            return ifx new_score > score then new_score else score;
+          }
+        }
+      }
  
       // null move pruning. check for zugzwang before searching.
       #if null_flag == true then {
@@ -179,22 +201,6 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
         }
       }
  
-      // razoring.
-      if depth < 3 then {
-        score := static_eval + 175;
-        if score < beta && depth == 1 {
-          new_score := quiescene(chess, alpha, beta, fifty);
-          return ifx new_score > score then new_score else score;
-        }
-        score += 250;
-        if score < beta {
-          new_score := quiescene(chess, alpha, beta, fifty);
-          if new_score < beta {
-            return ifx new_score > score then new_score else score;
-          }
-        }
-      }
-
       // prob cut implement TODO: make this better...currently we copy twice.
       prob_beta := beta + 110;
       if depth > 4 && math.abs(beta) < 20_000 {
@@ -259,7 +265,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
   alpha_increase := 0;
   improving := get_improving(chess);
   for move, move_count : move_gen {
-    #if single_ext == false {
+    #if null_flag == true && single_ext == false {
       if ply == chess.exply && move == chess.excluded_move then {
         continue;
       }
@@ -340,7 +346,6 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
 
       // Late Move Reduction when not in check and not giving check.
       else if depth > 2 && status == ChessFlags.Normal && flags <= Move16.Double_Pawn_Push {
-
         R := LateMoveReduction[min(depth,63)][min(move_count,63)];
         if !pv_node then
           R += 1;
@@ -447,7 +452,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
         return null;
     }
     key  := hash % TSIZE;
-    prefetch(*ttable.entries[key], Prefetch_Hint.T0);
+    //prefetch(*ttable.entries[key], Prefetch_Hint.T0);
     entry := *ttable.entries[key];
     if entry.hash == hash then {
       entry.age = search_age;
@@ -479,7 +484,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
         return;
     }
     key  := hash % TSIZE;
-    prefetch(*ttable.entries[key], Prefetch_Hint.T0);
+    //prefetch(*ttable.entries[key], Prefetch_Hint.T0);
     entry := *ttable.entries[key];
     if depth >= entry.depth || entry.age != search_age then {
       entry.hash   = hash;
@@ -747,7 +752,7 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
 
   transposition_table_lookup :: (hash: u64) -> *ttable.TTEntry #expand {
     key  := hash % TSIZE;
-    prefetch(*ttable.entries[key], Prefetch_Hint.T0);
+    //prefetch(*ttable.entries[key], Prefetch_Hint.T0);
     entry := *ttable.entries[key];
     if entry.hash == hash then
       entry.age = search_age;
@@ -776,7 +781,7 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
   // quiescene TT
   transposition_table_store :: (hash: u64) #expand {
     key  := hash % TSIZE;
-    prefetch(*ttable.entries[key], Prefetch_Hint.T0);
+    //prefetch(*ttable.entries[key], Prefetch_Hint.T0);
     entry := *ttable.entries[key];
     if entry.depth <= 0 then {
       entry.hash   = hash;
@@ -1420,12 +1425,14 @@ make_move :: (c: *ChessGame, move: Move16) -> Piece, Castling, u64 {
   move32.piece = piece;
   make_move_nnue(c, move);
 
+  key  := c.hash % TSIZE;
   cap, castling, hash := make_move(*c.chess, move);
   array_add(*c.moves, move32);
   array_add(*c.rtable, hash);
 
   c.ply += 1;
   c.maxply = max(c.maxply, c.ply);
+  prefetch(*ttable.entries[key], Prefetch_Hint.T0);
   return cap, castling, hash;
 
   make_move_nnue :: (using c: *ChessGame, move: Move16) #expand {
