@@ -651,7 +651,6 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
   entry := transposition_table_lookup(chess.hash);
   best_move := ifx entry != null then entry.ttmove else Move16.Quiet;
 
-  auto_release_temp();
   moves := init_quiescene(pv_table[ply][0], best_move);
   status := generate_moves(chess, *moves, fifty);
   hash_flag := TFLAGS.ALPHA;
@@ -827,11 +826,12 @@ perft :: (chess: *Chess, depth: int) -> int {
 
 #no_reset LateMoveReduction: [64][64] int;
 #run {
-  for i: 1..63
+  for i: 1..63 {
     for j: 1..63 {
       LMR := math.log(cast(float)i) * math.log(cast(float)j) * 0.5;
       LateMoveReduction[i][j] = cast (int) LMR;
     }
+  }
 }
 
 // most valuable victim, least valuable attacker.
@@ -1081,7 +1081,9 @@ add_move :: (chess: *Chess, heap: *Quiescene, from: int, to: int, $flags: Move16
     heap_add(heap, move, score); // TODO: evasion history maybe?
   }
 
-  #if !in_check && (flags == Quiet || flags == Double_Pawn_Push || flags == King_Castle || flags == Queen_Castle) {
+  #if !in_check && (flags == Quiet || flags == Double_Pawn_Push) {
+    //|| flags == King_Castle || flags == Queen_Castle) {
+    // TODO: FIX Later!
     #assert(false);
   }
 }

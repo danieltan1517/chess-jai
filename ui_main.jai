@@ -306,13 +306,16 @@ console_write_command :: (engines: *[..] UCI_Engine, str: string, chess: *Chess,
     return;
 
   case "fen";
+    // TODO: is reset(chess, moves_arr) neccessary??
     reset(chess, moves_arr);
+    print("%\n", moves_arr.count);
     while str && str[0] == #char " " {
       advance(*str, 1);
     }
     if str {
       fen_string = copy_string(str); // TODO: eventually need to free memory up.
       if equal(fen_string, "startpos") then {
+        print("startpos\n");
         chess_startpos(chess);
       } else {
         if !chess_fen(chess, fen_string) then {
@@ -322,8 +325,9 @@ console_write_command :: (engines: *[..] UCI_Engine, str: string, chess: *Chess,
         }
       }
     }
-    
+    array_reset(moves_arr);
     generate_moves(chess, moves_arr);
+    print("%\n", moves_arr.count);
     return;
 
   case "white";
