@@ -611,11 +611,9 @@ perft_divide :: (chess: *Chess, depth: int) -> int {
   taken := get_time();
   if depth <= 0 then return 1;
   num_nodes := 0;
-  movegen: Perft(80);
-  generate_moves(chess, *movegen);
+  perft_count := 0;
   ep := chess.en_passant;
-  print("moves from here: %\n\n", movegen.count);
-  for move : movegen {
+  for :perft move, index: <<chess {
     cap, flags, hash := make_move(chess, move);
     move_count := perft(chess, depth-1);
     _, from, to := decode_move16(move);
@@ -624,8 +622,10 @@ perft_divide :: (chess: *Chess, depth: int) -> int {
     num_nodes += move_count;
     unmake_move(chess, move, cap, flags, hash);
     chess.en_passant = ep;
+    perft_count += 1;
   }
 
+  print("moves from here: %\n\n", perft_count);
   taken = get_time() - taken;
   print("Total: % nodes, Time taken: %\n\n", num_nodes, taken);
   return num_nodes;
@@ -810,17 +810,15 @@ pv_table: [128] PV_Line;
 perft :: (chess: *Chess, depth: int) -> int {
   if depth == 0 then return 1;
   num_nodes := 0;
-  movegen: Perft(80);
-  generate_moves(chess, *movegen);
 
-  if depth == 1 then return movegen.count;
   ep := chess.en_passant;
-  for move : movegen {
-    piece, flags, hash := make_move(chess, move);
+  for :perft move: <<chess {
+    cap, flags, hash := make_move(chess, move);
     num_nodes += perft(chess, depth-1);
-    unmake_move(chess, move, piece, flags, hash);
+    unmake_move(chess, move, cap, flags, hash);
     chess.en_passant = ep;
   }
+
   return num_nodes;
 }
 
@@ -1100,11 +1098,6 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
     heap_add(heap, move, score);
     return;
   }
-  /*if move == heap.ttmove then {
-    score = INF-1;
-    heap_add(heap, move, score);
-    return;
-  }*/
 
   #if flags == Capture {
     // TODO: try different capture move scoring techniques.
@@ -1162,9 +1155,37 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
   heap_add(heap, move, score);
 }
 
-Perft :: struct($N: int) {
+Moves :: struct {
   count: int;
-  array: [N] Move16;
+  array: [48] Move16;
+}
+
+perft :: (chess: *Chess, body: Code, f: For_Flags) #expand {
+  moves: Moves;
+  unsafe, check := generate_attacks(chess);
+  generate_tactics(unsafe, check, chess, *moves);
+  i := 0;
+  `it := Move16.Quiet;
+  `it_index := 0;
+  while i < moves.count {
+    it = moves[i];
+    #insert body;
+    i += 1;
+    it_index += 1;
+  }
+  moves.count = 0;
+  generate_quiets(unsafe, check, chess, *moves);
+  i = 0;
+  while i < moves.count {
+    it = moves[i];
+    #insert body;
+    i += 1;
+    it_index += 1;
+  }
+
+  operator [] :: (m: Moves, index: int) -> Move16 #expand {
+    return m.array[index];
+  }
 }
 
 for_expansion :: (using heap: *$Q/Quiescene, code: Code, f: For_Flags) #expand {
@@ -1188,16 +1209,7 @@ for_expansion :: (using heap: *Negamax, code: Code, f: For_Flags) #expand {
   }
 }
 
-for_expansion :: (perft: *$P/Perft, code: Code, f: For_Flags) #expand {
-  i := 0;
-  while i < perft.count {
-    `it, `it_index := perft.array[i], i;
-    #insert code;
-    i += 1;
-  }
-}
-
-add_move :: (chess: *Chess, using perft: *$P/Perft, from: int, to: int, $flags: Move16, $in_check: bool) {
+add_move :: (chess: *Chess, using moves: *Moves, from: int, to: int, $flags: Move16, $in_check: bool) {
   move := to_move16(from, to, flags);
   array[count] = move;
   count += 1;

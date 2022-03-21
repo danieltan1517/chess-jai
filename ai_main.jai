@@ -11,6 +11,13 @@ main :: () {
   chess_startpos(*chess);
   fifty := 0;
 
+  if is_legal(*chess, to_move16(xx serialized_bb.e2, xx serialized_bb.e3, Move16.Quiet)) {
+    print("e2e4 legal.\n");
+  } else {
+    print("not legal\n");
+  }
+
+
   setup_stdin(); // set STDIN to non-blocking.
   while true {
     reset_stop_signal();

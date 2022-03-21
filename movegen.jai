@@ -445,8 +445,6 @@ castling_move_table :: #run -> [64] Castling {
   return table;
 };
 
-
-
 to_move16 :: inline (from: int, to: int, flags: Move16) -> Move16 {
   ret  := (from << 10) | (to << 4) | (xx flags);
   return cast, trunc(Move16) ret;
@@ -616,6 +614,76 @@ init_magic_bitboards :: () {
   //print("magic bitboards initialized :)\n");
 }
 
+generate_attacks :: (chess: *Chess) -> unsafe: u64, check: u64 {
+  if chess.turn == Turn.WHITE {
+    unsafe, check := generate_attacks(chess, Turn.BLACK);
+    return unsafe, check;
+  } else {
+    unsafe, check := generate_attacks(chess, Turn.WHITE);
+    return unsafe, check;
+  }
+}
+
+generate_tactics :: (unsafe: u64, check: u64, chess: *Chess, movegen: *$T) {
+  num_checks := popcount(check);
+  if chess.turn == Turn.WHITE {
+    generate_tactics(unsafe, check, chess, Turn.WHITE, movegen);
+  } else {
+    generate_tactics(unsafe, check, chess, Turn.BLACK, movegen);
+  }
+
+  generate_tactics :: (unsafe: u64, check: u64, chess: *Chess, $turn: Turn, move_gen: *$T) {
+    num_checks := popcount(check);
+    if num_checks > 1 then {
+      king    := get_king(chess, turn);
+      king_sq := bit_scan_forward(king);
+      occupied := chess.occupied;
+      king_move_bits := king_moves(king) & ~unsafe;
+      pieces : u64 = 0;
+      #if turn == Turn.WHITE then {
+        pieces = get_white_pieces(chess);
+      } else {
+        pieces = get_black_pieces(chess);
+      }
+      captures := king_move_bits & occupied & ~pieces;
+      for :bitloop _, to: captures {
+        add_move(chess, move_gen, king_sq, to, Move16.Capture, in_check=true);
+      }
+
+    } else if num_checks == 1 then {
+      generate_check_captures(unsafe, check, chess, turn, move_gen);
+    } else {
+      generate_tactics_for(unsafe, chess, turn, move_gen);
+    }
+  }
+}
+
+generate_quiets :: (unsafe: u64, check: u64, chess: *Chess, movegen: *$T) {
+  if chess.turn == Turn.WHITE {
+    generate_quiets(unsafe, check, chess, Turn.WHITE, movegen);
+  } else {
+    generate_quiets(unsafe, check, chess, Turn.BLACK, movegen);
+  }
+
+  generate_quiets :: (unsafe: u64, check: u64, chess: *Chess, $turn: Turn, move_gen: *$T) {
+    num_checks := popcount(check);
+    if num_checks > 1 then {
+      king    := get_king(chess, turn);
+      king_sq := bit_scan_forward(king);
+      occupied := chess.occupied;
+      king_move_bits := king_moves(king) & ~unsafe;
+      quiets   := king_move_bits & ~occupied;
+      for :bitloop _, to: quiets {
+        add_move(chess, move_gen, king_sq, to, Move16.Quiet, in_check=true);
+      }
+    } else if num_checks == 1 then {
+      generate_check_quiets(unsafe, check, chess, turn, move_gen);
+    } else {
+      generate_quiets_for(unsafe, chess, turn, move_gen);
+    }
+  }
+}
+
 generate_moves :: (using chess: *Chess, movegen: *$T) -> ChessFlags {
   if chess.turn == Turn.WHITE {
     return generate_moves_for(chess, Turn.WHITE, movegen);
@@ -717,13 +785,121 @@ using Bitboard :: enum_flags u64 {
   queen_side :: ~king_side;
 }
 
+// TODO: make is legal check better.
+is_legal :: (chess: *Chess, move: Move16) -> bool {
+  if chess.turn == Turn.WHITE then
+    return is_legal(chess, Turn.WHITE, move);
+  else
+    return is_legal(chess, Turn.BLACK, move);
+
+  is_legal :: (chess: *Chess, $turn: Turn, move: Move16) -> bool {
+    unsafe, check := generate_attacks(chess);
+    flags, from, to := decode_move16(move);
+    from_bit := cast(u64) (1<<from);
+    to_bitboard := cast(u64) (1<<to);
+    moves : u64 = 0;
+    piece := piece_at(chess, from);
+    pieces : u64 = 0;
+    #if turn == Turn.WHITE then {
+      pieces = get_white_pieces(chess);
+    } else {
+      pieces = get_black_pieces(chess);
+    }
+    
+    occupied := chess.occupied;
+    opp_piece := piece_at(chess, to);
+    if flags == Move16.Ep_Capture then {
+      ep_bb := pawn_advance(to_bitboard, turn ^ 1);
+      if ep_bb != chess.en_passant
+        return false;
+      index := bit_scan_forward(ep_bb);
+      opp_piece = piece_at(chess, index);
+      occupied &= ~ep_bb;
+    }
+
+    // not a capture move.
+    if flags >= Move16.Capture && opp_piece == Piece.NONE then
+      return false;
+    if piece == {
+    case Piece.NONE;
+      return false;
+    case Piece.W_KING;
+      #if turn == Turn.BLACK return false;
+      moves = king_moves(chess.w_king) & ~unsafe & ~pieces;
+
+    case Piece.W_QUEEN;
+      #if turn == Turn.BLACK return false;
+      moves = rook_moves(from, occupied) | bishop_moves(from, occupied);
+      moves &= ~pieces;
+
+    case Piece.W_ROOK;
+      #if turn == Turn.BLACK return false;
+      moves = rook_moves(from, chess.occupied) & ~pieces;
+
+    case Piece.W_BISHOP;
+      #if turn == Turn.BLACK return false;
+      moves = bishop_moves(from, chess.occupied);
+      moves &= ~pieces;
+
+    case Piece.W_KNIGHT;
+      #if turn == Turn.BLACK return false;
+      moves = knight_moves(from_bit) & ~pieces;
+      moves &= ~pieces;
+
+    case Piece.W_PAWN;
+      #if turn == Turn.BLACK return false;
+      adv := pawn_advance(from_bit, turn) & ~occupied;
+      adv2 := pawn_advance(adv, turn) & ~occupied;
+      cap  := pawn_captures(from_bit, turn) & occupied & ~pieces;
+      moves = adv|adv2|cap;
+      print_bitboard(moves);
+
+    case Piece.B_KING;
+      #if turn == Turn.WHITE return false;
+      moves = king_moves(chess.b_king) & ~unsafe & ~pieces;
+
+    case Piece.B_QUEEN;
+      #if turn == Turn.WHITE return false;
+      moves = rook_moves(from, occupied) | bishop_moves(from, occupied);
+      moves &= ~pieces;
+
+    case Piece.B_ROOK;
+      #if turn == Turn.WHITE return false;
+      moves = rook_moves(from, chess.occupied) & ~pieces;
+      moves &= ~pieces;
+
+    case Piece.B_BISHOP;
+      #if turn == Turn.WHITE return false;
+      moves = bishop_moves(from, chess.occupied);
+      moves &= ~pieces;
+
+    case Piece.B_KNIGHT;
+      #if turn == Turn.WHITE return false;
+      moves = knight_moves(from_bit) & ~pieces;
+      moves &= ~pieces;
+
+    case Piece.B_PAWN;
+      #if turn == Turn.WHITE return false;
+      adv := pawn_advance(from_bit, turn) & ~occupied;
+      adv2 := pawn_advance(adv, turn) & ~occupied;
+      cap := pawn_captures(from_bit, turn) & occupied & ~pieces;
+      moves = adv|adv2|cap;
+    }
+
+    if moves & to_bitboard then
+      return true;
+    else 
+      return false;
+  }
+}
+
+
 // TODO: enpassant does not work on diagonal pins for esoteric
 // reasons, hopefully we will be able to handle this case robustly,
 // but for now, just get something off the ground.
 generate_moves_for :: (chess: *Chess, $turn: Turn, move_gen: *$T) -> ChessFlags {
   opp :: turn ^ 1; 
   unsafe, check := generate_attacks(chess, opp);
-  //print_bitboard(check);
   num_checks := popcount(check);
 
   if num_checks > 1 then {
@@ -748,15 +924,15 @@ generate_moves_for :: (chess: *Chess, $turn: Turn, move_gen: *$T) -> ChessFlags 
     }
   } else if num_checks == 1 then {
     //print("check.\n");
-    generate_check_captures(chess, turn, move_gen);
+    generate_check_captures(unsafe, check, chess, turn, move_gen);
     #if !CAPTURES_ONLY {
-      generate_check_quiets(chess, turn, move_gen);
+      generate_check_quiets(unsafe, check, chess, turn, move_gen);
     }
   } else {
     //print("normal.\n");
-    generate_tactics_for(chess, turn, move_gen);
+    generate_tactics_for(unsafe, chess, turn, move_gen);
     #if !CAPTURES_ONLY {
-      generate_quiets_for(chess, turn, move_gen);
+      generate_quiets_for(unsafe, chess, turn, move_gen);
     }
   }
   return ChessFlags.Normal;
@@ -778,9 +954,8 @@ promotion_rank :: (turn: $Turn) -> u64 #expand {
     return xx rank_2;
 }
 
-generate_check_captures :: (chess: *Chess, $turn: Turn, move_gen: *$T) {
+generate_check_captures :: (unsafe: u64, check: u64, chess: *Chess, $turn: Turn, move_gen: *$T) {
   opp :: turn ^ 1; 
-  unsafe, check := generate_attacks(chess, opp);
   occupied := chess.occupied;
   en_passant := chess.en_passant;
   king    := get_king(chess, turn);
@@ -834,15 +1009,11 @@ generate_check_captures :: (chess: *Chess, $turn: Turn, move_gen: *$T) {
   }
 
   knight_bits := knight_moves(check) & knight;
-  //print("knight\n");
-  //print_bitboard(knight_bits);
   for :bitloop _, from: knight_bits {
     add_move(chess, move_gen, from, check_sq, Move16.Capture, in_check=true);
   }
 
   pawn_bits := pawn_captures(check, opp) & pawn;
-  //print("pawn bits \n");
-  //print_bitboard(pawn_bits);
   if check & cast(u64)(rank_1|rank_8) {
     for :bitloop _, from: pawn_bits {
       add_move(chess, move_gen, from, check_sq, Move16.Queen_Promotion_Capture, in_check=true);
@@ -866,16 +1037,13 @@ generate_check_captures :: (chess: *Chess, $turn: Turn, move_gen: *$T) {
   }
 
   king_bits := king_moves(king) & opponent_pieces & ~unsafe;
-  //print("king bits \n");
-  //print_bitboard(king_bits);
   for :bitloop _, to: king_bits {
     add_move(chess, move_gen, king_sq, to, Move16.Capture, in_check=true);
   }
 }
 
-generate_check_quiets :: (chess: *Chess, $turn: Turn, move_gen: *$T) {
+generate_check_quiets :: (unsafe: u64, check: u64, chess: *Chess, $turn: Turn, move_gen: *$T) {
   opp :: turn ^ 1; 
-  unsafe, check := generate_attacks(chess, opp);
   occupied := chess.occupied;
   king    := get_king(chess, turn);
   queen   := get_queen(chess, turn);
@@ -953,9 +1121,8 @@ generate_check_quiets :: (chess: *Chess, $turn: Turn, move_gen: *$T) {
   }
 }
 
-generate_quiets_for :: (chess: *Chess, $turn: Turn, move_gen: *$T) {
+generate_quiets_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T) {
   opp :: turn ^ 1; 
-  unsafe, check := generate_attacks(chess, opp);
   occupied := chess.occupied;
   en_passant := chess.en_passant;
   king    := get_king(chess, turn);
@@ -964,6 +1131,7 @@ generate_quiets_for :: (chess: *Chess, $turn: Turn, move_gen: *$T) {
   bishop  := get_bishop(chess, turn);
   knight  := get_knight(chess, turn); 
   pawn    := get_pawn(chess, turn);
+
   king_sq := bit_scan_forward(king);
   king_file := file_of(king_sq);
   pieces := king|queen|rook|bishop|knight|pawn;
@@ -1049,9 +1217,9 @@ generate_quiets_for :: (chess: *Chess, $turn: Turn, move_gen: *$T) {
   }
 
   pawn &= ~promotion_rank(turn);
-  //print_bitboard(pawn);
-  for :bitloop pawn_bit, from: pawn {
-    //print("pawn %\n", cast(Bitboard)pawn_bit);
+  while pawn {
+    from := bit_scan_forward(pawn);
+    pawn_bit := cast(u64) (1 << from);
     quiet := pawn_advance(pawn_bit, turn) & ~occupied;
     if quiet {
       to := bit_scan_forward(quiet);
@@ -1062,12 +1230,27 @@ generate_quiets_for :: (chess: *Chess, $turn: Turn, move_gen: *$T) {
         add_move(chess, move_gen, from, to, Move16.Double_Pawn_Push, in_check=false);
       }
     }
+    pawn = popbit(pawn);
   }
+
+  /*
+    // TODO: when the compiler bug gets fixed, we can go back to doing the for loop
+  for :bitloop pawn_bit, from: pawn {
+    quiet := pawn_advance(pawn_bit, turn) & ~occupied;
+    if quiet {
+      to := bit_scan_forward(quiet);
+      add_move(chess, move_gen, from, to, Move16.Quiet, in_check=false);
+      quiet2 := pawn_advance(quiet & pawn_push_rank(turn), turn) & ~occupied;
+      if quiet2 {
+        to := bit_scan_forward(quiet2);
+        add_move(chess, move_gen, from, to, Move16.Double_Pawn_Push, in_check=false);
+      }
+    }
+  }*/
 }
 
-generate_tactics_for :: (chess: *Chess, $turn: Turn, move_gen: *$T) {
+generate_tactics_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T) {
   opp :: turn ^ 1; 
-  unsafe, check := generate_attacks(chess, opp);
   occupied := chess.occupied;
   en_passant := chess.en_passant;
   king    := get_king(chess, turn);
@@ -1080,7 +1263,6 @@ generate_tactics_for :: (chess: *Chess, $turn: Turn, move_gen: *$T) {
   king_file := file_of(king_sq);
   pieces := king|queen|rook|bishop|knight|pawn;
   opponent_pieces := chess.occupied & ~pieces;
-  num_checks := popcount(check);
   pinned : u64 = 0;
   opp_qr := get_queen(chess, opp) | get_rook(chess, opp);
   xray_rook := xray_rook_attacks(king_sq, occupied, pieces) & opp_qr;
@@ -1885,7 +2067,7 @@ get_knight :: (chess: *Chess, $turn: Turn) -> u64 #expand {
 get_pawn :: (chess: *Chess, $turn: Turn) -> u64 #expand {
   #if turn == Turn.WHITE then
     return chess.w_pawn;
-  #if turn == Turn.BLACK then
+  else
     return chess.b_pawn;
 }
 
