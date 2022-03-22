@@ -1157,7 +1157,7 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
 
 Moves :: struct {
   count: int;
-  array: [48] Move16;
+  array: [64] Move16;
 }
 
 perft :: (chess: *Chess, body: Code, f: For_Flags) #expand {
@@ -1169,6 +1169,9 @@ perft :: (chess: *Chess, body: Code, f: For_Flags) #expand {
   `it_index := 0;
   while i < moves.count {
     it = moves[i];
+    if !is_legal(chess, it) {
+      continue;
+    }
     #insert body;
     i += 1;
     it_index += 1;
@@ -1178,6 +1181,9 @@ perft :: (chess: *Chess, body: Code, f: For_Flags) #expand {
   i = 0;
   while i < moves.count {
     it = moves[i];
+    if !is_legal(chess, it) {
+      continue;
+    }
     #insert body;
     i += 1;
     it_index += 1;
