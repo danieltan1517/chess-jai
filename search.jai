@@ -262,9 +262,15 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
     depth += 1;
   }
 
+ // :: (chess: *Chess, body: Code, f: For_Flags) #expand {
+ //  for move, move_count : move_gen {
+
+
   alpha_increase := 0;
   improving := get_improving(chess);
-  for move, move_count : move_gen {
+
+  move_count := 0;
+  for :pv move, move_score : <<chess {
     #if null_flag == true && single_ext == false {
       if ply == chess.exply && move == chess.excluded_move then {
         continue;
@@ -346,7 +352,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
 
       // Late Move Reduction when not in check and not giving check.
       else if depth > 2 && status == ChessFlags.Normal && flags <= Move16.Double_Pawn_Push {
-        R := LateMoveReduction[min(depth,63)][min(move_count,63)];
+        R := LateMoveReduction[min(depth,63)][min(moves_searched,63)];
         if !pv_node then
           R += 1;
         if improving == 0 then
@@ -496,6 +502,46 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
     }
   }
 
+  pv :: (chess: *ChessGame, body: Code, f: For_Flags) #expand {
+    `it := Move16.Quiet;
+    `it_index := 0;
+
+    // TODO: This is wrong...
+    // search the PV
+    if is_legal(chess, ttmove) then {
+      it, it_index = ttmove, INF;
+      #insert (break={return;}, continue={}) body;
+    }
+    
+    counter  := get_counter_move(chess);
+    followup1, followup2 := get_follow_up_move(chess);
+    moves := init_negamax(ttmove, __killer_moves[ply][0], __killer_moves[ply][1], counter, followup1, followup2);
+    unsafe, check := generate_attacks(chess);
+
+    // search all captures.
+    generate_tactics(unsafe, check, chess, *moves);
+    while moves.count > 0 {
+      it, it_index = heap_pop(*moves);
+      #insert (break={return;}) body;
+    }
+
+    // search all killer moves
+    killers := __killer_moves[ply];
+    for move: killers {
+      it, it_index = move, INF;
+      if !is_legal(chess, move) then {
+        continue;
+      }
+      #insert (break={return;}) body;
+    }
+
+    // search all quiet moves
+    generate_quiets(unsafe, check, chess, *moves);
+    while moves.count > 0 {
+      it, it_index = heap_pop(*moves);
+      #insert (break={return;}) body;
+    }
+  }
 }
 
 // perft results are found here: https://www.chessprogramming.org/Perft_Results
@@ -1094,8 +1140,6 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
 
   // move is part of principle variation. store it.
   if move == heap.pv then {
-    score = INF;
-    heap_add(heap, move, score);
     return;
   }
 
@@ -1128,27 +1172,27 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
 
   #if flags == Quiet || flags == Double_Pawn_Push {
     if move == heap.killer1 {
-      score = 19250;
+      return;
     } else if move == heap.killer2 {
-      score = 19225;
-    } else {
-      piece := cast(int) piece_at(chess, from);
-      score = __history_moves[piece][to];
+      return;
+    }
 
-      if move == heap.counter then {
-        COUNTER_BONUS :: 576;
-        score += COUNTER_BONUS;
-      }
+    piece := cast(int) piece_at(chess, from);
+    score = __history_moves[piece][to];
 
-      if move == heap.follow_up1 then {
-        CONTINUE_BONUS :: 400;
-        score += CONTINUE_BONUS;
-      }
+    if move == heap.counter then {
+      COUNTER_BONUS :: 576;
+      score += COUNTER_BONUS;
+    }
 
-      if move == heap.follow_up2 then {
-        CONTINUE_BONUS :: 400;
-        score += CONTINUE_BONUS;
-      }
+    if move == heap.follow_up1 then {
+      CONTINUE_BONUS :: 400;
+      score += CONTINUE_BONUS;
+    }
+
+    if move == heap.follow_up2 then {
+      CONTINUE_BONUS :: 400;
+      score += CONTINUE_BONUS;
     }
   }
 
@@ -1169,9 +1213,6 @@ perft :: (chess: *Chess, body: Code, f: For_Flags) #expand {
   `it_index := 0;
   while i < moves.count {
     it = moves[i];
-    if !is_legal(chess, it) {
-      continue;
-    }
     #insert body;
     i += 1;
     it_index += 1;
@@ -1181,9 +1222,6 @@ perft :: (chess: *Chess, body: Code, f: For_Flags) #expand {
   i = 0;
   while i < moves.count {
     it = moves[i];
-    if !is_legal(chess, it) {
-      continue;
-    }
     #insert body;
     i += 1;
     it_index += 1;
@@ -1192,6 +1230,16 @@ perft :: (chess: *Chess, body: Code, f: For_Flags) #expand {
   operator [] :: (m: Moves, index: int) -> Move16 #expand {
     return m.array[index];
   }
+
+  /*if !is_legal(chess, it) {
+    need to increment 'i += 1' to make sure it doesn't infinite loop
+    i += 1;
+    continue;
+  }*/
+  /*if !is_legal(chess, it) {
+    i += 1;
+    continue;
+  }*/
 }
 
 for_expansion :: (using heap: *$Q/Quiescene, code: Code, f: For_Flags) #expand {

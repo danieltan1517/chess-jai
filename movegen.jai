@@ -649,7 +649,6 @@ generate_tactics :: (unsafe: u64, check: u64, chess: *Chess, movegen: *$T) {
       for :bitloop _, to: captures {
         add_move(chess, move_gen, king_sq, to, Move16.Capture, in_check=true);
       }
-
     } else if num_checks == 1 then {
       generate_check_captures(unsafe, check, chess, turn, move_gen);
     } else {
@@ -819,7 +818,7 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
 
     // not a capture move.
     if (flags == Move16.Capture || flags >= Move16.Knight_Promotion_Capture) && opp_piece == Piece.NONE then {
-      print("not a capture move. return false\n");
+      //print("not a capture move. return false\n");
       return false;
     }
     if flags >= Move16.Knight_Promotion_Capture && flags <= Move16.Queen_Promotion_Capture && opp_piece == Piece.NONE then {
@@ -907,7 +906,7 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
     }
     // illegal piece move.
     if (moves & to_bitboard) == 0 then {
-      print("illegal piece move %.\n", cast(Bitboard)moves);
+      //print("illegal piece move %.\n", cast(Bitboard)moves);
       return false;
     }
     if flags == Move16.King_Castle then {
@@ -934,7 +933,7 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
     if !in_check(chess, turn, king_bit, to_bitboard, occupied) {
       return true;
     } else {
-      print("king in check: %\n", cast(Bitboard)king_bit);
+      //print("king in check: %\n", cast(Bitboard)king_bit);
       return false;
     }
   }
@@ -946,13 +945,13 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
     
     sq := bit_scan_forward(king_bit);
     if king_bit & pawn_captures(pawn, opp) then {
-      print("pawns %\n", cast(Bitboard)king_bit);
+      //print("pawns %\n", cast(Bitboard)king_bit);
       return true;
     }
 
     knight := get_knight(chess, opp) & ~to_bitboard;
     if king_bit & knight_moves(knight) then {
-      print("knight %\n", cast(Bitboard)king_bit);
+      //print("knight %\n", cast(Bitboard)king_bit);
       return true;
     }
 
@@ -961,13 +960,13 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
     // TODO FIX FIX FIX.
     for :bitloop _, sq: king_bit {
       if rook_moves(sq, occupied) & (queen|rook) then {
-        print("rook %\n", cast(Bitboard)king_bit);
+        //print("rook %\n", cast(Bitboard)king_bit);
         return true;
       }
      
       bishop := get_bishop(chess, opp) & ~to_bitboard;
       if bishop_moves(sq, occupied) & (queen|bishop) then {
-        print("bishop %\n", cast(Bitboard)king_bit);
+        //print("bishop %\n", cast(Bitboard)king_bit);
         return true;
       }
     }
@@ -1052,7 +1051,7 @@ generate_check_captures :: (unsafe: u64, check: u64, chess: *Chess, $turn: Turn,
   opponent_pieces := chess.occupied & ~pieces;
 
   pinned : u64 = 0;
-  opp_qr := get_queen(chess, opp) | get_rook(chess, opp);
+  /*opp_qr := get_queen(chess, opp) | get_rook(chess, opp);
   xray_rook := xray_rook_attacks(king_sq, occupied, pieces) & opp_qr;
   for :bitloop _, index: xray_rook {
     between := between_squares(index, king_sq);
@@ -1066,7 +1065,7 @@ generate_check_captures :: (unsafe: u64, check: u64, chess: *Chess, $turn: Turn,
     between := between_squares(index, king_sq);
     pin := between & occupied;
     pinned |= pin;
-  }
+  }*/
 
   queen  &= ~pinned;
   rook   &= ~pinned;
@@ -1137,7 +1136,7 @@ generate_check_quiets :: (unsafe: u64, check: u64, chess: *Chess, $turn: Turn, m
   pieces := king|queen|rook|bishop|knight|pawn;
 
   pinned : u64 = 0;
-  opp_qr := get_queen(chess, opp) | get_rook(chess, opp);
+  /*opp_qr := get_queen(chess, opp) | get_rook(chess, opp);
   xray_rook := xray_rook_attacks(king_sq, occupied, pieces) & opp_qr;
   for :bitloop _, index: xray_rook {
     between := between_squares(index, king_sq);
@@ -1151,7 +1150,7 @@ generate_check_quiets :: (unsafe: u64, check: u64, chess: *Chess, $turn: Turn, m
     between := between_squares(index, king_sq);
     pin := between & occupied;
     pinned |= pin;
-  }
+  }*/
 
   queen  &= ~pinned;
   rook   &= ~pinned;
@@ -1220,7 +1219,7 @@ generate_quiets_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T) 
   opponent_pieces := chess.occupied & ~pieces;
 
   pinned : u64 = 0;
-  opp_qr := get_queen(chess, opp) | get_rook(chess, opp);
+  /*opp_qr := get_queen(chess, opp) | get_rook(chess, opp);
   xray_rook := xray_rook_attacks(king_sq, occupied, pieces) & opp_qr;
   for :bitloop _, index: xray_rook {
     between := between_squares(index, king_sq);
@@ -1262,7 +1261,7 @@ generate_quiets_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T) 
         add_move(chess, move_gen, sq, to, Move16.Quiet, in_check=false);
       }
     }
-  }
+  }*/
 
   queen  &= ~pinned;
   rook   &= ~pinned;
@@ -1315,8 +1314,7 @@ generate_quiets_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T) 
     pawn = popbit(pawn);
   }
 
-  /*
-    // TODO: when the compiler bug gets fixed, we can go back to doing the for loop
+  /*  // TODO: when the compiler bug gets fixed, we can go back to doing the for loop
   for :bitloop pawn_bit, from: pawn {
     quiet := pawn_advance(pawn_bit, turn) & ~occupied;
     if quiet {
@@ -1346,7 +1344,7 @@ generate_tactics_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T)
   pieces := king|queen|rook|bishop|knight|pawn;
   opponent_pieces := chess.occupied & ~pieces;
   pinned : u64 = 0;
-  opp_qr := get_queen(chess, opp) | get_rook(chess, opp);
+  /*opp_qr := get_queen(chess, opp) | get_rook(chess, opp);
   xray_rook := xray_rook_attacks(king_sq, occupied, pieces) & opp_qr;
   for :bitloop _, index: xray_rook {
     between := between_squares(index, king_sq);
@@ -1377,7 +1375,7 @@ generate_tactics_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T)
         add_move(chess, move_gen, sq, index, Move16.Capture, in_check=false);
       }
     }
-  }
+  }*/
 
   queen  &= ~pinned;
   rook   &= ~pinned;
@@ -1500,7 +1498,6 @@ generate_attacks :: (chess: *Chess, $turn: Turn) -> att: u64, check: u64 {
   bishop := get_bishop(chess, turn);
   knight := get_knight(chess, turn); 
   pawn   := get_pawn(chess, turn);
-
 
   att |= king_moves(king);
 
