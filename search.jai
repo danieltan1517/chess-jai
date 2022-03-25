@@ -102,6 +102,8 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
 }
 
 negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := true, alpha := -INF, beta := INF, fifty: int) -> int {
+
+/*
   ply := chess.ply;
   pv_node := alpha != beta-1;
   if (__nodes_searched & 1024) && stdin_stop_signal()
@@ -542,6 +544,9 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
       #insert (break={return;}) body;
     }
   }
+*/
+
+  return 0;
 }
 
 // perft results are found here: https://www.chessprogramming.org/Perft_Results
