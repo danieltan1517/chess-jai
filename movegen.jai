@@ -563,10 +563,7 @@ do_en_passant_moves :: (chess: *Chess, pawn: u64, en_passant: u64, $turn: Turn, 
   occupied := chess.occupied;
   king := get_king(chess, turn) & ep_rank;
   queen_rook := get_queen(chess, opp) | get_rook(chess, opp) & ep_rank;
-  while pawn {
-    // handle en paesant magic pin.
-    pawn_sq := bit_scan_forward(pawn);
-    pawn_bitboard := cast(u64) (1 << pawn_sq);
+  for :bitloop pawn_bitboard, pawn_sq: pawn {
     if king == 0 || queen_rook == 0 {
       // do enpassant move.
       add_move(chess, move_gen, pawn_sq, ep_sq, Move16.Ep_Capture, in_check=in_check);
@@ -579,7 +576,9 @@ do_en_passant_moves :: (chess: *Chess, pawn: u64, en_passant: u64, $turn: Turn, 
         between := between_squares(sq, ksq);
         erase_both := occupied & ~(victim|pawn_bitboard);
         if (between & erase_both) == 0 {
-          return 0;
+
+          // COMPILER BUG:
+          break pawn_bitboard;
         }
         queen_rook = popbit(queen_rook);
       }
@@ -588,7 +587,6 @@ do_en_passant_moves :: (chess: *Chess, pawn: u64, en_passant: u64, $turn: Turn, 
       add_move(chess, move_gen, pawn_sq, ep_sq, Move16.Ep_Capture, in_check=in_check);
       ret = 1;
     }
-    pawn &= pawn - 1;
   }
 
   return ret;
@@ -1051,7 +1049,7 @@ generate_check_captures :: (unsafe: u64, check: u64, chess: *Chess, $turn: Turn,
   opponent_pieces := chess.occupied & ~pieces;
 
   pinned : u64 = 0;
-  /*opp_qr := get_queen(chess, opp) | get_rook(chess, opp);
+  opp_qr := get_queen(chess, opp) | get_rook(chess, opp);
   xray_rook := xray_rook_attacks(king_sq, occupied, pieces) & opp_qr;
   for :bitloop _, index: xray_rook {
     between := between_squares(index, king_sq);
@@ -1065,7 +1063,7 @@ generate_check_captures :: (unsafe: u64, check: u64, chess: *Chess, $turn: Turn,
     between := between_squares(index, king_sq);
     pin := between & occupied;
     pinned |= pin;
-  }*/
+  }
 
   queen  &= ~pinned;
   rook   &= ~pinned;
@@ -1136,7 +1134,7 @@ generate_check_quiets :: (unsafe: u64, check: u64, chess: *Chess, $turn: Turn, m
   pieces := king|queen|rook|bishop|knight|pawn;
 
   pinned : u64 = 0;
-  /*opp_qr := get_queen(chess, opp) | get_rook(chess, opp);
+  opp_qr := get_queen(chess, opp) | get_rook(chess, opp);
   xray_rook := xray_rook_attacks(king_sq, occupied, pieces) & opp_qr;
   for :bitloop _, index: xray_rook {
     between := between_squares(index, king_sq);
@@ -1150,7 +1148,7 @@ generate_check_quiets :: (unsafe: u64, check: u64, chess: *Chess, $turn: Turn, m
     between := between_squares(index, king_sq);
     pin := between & occupied;
     pinned |= pin;
-  }*/
+  }
 
   queen  &= ~pinned;
   rook   &= ~pinned;
@@ -1219,7 +1217,7 @@ generate_quiets_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T) 
   opponent_pieces := chess.occupied & ~pieces;
 
   pinned : u64 = 0;
-  /*opp_qr := get_queen(chess, opp) | get_rook(chess, opp);
+  opp_qr := get_queen(chess, opp) | get_rook(chess, opp);
   xray_rook := xray_rook_attacks(king_sq, occupied, pieces) & opp_qr;
   for :bitloop _, index: xray_rook {
     between := between_squares(index, king_sq);
@@ -1261,7 +1259,7 @@ generate_quiets_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T) 
         add_move(chess, move_gen, sq, to, Move16.Quiet, in_check=false);
       }
     }
-  }*/
+  }
 
   queen  &= ~pinned;
   rook   &= ~pinned;
@@ -1298,23 +1296,6 @@ generate_quiets_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T) 
   }
 
   pawn &= ~promotion_rank(turn);
-  while pawn {
-    from := bit_scan_forward(pawn);
-    pawn_bit := cast(u64) (1 << from);
-    quiet := pawn_advance(pawn_bit, turn) & ~occupied;
-    if quiet {
-      to := bit_scan_forward(quiet);
-      add_move(chess, move_gen, from, to, Move16.Quiet, in_check=false);
-      quiet2 := pawn_advance(quiet & pawn_push_rank(turn), turn) & ~occupied;
-      if quiet2 {
-        to := bit_scan_forward(quiet2);
-        add_move(chess, move_gen, from, to, Move16.Double_Pawn_Push, in_check=false);
-      }
-    }
-    pawn = popbit(pawn);
-  }
-
-  /*  // TODO: when the compiler bug gets fixed, we can go back to doing the for loop
   for :bitloop pawn_bit, from: pawn {
     quiet := pawn_advance(pawn_bit, turn) & ~occupied;
     if quiet {
@@ -1326,7 +1307,7 @@ generate_quiets_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T) 
         add_move(chess, move_gen, from, to, Move16.Double_Pawn_Push, in_check=false);
       }
     }
-  }*/
+  }
 }
 
 generate_tactics_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T) {
@@ -1344,7 +1325,7 @@ generate_tactics_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T)
   pieces := king|queen|rook|bishop|knight|pawn;
   opponent_pieces := chess.occupied & ~pieces;
   pinned : u64 = 0;
-  /*opp_qr := get_queen(chess, opp) | get_rook(chess, opp);
+  opp_qr := get_queen(chess, opp) | get_rook(chess, opp);
   xray_rook := xray_rook_attacks(king_sq, occupied, pieces) & opp_qr;
   for :bitloop _, index: xray_rook {
     between := between_squares(index, king_sq);
@@ -1375,7 +1356,7 @@ generate_tactics_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T)
         add_move(chess, move_gen, sq, index, Move16.Capture, in_check=false);
       }
     }
-  }*/
+  }
 
   queen  &= ~pinned;
   rook   &= ~pinned;

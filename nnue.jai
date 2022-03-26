@@ -1,6 +1,12 @@
 #import "Basic";
 #import "File";
 
+bit_scan_forward :: (input: u64)->int #expand {
+  result := -1;
+  #asm { bsf.q result, input; }
+  return result;
+}
+
 main :: () {
   print("code\n");
   nnue_init("resources/nn-04cf2b4ed1da.nnue");
@@ -11,11 +17,6 @@ main :: () {
   nnue_evaluate(*chess, true);
   nnue_evaluate(*chess, false);
 
-bit_scan_forward :: (input: u64)->int #expand {
-  result := -1;
-  #asm { bsf.q result, input; }
-  return result;
-}
 
 using Bitboard :: enum_flags u64 {
   a1; b1; c1; d1; e1; f1; g1; h1;
@@ -290,15 +291,6 @@ nnue_init :: (file_name: string) -> bool {
     }
   }
 
-  /*
-      xmm0: vec;
-      xmm1: vec;
-      xmm2: vec;
-      xmm3: vec;
-      xmm4: vec;
-      xmm5: vec;
-  */
-
   permute_biases :: (biases: [] s32) #expand {
     rdi := biases.data;
     // translated from godbolt's clang -O3 assembly language output.
@@ -409,14 +401,14 @@ nnue_evaluate_pos :: (pos: *Position) -> s32 {
 
   buf: NetData;
   print("transform\n");
-  transform(pos, buf.input, input_mask);
+  transform(pos, buf.input, input_mask.data);
 
-  /*affine_txfm(buf.input, buf.hidden1_out, FtOutDims, 32,
-              hidden1_biases, hidden1_weights, input_mask, hidden1_mask, true);
-  affine_txfm(buf.hidden1_out, buf.hidden2_out, 32, 32
-              hidden2_biases, hidden2_weights, hidden1_mask, null, false);
+  affine_txfm(buf.input.data, buf.hidden1_out.data, FtOutDims, 32,
+              hidden1_biases.data, hidden1_weights.data, input_mask.data, hidden1_mask.data, true);
+  affine_txfm(buf.hidden1_out.data, buf.hidden2_out.data, 32, 32,
+              hidden2_biases.data, hidden2_weights.data, hidden1_mask.data, null, false);
 
-  out_value = affine_propagate(buf.hidden2_out, output_biases, output_weights);*/
+  out_value = affine_propagate(buf.hidden2_out.data, output_biases.data, output_weights.data);
 
   return out_value / FV_SCALE;
 
@@ -606,8 +598,9 @@ refresh_accumulator :: (pos: *Position) {
 
 append_active_indices :: (pos: *Position, active: *[2] IndexList)
 {
-  for c: 0..1
+  for c: 0..1 {
     half_kp_append_active_indices(pos, xx c, *(<<active)[c]);
+  }
 }
 
 append_changed_indices :: (pos: *Position, removed: [2] IndexList, added: [2] IndexList, reset: *[2] bool) {
@@ -712,10 +705,10 @@ PieceToIndex: [2][14] s32 = .[
        0, PS_W_QUEEN, PS_W_ROOK, PS_W_BISHOP, PS_W_KNIGHT, PS_W_PAWN, 0]
 ];
 
-transform :: (pos: *Position, output: [] s8, out_mask: [] u32) {
+transform :: (pos: *Position, output: [] s8, out_mask: *u32) {
   if (!update_accumulator(pos))
     refresh_accumulator(pos);
-
+  print("wukong transform!\n");
   accumulation := *pos.nnue[0].accumulator.accumulation;
   perspectives: [2] int;
   perspectives[0] = pos.player;
@@ -724,25 +717,225 @@ transform :: (pos: *Position, output: [] s8, out_mask: [] u32) {
   for p: 0..1 {
     offset := kHalfDimensions * p;
     numChunks := (16*kHalfDimensions) / SIMD_WIDTH;
-
     out := cast(*void) *output[offset];
+    
     for i: 0..numChunks/2-1 {
       s0 := cast(*s8)*((<<accumulation)[perspectives[p]]) + 32*(i*2);
       s1 := cast(*s8)*((<<accumulation)[perspectives[p]]) + 32*(i*2 + 1);
-
+      //print("%\n", s0-accumulation.data);
+      //print("%\n", s1-accumulation.data);
+      // TODO: I don't know if this is correct. I'm assuming it is
+      // then come back later to fix it...
+      // s0, s1 are fine. just need to figure out the correct assembly...
       #asm AVX, AVX2 {
         movups.y xmm0:, [s0];
         movups.y xmm1:, [s1];
         packsswb.y xmm2:, xmm0, xmm1;
         movups.y [out], xmm2;
-      }
 
-      //*outMask++ = vec_mask_pos(out[i]);
+        pxor.y xmm3:, xmm3, xmm3; // xmm3 = 0
+        pcmpgtb.y xmm4:, xmm2, xmm3; // vec_mask_pos(out, 0)
+        pmovmskb reg:, xmm4;
+        mov.d [out_mask], reg;
+        add.q out, 32;
+        add.q out_mask, 4;
+      }
     }
   }
 }
+
+affine_txfm :: (input: *s8, output: *void, inDims: u32, outDims: u32, biases: *s32, weights: *s8, in_mask: *u32, out_mask: *u32, pack8_and_calc_mask: bool) {
+
+  assert(outDims == 32);
+
+  #asm AVX, AVX2 {
+     pxor.y   kZero:, kZero, kZero; // kZero = 0
+     movups.y out0:, [biases];
+     movups.y out1:, [biases + 32];
+     movups.y out2:, [biases + 64];
+     movups.y out3:, [biases + 96];
+  }
+  v: u64;
+  idx := 0;
+
+  v = << (cast(*u64)in_mask);
+  offset := 0;
+  while offset < inDims {
+    if !next_idx(*idx, *offset, *v, in_mask, inDims)
+      break;
+    simd_index := idx * 32;
+    #asm AVX, AVX2 {
+      //first = ((__m256i *)weights)[idx];
+      movups.y first:, [weights + simd_index];
+      pxor.y second:, second, second;
+    }
+    factor: u16 = xx input[idx];
+
+    if next_idx(*idx, *offset, *v, in_mask, inDims) {
+      simd_index := idx * 32;
+      #asm AVX, AVX2 {
+        //second = ((__m256i *)weights)[idx];
+        movups.y second, [weights + simd_index];
+      }
+      factor |= cast(u16)(input[idx]) << 8;
+    } else {
+      #asm AVX, AVX2 {
+        movups.y second, kZero;
+      }
+    }
+
+    //__m256i mul = _mm256_set1_epi16(factor), prod, signs;
+    xmm_vec:  [16] u16;
+    xmm_vec[0] = factor;
+    xmm_vec[1] = factor;
+    xmm_vec[2] = factor;
+    xmm_vec[3] = factor;
+    xmm_vec[4] = factor;
+    xmm_vec[5] = factor;
+    xmm_vec[6] = factor;
+    xmm_vec[7] = factor;
+    xmm_vec[8] = factor;
+    xmm_vec[9] = factor;
+    xmm_vec[10] = factor;
+    xmm_vec[11] = factor;
+    xmm_vec[12] = factor;
+    xmm_vec[13] = factor;
+    xmm_vec[14] = factor;
+    xmm_vec[15] = factor;
+    xmm_ptr := xmm_vec.data;
+    #asm AVX, AVX2 {
+      movups.y mul:, [xmm_ptr];
+
+      // prod = _mm256_maddubs_epi16(mul, _mm256_unpacklo_epi8(first, second));
+      punpcklbw.y xmm_reg:, first, second;
+      pmaddubsw.y prod:, mul, prod;
+
+      // signs = _mm256_cmpgt_epi16(kZero, prod); // <---
+      pcmpgtw.y signs:, kZero, prod;
+
+      // out_0 = _mm256_add_epi32(out_0, _mm256_unpacklo_epi16(prod, signs));
+      punpcklwd.y xmm_reg, prod, signs;
+      paddd.y out0, out0, xmm_reg;
+      
+      // out_1 = _mm256_add_epi32(out_1, _mm256_unpackhi_epi16(prod, signs));
+      punpckhwd.y xmm_reg, prod, signs;
+      paddd.y out1, out1, xmm_reg;
+
+      // prod = _mm256_maddubs_epi16(mul, _mm256_unpackhi_epi8(first, second)); // <---
+      punpckhbw.y xmm_reg, first, second;
+      pmaddubsw.y prod, mul, xmm_reg;
+
+      // signs = _mm256_cmpgt_epi16(kZero, prod);
+      pcmpgtw.y signs, kZero, prod;
+
+      // out_2 = _mm256_add_epi32(out_2, _mm256_unpacklo_epi16(prod, signs));
+      punpcklwd.y xmm_reg, prod, signs;
+      paddd.y out2, out2, xmm_reg;
+
+      // out_3 = _mm256_add_epi32(out_3, _mm256_unpackhi_epi16(prod, signs));
+      punpcklwd.y xmm_reg, prod, signs;
+      paddd.y out3, out3, xmm_reg;
+    }
+  }
+
+  #asm AVX, AVX2 {
+    // __m256i out16_0 = _mm256_srai_epi16(_mm256_packs_epi32(out_0, out_1), SHIFT);
+    packssdw.y sat01:, out0, out1;
+    psraw.y out16_0:,  sat01, 6;
+
+    // __m256i out16_1 = _mm256_srai_epi16(_mm256_packs_epi32(out_2, out_3), SHIFT);
+    packssdw.y sat23:, out2, out3;
+    psraw.y out16_1:,  sat23, 6;
+
+    //__m256i *outVec = (__m256i *)output;
+    //outVec[0] = _mm256_packs_epi16(out16_0, out16_1);
+    packsswb.y outvec:, out16_0, out16_1;
+    movups.y [output], outvec;
+  }
+
+  if pack8_and_calc_mask then {
+    #asm AVX2 {
+      //outMask[0] = _mm256_movemask_epi8(_mm256_cmpgt_epi8(outVec[0], kZero));
+      pcmpgtb.y  temp:, outvec, kZero;
+      pmovmskb eax:, temp;
+      mov.d [out_mask], eax;
+    }
+  } else {
+    #asm AVX, AVX2 {
+      //outVec[0] = _mm256_max_epi8(outVec[0], kZero);
+      pmaxsb.y outvec, outvec, kZero;
+      movups.y [output], outvec;
+    }
+  }
+
+  next_idx :: (idx: *int, offset: *int, v: *u64, mask: *u32, inDims: int) -> bool {
+    while <<v == 0 {
+      <<offset += 8 * size_of(u32);
+      if <<offset >= inDims then
+        return false;
+      memcpy(v, cast(*s8)mask + (<<offset / 8), size_of(u64));
+    }
+    <<idx = <<offset + bit_scan_forward(<<v);
+    <<v &= <<v - 1;
+    return true;
+  }
+
+}
+
+// TODO: Do this:
+affine_propagate :: (input: *s8, biases: *s32, weights: *s8) -> s32 {
+  #asm AVX, AVX2 {
+     //__m256i *iv = (__m256i *)input;
+     movups.y iv:, [input];
+     //__m256i *row = (__m256i *)weights;
+     movups.y row:, [weights];
+     //__m256i prod = _mm256_maddubs_epi16(iv[0], row[0]);
+     pmaddubsw.y prod:, iv, row;
+  }
+
+  
+  //  prod = _mm256_madd_epi16(prod, _mm256_set1_epi16(1));
+  xmm_vec:  [16] u16;
+  xmm_vec[0] = 1;
+  xmm_vec[1] = 1;
+  xmm_vec[2] = 1;
+  xmm_vec[3] = 1;
+  xmm_vec[4] = 1;
+  xmm_vec[5] = 1;
+  xmm_vec[6] = 1;
+  xmm_vec[7] = 1;
+  xmm_vec[8] = 1;
+  xmm_vec[9] = 1;
+  xmm_vec[10] = 1;
+  xmm_vec[11] = 1;
+  xmm_vec[12] = 1;
+  xmm_vec[13] = 1;
+  xmm_vec[14] = 1;
+  xmm_vec[15] = 1;
+  xmm_ptr := xmm_vec.data;
+  #asm AVX, AVX2 {
+    movups.y temp:, [xmm_ptr];
+    pmaddwd.y prod, prod, temp;
+    //__m128i sum = _mm_add_epi32(_mm256_castsi256_si128(prod), _mm256_extracti128_si256(prod, 1));
+    //sum = _mm_add_epi32(sum, _mm_shuffle_epi32(sum, 0x1b));
+    //return _mm_cvtsi128_si32(sum) + _mm_extract_epi32(sum, 1) + biases[0];
+  }
+
+  return 0;
+}
+
 
 nnue :: #foreign_library "nnue-probe/src/libnnueprobe";
 __nnue_init :: (eval_file: *u8) #foreign nnue "nnue_init"; 
 
 __nnue_evaluate :: (player: s32, pieces: *s32, squares: *s32) -> s32 #foreign nnue "nnue_evaluate";
+
+
+
+
+
+
+
+
+
+
