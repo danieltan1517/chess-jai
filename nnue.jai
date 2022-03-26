@@ -14,9 +14,9 @@ main :: () {
   __nnue_init("resources/nn-04cf2b4ed1da.nnue");
   chess: Chess;
   chess_startpos(*chess);
-  nnue_evaluate(*chess, true);
-  nnue_evaluate(*chess, false);
-
+  ret1 := nnue_evaluate(*chess, true);
+  ret2 := nnue_evaluate(*chess, false);
+  print("ret1=% ret2=%\n", ret1, ret2);
 
 using Bitboard :: enum_flags u64 {
   a1; b1; c1; d1; e1; f1; g1; h1;
@@ -396,8 +396,8 @@ nnue_evaluate_pos :: (pos: *Position) -> s32 {
   out_value: s32;
 
   // TODO: maybe these need to be align 8? like the nnue-probe library?
-  input_mask:   [FtOutDims / (8 * size_of(u32)) ] u32; // #align 8
-  hidden1_mask: [8 / size_of(u32)] u32; // #align 8
+  input_mask:   [FtOutDims / (8 * size_of(u32)) ] u32 #align 8;
+  hidden1_mask: [8 / size_of(u32)] u32 #align 8;
 
   buf: NetData;
   print("transform\n");
@@ -892,7 +892,6 @@ affine_propagate :: (input: *s8, biases: *s32, weights: *s8) -> s32 {
      //__m256i prod = _mm256_maddubs_epi16(iv[0], row[0]);
      pmaddubsw.y prod:, iv, row;
   }
-
   
   //  prod = _mm256_madd_epi16(prod, _mm256_set1_epi16(1));
   xmm_vec:  [16] u16;
@@ -913,15 +912,31 @@ affine_propagate :: (input: *s8, biases: *s32, weights: *s8) -> s32 {
   xmm_vec[14] = 1;
   xmm_vec[15] = 1;
   xmm_ptr := xmm_vec.data;
+
+  value: s64 = 0;
   #asm AVX, AVX2 {
     movups.y temp:, [xmm_ptr];
     pmaddwd.y prod, prod, temp;
+
     //__m128i sum = _mm_add_epi32(_mm256_castsi256_si128(prod), _mm256_extracti128_si256(prod, 1));
+    extracti128 xmm0:, prod, 1;
+    paddd.x sum:, prod, xmm0;
+
+
     //sum = _mm_add_epi32(sum, _mm_shuffle_epi32(sum, 0x1b));
-    //return _mm_cvtsi128_si32(sum) + _mm_extract_epi32(sum, 1) + biases[0];
+    pshufd.x xmm1:, sum, 0x1b;
+    paddd.x sum, sum, xmm1;
+
+
+    pextrd reg2:, sum, 1;
+    movd reg1:, sum; 
+    lea.q reg3:, [biases];
+    add.q value, reg1;
+    add.q value, reg2;
+    add.q value, reg3;
   }
 
-  return 0;
+  return xx value;
 }
 
 
