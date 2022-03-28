@@ -1206,22 +1206,19 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
 
 Moves :: struct {
   count: int;
-  array: [64] Move16;
+  array: [80] Move16;
 }
 
 perft :: (chess: *Chess, body: Code, f: For_Flags) #expand {
 
   moves: Moves;
-  generate_moves(chess, *moves);
+  /*generate_moves(chess, *moves);
   `it_index := 0;
   while it_index < moves.count {
     `it := moves[it_index];
     #insert body;
     it_index += 1;
-  }
- 
-
-  /*moves: Moves;
+  }*/
   unsafe, check := generate_attacks(chess);
   generate_tactics(unsafe, check, chess, *moves);
   i := 0;
@@ -1234,6 +1231,7 @@ perft :: (chess: *Chess, body: Code, f: For_Flags) #expand {
     it_index += 1;
   }
   moves.count = 0;
+  memset(*moves, 0, size_of(Moves));
   generate_quiets(unsafe, check, chess, *moves);
   i = 0;
   while i < moves.count {
@@ -1241,7 +1239,7 @@ perft :: (chess: *Chess, body: Code, f: For_Flags) #expand {
     #insert body;
     i += 1;
     it_index += 1;
-  }*/
+  }
 
   operator [] :: (m: Moves, index: int) -> Move16 #expand {
     return m.array[index];

@@ -756,7 +756,7 @@ affine_txfm :: (input: *s8, output: *void, inDims: u32, outDims: u32, biases: *s
      movups.y out3:, [biases + 96];
   }
   v: u64;
-  idx := 0;
+  idx : s32 = 0;
 
   v = << (cast(*u64)in_mask);
   offset := 0;
@@ -868,14 +868,14 @@ affine_txfm :: (input: *s8, output: *void, inDims: u32, outDims: u32, biases: *s
     }
   }
 
-  next_idx :: (idx: *int, offset: *int, v: *u64, mask: *u32, inDims: int) -> bool {
+  next_idx :: (idx: *s32, offset: *int, v: *u64, mask: *u32, inDims: int) -> bool {
     while <<v == 0 {
       <<offset += 8 * size_of(u32);
       if <<offset >= inDims then
         return false;
       memcpy(v, cast(*s8)mask + (<<offset / 8), size_of(u64));
     }
-    <<idx = <<offset + bit_scan_forward(<<v);
+    <<idx = cast(s32) (<<offset + bit_scan_forward(<<v));
     <<v &= <<v - 1;
     return true;
   }
@@ -913,7 +913,7 @@ affine_propagate :: (input: *s8, biases: *s32, weights: *s8) -> s32 {
   xmm_vec[15] = 1;
   xmm_ptr := xmm_vec.data;
 
-  value: s64 = 0;
+  value: s32 = 0;
   #asm AVX, AVX2 {
     movups.y temp:, [xmm_ptr];
     pmaddwd.y prod, prod, temp;
@@ -930,7 +930,7 @@ affine_propagate :: (input: *s8, biases: *s32, weights: *s8) -> s32 {
 
     pextrd reg2:, sum, 1;
     movd reg1:, sum; 
-    lea.q reg3:, [biases];
+    lea.d reg3:, [biases];
     add.q value, reg1;
     add.q value, reg2;
     add.q value, reg3;

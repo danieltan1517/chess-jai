@@ -816,7 +816,6 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
 
     // not a capture move.
     if (flags == Move16.Capture || flags >= Move16.Knight_Promotion_Capture) && opp_piece == Piece.NONE then {
-      //print("not a capture move. return false\n");
       return false;
     }
     if flags >= Move16.Knight_Promotion_Capture && flags <= Move16.Queen_Promotion_Capture && opp_piece == Piece.NONE then {
@@ -904,7 +903,6 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
     }
     // illegal piece move.
     if (moves & to_bitboard) == 0 then {
-      //print("illegal piece move %.\n", cast(Bitboard)moves);
       return false;
     }
     if flags == Move16.King_Castle then {
@@ -931,7 +929,6 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
     if !in_check(chess, turn, king_bit, to_bitboard, occupied) {
       return true;
     } else {
-      //print("king in check: %\n", cast(Bitboard)king_bit);
       return false;
     }
   }
@@ -943,13 +940,11 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
     
     sq := bit_scan_forward(king_bit);
     if king_bit & pawn_captures(pawn, opp) then {
-      //print("pawns %\n", cast(Bitboard)king_bit);
       return true;
     }
 
     knight := get_knight(chess, opp) & ~to_bitboard;
     if king_bit & knight_moves(knight) then {
-      //print("knight %\n", cast(Bitboard)king_bit);
       return true;
     }
 
@@ -958,13 +953,11 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
     // TODO FIX FIX FIX.
     for :bitloop _, sq: king_bit {
       if rook_moves(sq, occupied) & (queen|rook) then {
-        //print("rook %\n", cast(Bitboard)king_bit);
         return true;
       }
      
       bishop := get_bishop(chess, opp) & ~to_bitboard;
       if bishop_moves(sq, occupied) & (queen|bishop) then {
-        //print("bishop %\n", cast(Bitboard)king_bit);
         return true;
       }
     }
@@ -982,7 +975,6 @@ generate_moves_for :: (chess: *Chess, $turn: Turn, move_gen: *$T) -> ChessFlags 
   num_checks := popcount(check);
 
   if num_checks > 1 then {
-    //print("double-check.\n");
     king    := get_king(chess, turn);
     queen   := get_queen(chess, turn);
     rook    := get_rook(chess, turn);
@@ -1002,13 +994,11 @@ generate_moves_for :: (chess: *Chess, $turn: Turn, move_gen: *$T) -> ChessFlags 
       add_move(chess, move_gen, king_sq, to, Move16.Quiet, in_check=true);
     }
   } else if num_checks == 1 then {
-    //print("check.\n");
     generate_check_captures(unsafe, check, chess, turn, move_gen);
     #if !CAPTURES_ONLY {
       generate_check_quiets(unsafe, check, chess, turn, move_gen);
     }
   } else {
-    //print("normal.\n");
     generate_tactics_for(unsafe, chess, turn, move_gen);
     #if !CAPTURES_ONLY {
       generate_quiets_for(unsafe, chess, turn, move_gen);
@@ -1209,7 +1199,8 @@ generate_quiets_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T) 
   rook    := get_rook(chess, turn);
   bishop  := get_bishop(chess, turn);
   knight  := get_knight(chess, turn); 
-  pawn    := get_pawn(chess, turn);
+  pawn    := ifx chess.turn == Turn.WHITE chess.w_pawn else chess.b_pawn; 
+  //get_pawn(chess, turn);
 
   king_sq := bit_scan_forward(king);
   king_file := file_of(king_sq);
@@ -1295,6 +1286,8 @@ generate_quiets_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T) 
     }
   }
 
+  // BUG: this function believes it is white pawn moves...when it's supposed
+  // to be black pawn moves.
   pawn &= ~promotion_rank(turn);
   for :bitloop pawn_bit, from: pawn {
     quiet := pawn_advance(pawn_bit, turn) & ~occupied;
@@ -1512,14 +1505,26 @@ generate_attacks :: (chess: *Chess, $turn: Turn) -> att: u64, check: u64 {
 
 bitloop :: (bitboard: *u64, body: Code, flags: For_Flags) #expand {
   loop := << bitboard;
+  `it_index: int;
+  `it: u64;
   while loop {
-    `it_index := bit_scan_forward(loop);
+
+    // BUG: until this gets fixed, I will be using inline assembly.
+    /*`it_index := bit_scan_forward(loop);
     `it := cast(u64) (1 << it_index);
-    loop = popbit(loop);
+    loop = popbit(loop);*/
+
+    #asm { 
+      reg: gpr === c;
+      bsf.q reg, loop;
+      mov.q it_index, reg;
+      mov.q it, 1;
+      shl.q it, reg;
+      blsr.q loop, loop;
+    }
     #insert body;
   }
 }
-
 
 PRNG :: struct {
   seed: u64;

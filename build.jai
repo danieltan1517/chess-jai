@@ -4,9 +4,9 @@
 ui_exe :: "jai-chess";
 ui_file_names :: string.["ui_main.jai", "movegen.jai"];
 
-ai_exe :: "nnue";
-//ai_file_names :: string.["ai_main.jai", "search.jai", "eval.jai", "movegen.jai"];
-ai_file_names :: string.["nnue.jai"];
+ai_exe :: "leviathan";
+ai_file_names :: string.["ai_main.jai", "search.jai", "eval.jai", "movegen.jai"];
+//ai_file_names :: string.["nnue.jai"];
 
 #run {
   args_option : enum { debug; release;} = .debug;
@@ -87,7 +87,7 @@ build_release :: (executable_name: string, file_names: [] string, workspace_name
   target_options.output_executable_name = executable_name;
   target_options.optimization_level = .RELEASE;
   target_options.temporary_storage_size = 262144;
-  set_optimization_level(*target_options, 3, 2); 
+  set_optimization_level(*target_options, 3, 0); 
   target_options.stack_trace = false;
 
   set_build_options(target_options, w);
