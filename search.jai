@@ -504,6 +504,29 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
   }
 
   pv :: (chess: *ChessGame, body: Code, f: For_Flags) #expand {
+
+  /*unsafe, check := generate_attacks(chess);
+  generate_tactics(unsafe, check, chess, *moves);
+  i := 0;
+  `it := Move16.Quiet;
+  `it_index := 0;
+  while i < moves.count {
+    it = moves[i];
+    #insert body;
+    i += 1;
+    it_index += 1;
+  }
+  moves.count = 0;
+  memset(*moves, 0, size_of(Moves));
+  generate_quiets(unsafe, check, chess, *moves);
+  i = 0;
+  while i < moves.count {
+    it = moves[i];
+    #insert body;
+    i += 1;
+    it_index += 1;
+  }*/
+
     `it := Move16.Quiet;
     `it_index := 0;
 
@@ -667,10 +690,16 @@ perft_all :: () {
 perft_divide :: (chess: *Chess, depth: int) -> int {
   taken := get_time();
   if depth <= 0 then return 1;
+
+  moves: Moves;
+  generate_moves(chess, *moves);
+
   num_nodes := 0;
   perft_count := 0;
+
   ep := chess.en_passant;
-  for :perft move, index: <<chess {
+  for i: 0..moves.count-1 {
+    move := moves.array[i];
     cap, flags, hash := make_move(chess, move);
     move_count := perft(chess, depth-1);
     _, from, to := decode_move16(move);
@@ -866,13 +895,22 @@ pv_table: [128] PV_Line;
 // walks the move generation tree of strictly legal moves to count the leaf nodes
 perft :: (chess: *Chess, depth: int) -> int {
   if depth == 0 then return 1;
-  num_nodes := 0;
+  moves: Moves;
+  generate_moves(chess, *moves);
 
+  if depth == 1 then {
+    return moves.count;
+  }
+
+  num_nodes := 0;
   ep := chess.en_passant;
-  for :perft move: <<chess {
-    cap, flags, hash := make_move(chess, move);
+  for i: 0..moves.count-1 {
+    mov := moves.array[i];
+    cap, castling, hash := make_move(chess, mov);
+
     num_nodes += perft(chess, depth-1);
-    unmake_move(chess, move, cap, flags, hash);
+
+    unmake_move(chess, mov, cap, castling, hash);
     chess.en_passant = ep;
   }
 
@@ -1215,52 +1253,6 @@ Moves :: struct {
   array: [80] Move16;
 }
 
-perft :: (chess: *Chess, body: Code, f: For_Flags) #expand {
-
-  moves: Moves;
-  generate_moves(chess, *moves);
-  `it_index := 0;
-  while it_index < moves.count {
-    `it := moves[it_index];
-    #insert body;
-    it_index += 1;
-  }
-  /*unsafe, check := generate_attacks(chess);
-  generate_tactics(unsafe, check, chess, *moves);
-  i := 0;
-  `it := Move16.Quiet;
-  `it_index := 0;
-  while i < moves.count {
-    it = moves[i];
-    #insert body;
-    i += 1;
-    it_index += 1;
-  }
-  moves.count = 0;
-  memset(*moves, 0, size_of(Moves));
-  generate_quiets(unsafe, check, chess, *moves);
-  i = 0;
-  while i < moves.count {
-    it = moves[i];
-    #insert body;
-    i += 1;
-    it_index += 1;
-  }*/
-
-  operator [] :: (m: Moves, index: int) -> Move16 #expand {
-    return m.array[index];
-  }
-
-  /*if !is_legal(chess, it) {
-    need to increment 'i += 1' to make sure it doesn't infinite loop
-    i += 1;
-    continue;
-  }*/
-  /*if !is_legal(chess, it) {
-    i += 1;
-    continue;
-  }*/
-}
 
 for_expansion :: (using heap: *$Q/Quiescene, code: Code, f: For_Flags) #expand {
   i := 0;
