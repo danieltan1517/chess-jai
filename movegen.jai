@@ -222,7 +222,6 @@ unmake_null_move :: (chess: *Chess, ep: u64, hash: u64) #expand {
 
 make_move :: (chess: *Chess, move: Move16) -> captured: Piece, Castling, hash: u64 {
   flags, sq, to_sq := decode_move16(move);
-  //print("flag: %\n", flags);
   hash := chess.hash;
   chess.hash ^= zobrist_en_passant(chess.en_passant);
   chess.en_passant = 0;
@@ -607,9 +606,7 @@ PawnPushRank :: ($turn: Turn) -> u64 #expand {
 }
 
 init_magic_bitboards :: () {
-  //print("initializing magic bitboards.\n");
   init_magic_bitboard();
-  //print("magic bitboards initialized :)\n");
 }
 
 generate_attacks :: (chess: *Chess) -> unsafe: u64, check: u64 {
@@ -650,6 +647,7 @@ generate_tactics :: (unsafe: u64, check: u64, chess: *Chess, movegen: *$T) {
     } else if num_checks == 1 then {
       generate_check_captures(unsafe, check, chess, turn, move_gen);
     } else {
+      //print("%\n", turn);
       generate_tactics_for(unsafe, chess, turn, move_gen);
     }
   }
@@ -965,7 +963,6 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
   }
 }
 
-
 // TODO: enpassant does not work on diagonal pins for esoteric
 // reasons, hopefully we will be able to handle this case robustly,
 // but for now, just get something off the ground.
@@ -1037,6 +1034,7 @@ generate_check_captures :: (unsafe: u64, check: u64, chess: *Chess, $turn: Turn,
   king_file := file_of(king_sq);
   pieces := king|queen|rook|bishop|knight|pawn;
   opponent_pieces := chess.occupied & ~pieces;
+  assert(chess.turn == turn, "Compiler Bug: Turn should be %, not %", chess.turn, turn);
 
   pinned : u64 = 0;
   opp_qr := get_queen(chess, opp) | get_rook(chess, opp);
@@ -1122,6 +1120,7 @@ generate_check_quiets :: (unsafe: u64, check: u64, chess: *Chess, $turn: Turn, m
   pawn    := get_pawn(chess, turn);
   king_sq := bit_scan_forward(king);
   pieces := king|queen|rook|bishop|knight|pawn;
+  assert(chess.turn == turn, "Compiler Bug: Turn should be %, not %", chess.turn, turn);
 
   pinned : u64 = 0;
   opp_qr := get_queen(chess, opp) | get_rook(chess, opp);
@@ -1199,8 +1198,8 @@ generate_quiets_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T) 
   rook    := get_rook(chess, turn);
   bishop  := get_bishop(chess, turn);
   knight  := get_knight(chess, turn); 
-  pawn    := ifx chess.turn == Turn.WHITE chess.w_pawn else chess.b_pawn; 
-  //get_pawn(chess, turn);
+  pawn    := get_pawn(chess, turn);
+  assert(chess.turn == turn, "Compiler Bug: Turn should be %, not %", chess.turn, turn);
 
   king_sq := bit_scan_forward(king);
   king_file := file_of(king_sq);
@@ -1258,34 +1257,45 @@ generate_quiets_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T) 
   knight &= ~pinned;
   pawn   &= ~pinned;
 
-  king_move_bits := king_moves(king) & ~occupied & ~unsafe;
-  for :bitloop _, to: king_move_bits {
-    add_move(chess, move_gen, king_sq, to, Move16.Quiet, in_check=false);
-  }
+  generate_king_quiet_moves(chess, king, ~occupied, ~unsafe, move_gen);
+  generate_rook_quiet_moves(chess, queen|rook, occupied, move_gen);
+  generate_bishop_quiet_moves(chess, queen|bishop, occupied, move_gen);
+  generate_knight_move_moves(chess, knight, occupied, move_gen);
 
-  queen_rook := queen|rook;
-  for :bitloop _, from: queen_rook {
-    quiets := rook_moves(from, occupied) & ~occupied;
-    for :bitloop _, to: quiets {
-      add_move(chess, move_gen, from, to, Move16.Quiet, in_check=false);
+  generate_king_quiet_moves :: (chess: *Chess, king: u64, not_occupied: u64, safe: u64, move_gen: *T) {
+    king_sq := bit_scan_forward(king);
+    king_move_bits := king_moves(king) & not_occupied & safe;
+    for :bitloop _, to: king_move_bits {
+      add_move(chess, move_gen, king_sq, to, Move16.Quiet, in_check=false);
     }
   }
 
-  queen_bishop := queen|bishop;
-  for :bitloop _, from: queen_bishop {
-    quiets := bishop_moves(from, occupied) & ~occupied;
-    for :bitloop _, to: quiets {
-      add_move(chess, move_gen, from, to, Move16.Quiet, in_check=false);
+  generate_rook_quiet_moves :: (chess: *Chess, queen_rook: u64, occupied: u64, move_gen: *T) {
+    for :bitloop _, from: queen_rook {
+      quiets := rook_moves(from, occupied) & ~occupied;
+      for :bitloop _, to: quiets {
+        add_move(chess, move_gen, from, to, Move16.Quiet, in_check=false);
+      }
     }
   }
 
-  for :bitloop knight_bit, from: knight {
-    quiets := knight_moves(knight_bit) & ~occupied;
-    for :bitloop _, to: quiets {
-      add_move(chess, move_gen, from, to, Move16.Quiet, in_check=false);
+  generate_bishop_quiet_moves :: (chess: *Chess, queen_bishop: u64, occupied: u64, move_gen: *T) {
+    for :bitloop _, from: queen_bishop {
+      quiets := bishop_moves(from, occupied) & ~occupied;
+      for :bitloop _, to: quiets {
+        add_move(chess, move_gen, from, to, Move16.Quiet, in_check=false);
+      }
     }
   }
 
+  generate_knight_move_moves :: (chess: *Chess, knight: u64, occupied: u64, move_gen: *T) {
+    for :bitloop knight_bit, from: knight {
+      quiets := knight_moves(knight_bit) & ~occupied;
+      for :bitloop _, to: quiets {
+        add_move(chess, move_gen, from, to, Move16.Quiet, in_check=false);
+      }
+    }
+  }
   // BUG: this function believes it is white pawn moves...when it's supposed
   // to be black pawn moves.
   pawn &= ~promotion_rank(turn);
@@ -1304,6 +1314,7 @@ generate_quiets_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T) 
 }
 
 generate_tactics_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T) {
+  //print("%\n", turn);
   opp :: turn ^ 1; 
   occupied := chess.occupied;
   en_passant := chess.en_passant;
@@ -1315,6 +1326,7 @@ generate_tactics_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T)
   pawn    := get_pawn(chess, turn);
   king_sq := bit_scan_forward(king);
   king_file := file_of(king_sq);
+  assert(chess.turn == turn, "Compiler Bug: Turn should be %, not %", chess.turn, turn);
   pieces := king|queen|rook|bishop|knight|pawn;
   opponent_pieces := chess.occupied & ~pieces;
   pinned : u64 = 0;
@@ -1383,27 +1395,34 @@ generate_tactics_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T)
     }
   }
 
-  queen_rook := queen|rook;
-  for :bitloop _, from: queen_rook {
-    attacks := rook_moves(from, occupied) & opponent_pieces;
-    for :bitloop _, to: attacks {
-      add_move(chess, move_gen, from, to, Move16.Capture, in_check=false);
+  generate_rook_moves(chess, queen|rook, occupied, opponent_pieces, move_gen);
+  generate_bishop_moves(chess, queen|bishop, occupied, opponent_pieces, move_gen);
+  generate_knight_moves(chess, knight & knight_moves(opponent_pieces), occupied, opponent_pieces, move_gen);
+
+  generate_rook_moves :: (chess: *Chess, queen_rook: u64, occupied: u64, opponent_pieces: u64, move_gen: *T) {
+    for :bitloop _, from: queen_rook {
+      attacks := rook_moves(from, occupied) & opponent_pieces;
+      for :bitloop _, to: attacks {
+        add_move(chess, move_gen, from, to, Move16.Capture, in_check=false);
+      }
     }
   }
 
-  queen_bishop := queen|bishop;
-  for :bitloop _, from: queen_bishop {
-    attacks := bishop_moves(from, occupied) & opponent_pieces;
-    for :bitloop _, to: attacks {
-      add_move(chess, move_gen, from, to, Move16.Capture, in_check=false);
+  generate_bishop_moves :: (chess: *Chess, queen_bishop: u64, occupied: u64, opponent_pieces: u64, move_gen: *T) {
+    for :bitloop _, from: queen_bishop {
+      attacks := bishop_moves(from, occupied) & opponent_pieces;
+      for :bitloop _, to: attacks {
+        add_move(chess, move_gen, from, to, Move16.Capture, in_check=false);
+      }
     }
   }
 
-  knight &= knight_moves(opponent_pieces);
-  for :bitloop knight_bit, from: knight {
-    attacks := knight_moves(knight_bit) & opponent_pieces;
-    for :bitloop _, to: attacks {
-      add_move(chess, move_gen, from, to, Move16.Capture, in_check=false);
+  generate_knight_moves :: (chess: *Chess, knight: u64, occupied: u64, opponent_pieces: u64, move_gen: *T) {
+    for :bitloop knight_bit, from: knight {
+      attacks := knight_moves(knight_bit) & opponent_pieces;
+      for :bitloop _, to: attacks {
+        add_move(chess, move_gen, from, to, Move16.Capture, in_check=false);
+      }
     }
   }
 

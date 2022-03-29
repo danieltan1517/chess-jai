@@ -103,7 +103,6 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
 
 negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := true, alpha := -INF, beta := INF, fifty: int) -> int {
 
-/*
   ply := chess.ply;
   pv_node := alpha != beta-1;
   if (__nodes_searched & 1024) && stdin_stop_signal()
@@ -510,10 +509,16 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
 
     // TODO: This is wrong...
     // search the PV
-    if is_legal(chess, ttmove) then {
-      it, it_index = ttmove, INF;
-      #insert (break={return;}, continue={}) body;
+    PV := false;
+    while true {
+      if is_legal(chess, ttmove) then {
+        it, it_index = ttmove, INF;
+        #insert (break={PV=true; break;}, continue=break) body;
+      }
+      break;
     }
+    if PV == true then
+      return;
     
     counter  := get_counter_move(chess);
     followup1, followup2 := get_follow_up_move(chess);
@@ -524,8 +529,10 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
     generate_tactics(unsafe, check, chess, *moves);
     while moves.count > 0 {
       it, it_index = heap_pop(*moves);
-      #insert (break={return;}) body;
+      #insert (break={PV=true; break;}) body;
     }
+    if PV == true then
+      return;
 
     // search all killer moves
     killers := __killer_moves[ply];
@@ -534,19 +541,18 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
       if !is_legal(chess, move) then {
         continue;
       }
-      #insert (break={return;}) body;
+      #insert (break={PV=true; break;}) body;
     }
+    if PV == true then
+      return;
 
     // search all quiet moves
     generate_quiets(unsafe, check, chess, *moves);
     while moves.count > 0 {
       it, it_index = heap_pop(*moves);
-      #insert (break={return;}) body;
+      #insert body;
     }
   }
-*/
-
-  return 0;
 }
 
 // perft results are found here: https://www.chessprogramming.org/Perft_Results
@@ -1212,14 +1218,14 @@ Moves :: struct {
 perft :: (chess: *Chess, body: Code, f: For_Flags) #expand {
 
   moves: Moves;
-  /*generate_moves(chess, *moves);
+  generate_moves(chess, *moves);
   `it_index := 0;
   while it_index < moves.count {
     `it := moves[it_index];
     #insert body;
     it_index += 1;
-  }*/
-  unsafe, check := generate_attacks(chess);
+  }
+  /*unsafe, check := generate_attacks(chess);
   generate_tactics(unsafe, check, chess, *moves);
   i := 0;
   `it := Move16.Quiet;
@@ -1239,7 +1245,7 @@ perft :: (chess: *Chess, body: Code, f: For_Flags) #expand {
     #insert body;
     i += 1;
     it_index += 1;
-  }
+  }*/
 
   operator [] :: (m: Moves, index: int) -> Move16 #expand {
     return m.array[index];
