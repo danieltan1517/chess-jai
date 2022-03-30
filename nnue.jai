@@ -295,12 +295,12 @@ nnue_init :: (file_name: string) -> bool {
     rdi := biases.data;
     // translated from godbolt's clang -O3 assembly language output.
     #asm {
-      movaps.x xmm0:, [rdi+16]; 
-      movaps.x xmm1:, [rdi+32];
-      movaps.x xmm2:, [rdi+48];
-      movaps.x xmm3:, [rdi+64];
-      movaps.x xmm4:, [rdi+80];
-      movaps.x xmm5:, [rdi+96];
+      movaps.x xmm0: vec, [rdi+16]; 
+      movaps.x xmm1: vec, [rdi+32];
+      movaps.x xmm2: vec, [rdi+48];
+      movaps.x xmm3: vec, [rdi+64];
+      movaps.x xmm4: vec, [rdi+80];
+      movaps.x xmm5: vec, [rdi+96];
 
       movaps.x [rdi+16], xmm3; 
       movaps.x [rdi+32], xmm0;
@@ -402,6 +402,8 @@ nnue_evaluate_pos :: (pos: *Position) -> s32 {
   buf: NetData;
   print("transform\n");
   transform(pos, buf.input, input_mask.data);
+  print("buf.input: %\n", buf.input);
+  print("input: %\n", input_mask);
 
   affine_txfm(buf.input.data, buf.hidden1_out.data, FtOutDims, 32,
               hidden1_biases.data, hidden1_weights.data, input_mask.data, hidden1_mask.data, true);
@@ -544,6 +546,29 @@ refresh_accumulator :: (pos: *Position) {
   ITERS :: kHalfDimensions / TILE_HEIGHT;
 
   for c: 0..1 {
+    /*
+
+    for (unsigned i = 0; i < kHalfDimensions / TILE_HEIGHT; i++) {
+      vec16_t *ft_biases_tile = (vec16_t *)&ft_biases[i * TILE_HEIGHT];
+      vec16_t *accTile = (vec16_t *)&accumulator->accumulation[c][i * TILE_HEIGHT];
+      vec16_t acc[NUM_REGS];
+
+      for (unsigned j = 0; j < NUM_REGS; j++)
+        acc[j] = ft_biases_tile[j];
+
+      for (size_t k = 0; k < activeIndices[c].size; k++) {
+        unsigned index = activeIndices[c].values[k];
+        unsigned offset = kHalfDimensions * index + i * TILE_HEIGHT;
+        vec16_t *column = (vec16_t *)&ft_weights[offset];
+
+        for (unsigned j = 0; j < NUM_REGS; j++)
+          acc[j] = vec_add_16(acc[j], column[j]);
+      }
+
+      for (unsigned j = 0; j < NUM_REGS; j++)
+        accTile[j] = acc[j];
+    }*/
+
     for i: 0..ITERS-1 {
       ft_biases_tile := cast(*void) *ft_biases[i*TILE_HEIGHT];
       acc: [NUM_REGS * (256/8)] u8;
@@ -593,6 +618,7 @@ refresh_accumulator :: (pos: *Position) {
   }
 
   accumulator.computedAccumulation = 1;
+  print("accumulator.accumulation: %\n", accumulator.accumulation);
 }
 
 

@@ -5,8 +5,8 @@ ui_exe :: "jai-chess";
 ui_file_names :: string.["ui_main.jai", "movegen.jai"];
 
 ai_exe :: "nnue";
-ai_file_names :: string.["ai_main.jai", "search.jai", "eval.jai", "movegen.jai"];
-//ai_file_names :: string.["nnue.jai"];
+//ai_file_names :: string.["ai_main.jai", "search.jai", "eval.jai", "movegen.jai"];
+ai_file_names :: string.["nnue.jai"];
 
 #run {
   args_option : enum { debug; release;} = .debug;
