@@ -1,6 +1,6 @@
-# Jai-Chess AI and UI
+# Jai-Chess AI with User Interface
 
-This Jai-Chess AI is a hobby project I created for fun. Here is a list of the features inside this simple chess engine.
+This Jai-Chess AI is a hobby project designed to test out and find bugs with the Jai Compiler.
 
 ## How to Build:
 Type `jai build.jai -- ui` to build the chess engine GUI.
@@ -40,8 +40,10 @@ The chess GUI uses the glfw3 and gl libraries.
 * Bitboards with Little Endian Rank-File Mapping
 * Magic bitboards
 * Kogge-Stone Algorithm
-* Move generator can generate 210 million positions per second (benchmarked from perft 6 from the initial position)
-* Moves represented as 16-bit integers
+* Move generator generates 210 million positions per second
+* Moves encoded as 16-bit integers
+* Legal/Psuedo Legal Move Generation
+* Staged Move Generation
 
 ### Search, Extensions Pruning
 * Iterative Deepening
@@ -82,4 +84,3 @@ The chess GUI uses the glfw3 and gl libraries.
 ## Still needs to be implemented
 * UCI not fully supported 
 * Check out [NNUE-pytorch](https://github.com/glinscott/nnue-pytorch/blob/master/docs/nnue.md)
-* Attempt to move to staged move generation.
