@@ -950,6 +950,10 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
     if king_bit & knight_moves(knight) then {
       return true;
     }
+    king := get_king(chess, opp);
+    if king_bit & king_moves(king) then {
+      return true;
+    }
 
     queen := get_queen(chess, opp) & ~to_bitboard;
     rook  := get_rook(chess, opp) & ~to_bitboard;
@@ -997,14 +1001,10 @@ generate_moves_for :: (chess: *Chess, $turn: Turn, move_gen: *$T) -> ChessFlags 
     }
   } else if num_checks == 1 then {
     generate_check_captures(unsafe, check, chess, turn, move_gen);
-    #if !CAPTURES_ONLY {
-      generate_check_quiets(unsafe, check, chess, turn, move_gen);
-    }
+    generate_check_quiets(unsafe, check, chess, turn, move_gen);
   } else {
     generate_tactics_for(unsafe, chess, turn, move_gen);
-    #if !CAPTURES_ONLY {
-      generate_quiets_for(unsafe, chess, turn, move_gen);
-    }
+    generate_quiets_for(unsafe, chess, turn, move_gen);
   }
   return ChessFlags.Normal;
   
@@ -1015,7 +1015,6 @@ generate_moves_for :: (chess: *Chess, $turn: Turn, move_gen: *$T) -> ChessFlags 
     return false;
   }
 
-  CAPTURES_ONLY :: #run captures_only(type_info(T));
 }
 
 promotion_rank :: (turn: $Turn) -> u64 #expand {

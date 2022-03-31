@@ -1,5 +1,6 @@
 // for NNUE resources: https://hxim.github.io/Stockfish-Evaluation-Guide/
 nnue_init :: () {
+  eval_file :: #run join(#filepath, "resources/nn-04cf2b4ed1da.nnue");
   __nnue_init(eval_file=eval_file);
 }
 
@@ -37,35 +38,34 @@ NNUEdata :: struct {
 #scope_file
 
 nnue_evaluate :: (chess: *ChessGame, fifty: int) -> int {
-  pieces : [40] s32;
-  squares: [40] s32;
+  pieces : [33] s32;
+  squares: [33] s32;
   pieces[0] = xx Piece.W_KING;
   squares[0] = xx bit_scan_forward(chess.w_king);
   pieces[1] = xx Piece.W_KING;
   squares[1] = xx bit_scan_forward(chess.b_king);
   index := 2;
-  piece := chess.occupied & ~(chess.w_king|chess.b_king);
-  for i: 0..63 {
-    bitboard := cast(u64) (1<<i);
-    if bitboard & piece {
-      pieces[index] = xx chess.pieces[i];
-      squares[index] = xx i;
-      index += 1;
+  for p, i: chess.pieces {
+    if p == Piece.NONE || p == Piece.W_KING || p == Piece.B_KING {
+      continue;
     }
+
+    pieces[index] = xx p;
+    squares[index] = xx i;
+    index += 1;
   }
+
   pieces[index] = 0;
   squares[index] = 0;
 
   a_nnue: [3] *NNUEdata;
-  {
-    a_nnue[0] = null;
-    a_nnue[1] = null;
-    a_nnue[2] = null;
-    i := 0;
-    while i<3 && chess.ply >= i {
-      a_nnue[i] = chess.nnue.data + chess.ply - i;
-      i += 1;
-    }
+  a_nnue[0] = null;
+  a_nnue[1] = null;
+  a_nnue[2] = null;
+  i := 0;
+  while i<3 && chess.ply >= i {
+    a_nnue[i] = chess.nnue.data + chess.ply - i;
+    i += 1;
   }
   eval := __nnue_evaluate_incr(xx chess.turn, pieces.data, squares.data, a_nnue.data);
   return (eval * (100 - fifty)) / 200;
@@ -114,7 +114,7 @@ trivial_evaluation :: (using chess: *Chess, fifty: int) -> bool, int {
     losx := los / 8;
     losy := los % 8;
 
-    distance   := math.abs(winx - losx) + math.abs(winy - losy);
+    distance   := abs(winx - losx) + abs(winy - losy);
     push_close := 140 - 20 * distance;
     edge       := push_to_edge(los);
     mat        := popcount(q)*900 + popcount(r)*500 + popcount(b)*350 + popcount(n)*300;
@@ -149,10 +149,6 @@ trivial_evaluation :: (using chess: *Chess, fifty: int) -> bool, int {
 }
 
 nnue :: #foreign_library "nnue-probe/src/libnnueprobe";
-
-eval_file :: #run join(#filepath, "resources/nn-04cf2b4ed1da.nnue");
-
-__nnue_init :: (eval_file: *u8) #foreign nnue "nnue_init"; 
+__nnue_init :: (eval_file: *u8) #c_call #foreign nnue "nnue_init"; 
 __nnue_evaluate_incr :: (player: s32, pieces: *s32, squares: *s32, nnue_data: **NNUEdata) -> s32 #foreign nnue "nnue_evaluate_incremental";
-
-//__nnue_evaluate :: (player: s32, pieces: *s32, squares: *s32) -> s32 #foreign nnue "nnue_evaluate";
+__nnue_evaluate :: (player: s32, pieces: *s32, squares: *s32) -> s32 #foreign nnue "nnue_evaluate";

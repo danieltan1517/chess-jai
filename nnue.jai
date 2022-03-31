@@ -380,7 +380,7 @@ IndexList :: struct {
 nnue_evaluate :: (player: s32, pieces: *s32, squares: *s32) -> s32 {
   nnue: NNUEdata;
   nnue.accumulator.computedAccumulation = 0;
-  
+  print("oops\n");  
   pos: Position;
   pos.nnue[0] = *nnue;
   pos.nnue[1] = null;
