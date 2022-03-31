@@ -97,18 +97,14 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
     //val := fib[index];
     LateMovePruning[i][0] = (3 + i*i) / 2;
     LateMovePruning[i][1] = (3 + i*i);
-    //print("%, %\n", LateMovePruning[i][0], LateMovePruning[i][1]);
   }
 }
 
 negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := true, alpha := -INF, beta := INF, fifty: int) -> int {
-
   ply := chess.ply;
   pv_node := alpha != beta-1;
   if (__nodes_searched & 1024) && stdin_stop_signal()
     return 0;
-  //__nodes_searched += 1;
-
   defer memset(*pv_table[ply+1], 0, size_of(PV_Line));
 
   // transposition lookup.
@@ -140,20 +136,16 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
 
   // TODO: this is NOT good code. inefficient.
   status := check_for_repetition(chess, fifty);
-  if status == {
-  case ChessFlags.Fifty;
-    if ply then
-      return 0 + ply;
-  case ChessFlags.Threefold_Repetition; 
-    if !pv_node then 
-      return 0 + ply; 
-  }
+  if status == ChessFlags.Fifty && ply then
+    return 0 + ply;
+  else if status == ChessFlags.Threefold_Repetition && !pv_node then
+    return 0 + ply; 
 
   array_add(*chess.eval, cast(s16)INF);
   defer pop(*chess.eval);
 
   // do pruning here. TODO:
-  if status == ChessFlags.Normal && !in_check(chess) {
+  if !in_check(chess) {
     if ply>0 && !pv_node then {
       static_eval := evaluate(chess, fifty);
       chess.eval[chess.eval.count-1] = cast(s16) static_eval;
@@ -202,13 +194,10 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
         }
       }
  
-      // prob cut implement TODO: make this better...currently we copy twice.
-      prob_beta := beta + 110;
       if depth > 4 && math.abs(beta) < 20_000 {
-        prob_movegen := init_quiescene(pv_table[ply][0], ttmove);
-        generate_moves(chess, *prob_movegen, fifty);
+        prob_beta := beta + 110;
         ep := chess.en_passant;
-        for move, move_count: prob_movegen {
+        for :probcut move, move_score: chess.chess {
           flags, from, to := decode_move16(move);
           pfrom := piece_at(chess, from);
          
@@ -231,26 +220,6 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
     }
   }
 
-  counter  := get_counter_move(chess);
-  followup1, followup2 := get_follow_up_move(chess);
-  move_gen := init_negamax(ttmove, __killer_moves[ply][0], __killer_moves[ply][1], counter, followup1, followup2);
-  status = generate_moves(chess, *move_gen, fifty);
-
-  if status == {
-  case ChessFlags.Checkmate;
-    return -INF + ply;
-  case ChessFlags.Stalemate;
-    return 0 + ply;
-  case ChessFlags.Fifty;
-    if ply then
-      return 0 + ply;
-  case ChessFlags.Threefold_Repetition; 
-    if !pv_node then 
-      return 0 + ply; 
-
-  case ChessFlags.Normal;
-  }
-
   ep := chess.en_passant;
   hash_flag := TFLAGS.ALPHA;
 
@@ -258,20 +227,13 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
   num_quiets := 0;
   moves_searched := 0;
 
-  // search extension: extend if only one move can be played.
-  if move_gen.count == 1  then {
-    depth += 1;
-  }
-
- // :: (chess: *Chess, body: Code, f: For_Flags) #expand {
- //  for move, move_count : move_gen {
-
-
-  alpha_increase := 0;
   improving := get_improving(chess);
+  counter  := get_counter_move(chess);
+  followup1, followup2 := get_follow_up_move(chess);
 
   move_count := 0;
-  for :pv move, move_score : <<chess {
+  for :pv move, move_score : chess.chess {
+    move_count += 1;
     #if null_flag == true && single_ext == false {
       if ply == chess.exply && move == chess.excluded_move then {
         continue;
@@ -285,7 +247,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
     pfrom := piece_at(chess, from);
     att := piece_at(chess, from);
     vic := piece_at(chess, to);
-    if ply>0 && move_count>0 {
+    if ply>0 && moves_searched>0 {
       if flags == Move16.Capture && PVALUE[att] > PVALUE[vic] && see(chess,move) < -218*depth  then
         continue;
       if flags <= Move16.Double_Pawn_Push && see(chess,move) < -21*depth*depth - 21 then
@@ -323,7 +285,6 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
       }
     }
      
-    moves_searched += 1;
     // make move.
     cap, castling, hash := make_move(chess, move);
     next_fifty := 0;
@@ -338,7 +299,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
     }
 
     eval := 0;
-    if move_count == 0 {
+    if moves_searched == 0 {
       eval = -negamax(chess, depth+ext-1, null_flag, single_ext, -beta, -alpha, next_fifty);
     } else {
       // captures. promotions. checks.
@@ -388,10 +349,6 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
       memcpy(*pv_table[ply].argmove[1], *pv_table[ply+1].argmove[0], pv_table[ply+1].move_count * size_of(Move16));
       pv_table[ply].move_count = pv_table[ply+1].move_count + 1;
       alpha = eval;
-      alpha_increase += 1;
-      if alpha_increase > 2 then {
-        depth -= 1;
-      }
     } 
 
     if eval >= beta then {
@@ -410,8 +367,6 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
             piece_type := piece_at(chess, from_move);
             value : int = xx __history_moves[piece_type][to_move];
             value -= ((64*inc) - (value*inc / 1024));
-            value = max(value, -25_000);
-            value = min(value, 19224);
             __history_moves[piece_type][to_move] = xx value;
           }
         }
@@ -419,7 +374,6 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
         // update history heuristic
         value : int = xx __history_moves[piece_type][to];
         value += ((64*inc)-(value*inc/1024));
-        value %= 19225;
         __history_moves[piece_type][to] = xx value;
 
         // update countermove heuristic
@@ -436,11 +390,19 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
       break;
     } 
 
+    moves_searched += 1;
   }
 
   if status == ChessFlags.Threefold_Repetition || status == ChessFlags.Fifty then {
     alpha = 0 + ply;
     depth = 100;
+  }
+
+  if move_count == 0 then {
+    if in_check(chess) then
+      alpha = -INF + ply;
+    else
+      alpha = 0 + ply;
   }
 
   transposition_table_store(chess.hash);
@@ -449,7 +411,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
   print_curr_move :: () #expand {
     time := get_time();
     if ply==0 && (time-time_begin)>3 then {
-      print("info depth %1 currmove %2%3 currmovenumber %4\n", chess.depth, cast(serialized_bb)`from, cast(serialized_bb)`to, `move_count+1);
+      print("info depth %1 currmove %2%3 currmovenumber %4\n", chess.depth, cast(serialized_bb)`from, cast(serialized_bb)`to, `moves_searched+1);
     }
   }
 
@@ -459,7 +421,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
         return null;
     }
     key  := hash % TSIZE;
-    //prefetch(*ttable.entries[key], Prefetch_Hint.T0);
+    prefetch(*ttable.entries[key], Prefetch_Hint.T0);
     entry := *ttable.entries[key];
     if entry.hash == hash then {
       entry.age = search_age;
@@ -491,7 +453,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
         return;
     }
     key  := hash % TSIZE;
-    //prefetch(*ttable.entries[key], Prefetch_Hint.T0);
+    prefetch(*ttable.entries[key], Prefetch_Hint.T0);
     entry := *ttable.entries[key];
     if depth >= entry.depth || entry.age != search_age then {
       entry.hash   = hash;
@@ -503,79 +465,89 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
     }
   }
 
-  pv :: (chess: *ChessGame, body: Code, f: For_Flags) #expand {
+  pv :: (chess: *Chess, body: Code, f: For_Flags) #expand {
+    stage: enum {PV; CAPTURES; KILLERS; QUIETS; END; } = .PV;
+    killers: [] Move16 = __killer_moves[ply];
+    moves := init_negamax(ttmove, killers[0], killers[1], counter, followup1, followup2);
 
-  /*unsafe, check := generate_attacks(chess);
-  generate_tactics(unsafe, check, chess, *moves);
-  i := 0;
-  `it := Move16.Quiet;
-  `it_index := 0;
-  while i < moves.count {
-    it = moves[i];
-    #insert body;
-    i += 1;
-    it_index += 1;
-  }
-  moves.count = 0;
-  memset(*moves, 0, size_of(Moves));
-  generate_quiets(unsafe, check, chess, *moves);
-  i = 0;
-  while i < moves.count {
-    it = moves[i];
-    #insert body;
-    i += 1;
-    it_index += 1;
-  }*/
-
-    `it := Move16.Quiet;
-    `it_index := 0;
-
-    // TODO: This is wrong...
-    // search the PV
-    PV := false;
+    unsafe: u64 = 0;
+    check: u64 = 0;
     while true {
-      if is_legal(chess, ttmove) then {
-        it, it_index = ttmove, INF;
-        #insert (break={PV=true; break;}, continue=break) body;
+      if moves.count <= 0 {
+        if stage == {
+        case .PV;
+          stage = .CAPTURES;
+          if is_legal(chess, ttmove) then {
+            heap_add(*moves, ttmove, 0x7FFF_FFFF);
+          } else {
+            continue;
+          }
+        case .CAPTURES;
+          stage = .KILLERS;
+          unsafe, check = generate_attacks(chess);
+          generate_tactics(unsafe, check, chess, *moves);
+          if moves.count <= 0 then {
+            continue;
+          } 
+        case .KILLERS;
+          stage = .QUIETS;
+          if is_legal(chess, killers[0]) {
+            heap_add(*moves, killers[0], 0x7FFF_FFFF);
+          }
+          if is_legal(chess, killers[1]) {
+            heap_add(*moves, killers[1], 0x7FFF_FFFF-1);
+          }
+          if moves.count <= 0 then {
+            continue;
+          }
+        case .QUIETS;
+          stage = .END;
+          generate_quiets(unsafe, check, chess, *moves);
+          if moves.count <= 0 then
+            continue;
+        case .END;
+          break;
+        }
       }
-      break;
-    }
-    if PV == true then
-      return;
-    
-    counter  := get_counter_move(chess);
-    followup1, followup2 := get_follow_up_move(chess);
-    moves := init_negamax(ttmove, __killer_moves[ply][0], __killer_moves[ply][1], counter, followup1, followup2);
-    unsafe, check := generate_attacks(chess);
 
-    // search all captures.
-    generate_tactics(unsafe, check, chess, *moves);
-    while moves.count > 0 {
-      it, it_index = heap_pop(*moves);
-      #insert (break={PV=true; break;}) body;
-    }
-    if PV == true then
-      return;
-
-    // search all killer moves
-    killers := __killer_moves[ply];
-    for move: killers {
-      it, it_index = move, INF;
-      if !is_legal(chess, move) then {
-        continue;
-      }
-      #insert (break={PV=true; break;}) body;
-    }
-    if PV == true then
-      return;
-
-    // search all quiet moves
-    generate_quiets(unsafe, check, chess, *moves);
-    while moves.count > 0 {
-      it, it_index = heap_pop(*moves);
+      `it, `it_index := heap_pop(*moves);
       #insert body;
     }
   }
+
+  probcut :: (chess: *Chess, body: Code, f: For_Flags) #expand {
+    stage: enum {PV; CAPTURES; QUIETS; END; } = .PV;
+    moves := init_negamax(ttmove, 0, 0, 0, 0, 0);
+    unsafe: u64 = 0;
+    check: u64 = 0;
+    while true {
+      if moves.count <= 0 {
+        if stage == {
+        case .PV;
+          stage = .CAPTURES;
+          if is_legal(chess, ttmove) then {
+            heap_add(*moves, ttmove, 0x7FFF_FFFF);
+          } else {
+            continue;
+          }
+        case .CAPTURES;
+          stage = .END;
+          unsafe, check = generate_attacks(chess);
+          generate_tactics(unsafe, check, chess, *moves);
+          if moves.count <= 0 then {
+            continue;
+          } 
+        case .END;
+          break;
+        }
+      }
+
+      `it, `it_index := heap_pop(*moves);
+      #insert body;
+    }
+  }
+
+
 }
 
 // perft results are found here: https://www.chessprogramming.org/Perft_Results
@@ -735,33 +707,27 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
   ply := chess.ply;
   pv_node := alpha != beta-1;
   entry := transposition_table_lookup(chess.hash);
-  best_move := ifx entry != null then entry.ttmove else Move16.Quiet;
+  best_move := Move16.Quiet;
 
-  moves := init_quiescene(pv_table[ply][0], best_move);
-  status := generate_moves(chess, *moves, fifty);
+  ttmove  := Move16.Quiet;
+  if pv_table[ply][0] && get_move16_flag(pv_table[ply][0]) >= Move16.Capture then {
+    ttmove = pv_table[ply][0];
+  } else if entry != null && get_move16_flag(entry.ttmove) >= Move16.Capture then {
+    ttmove = entry.ttmove;
+  }
+
   hash_flag := TFLAGS.ALPHA;
-  using ChessFlags;
-  if status == {
-  case Threefold_Repetition; #through;
-  case Stalemate;
-    return 0 + ply;
-
-  case Checkmate;
-    return -INF + ply;
-
-  case Normal;
+  poscheck := in_check(chess);
+  if !poscheck {
     // no standing pat while in check, only when position is normal
     eval := evaluate(chess, fifty);
-    if eval >= beta then
+    if eval >= beta then {
       return beta;
+    }
   
     // delta pruning:
     if can_delta_prune(chess) {
-      delta := 975;
-      if is_promoting_pawn(chess) then {
-        delta += 775;
-      }
-      if eval < (alpha - delta) then {
+      if eval < (alpha - 975) then {
         return alpha; 
       }
     }
@@ -770,16 +736,18 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
       alpha = eval; 
     }
   }
+
   // search captures only, captures negate the fifty move rule
   ep := chess.en_passant;
-  for move: moves {
+  move_count := 0;
+  for :pv move: chess.chess {
+    move_count += 1;
     type, from, to := decode_move16(move);
 
     // piece
     pfrom := piece_at(chess, from);
-
     // skip bap captures. SEE algorithm.
-    if is_bad_capture(move, status) then {
+    if is_bad_capture(move, poscheck) then {
       continue;
     }
 
@@ -808,8 +776,53 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
     }
   }
 
+  if move_count == 0 && poscheck then {
+    hash_flag = TFLAGS.EXACT;
+    alpha = -INF+ply;
+  }
   transposition_table_store(chess.hash);
   return alpha;
+
+  pv :: (chess: *Chess, body: Code, f: For_Flags) #expand {
+    stage: enum {PV; CAPTURES; QUIETS; END; } = .PV;
+    moves := init_negamax(ttmove, 0, 0, 0, 0, 0);
+
+    unsafe: u64 = 0;
+    check: u64 = 0;
+    while true {
+      if moves.count <= 0 {
+        if stage == {
+        case .PV;
+          stage = .CAPTURES;
+          if is_legal(chess, ttmove) then {
+            heap_add(*moves, ttmove, 0x7FFF_FFFF);
+          } else {
+            continue;
+          }
+        case .CAPTURES;
+          unsafe, check = generate_attacks(chess);
+          if check == 0 then
+            stage = .END;
+          else
+            stage = .QUIETS;
+          generate_tactics(unsafe, check, chess, *moves);
+          if moves.count <= 0 then {
+            continue;
+          } 
+        case .QUIETS;
+          stage = .END;
+          generate_quiets(unsafe, check, chess, *moves);
+          if moves.count <= 0 then
+            continue;
+        case .END;
+          break;
+        }
+      }
+
+      `it, `it_index := heap_pop(*moves);
+      #insert body;
+    }
+  }
 
   can_delta_prune :: (using chess: *Chess) -> bool #expand {
     w := w_queen | w_rook | w_bishop | w_knight;
@@ -822,8 +835,8 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
   }
 
   // a bad capture => true, a good capture => false
-  is_bad_capture :: (move: Move16, status: ChessFlags) -> bool #expand {
-    if status != ChessFlags.Normal then
+  is_bad_capture :: (move: Move16, check: bool) -> bool #expand {
+    if check == true then
       return false;
 
     _, from, to := decode_move16(move);
@@ -887,6 +900,10 @@ operator [] :: (using p: PV_Line, index: int) -> Move16 {
   return argmove[index];
 }
 
+operator [] :: (using m: Moves, index: int) -> Move16 {
+  return array[index];
+}
+
 time_begin: float64;
 
 pv_table: [128] PV_Line;
@@ -895,17 +912,16 @@ pv_table: [128] PV_Line;
 // walks the move generation tree of strictly legal moves to count the leaf nodes
 perft :: (chess: *Chess, depth: int) -> int {
   if depth == 0 then return 1;
-  moves: Moves;
-  generate_moves(chess, *moves);
 
   if depth == 1 then {
+    moves: Moves(true);
+    generate_moves(chess, *moves);
     return moves.count;
   }
 
   num_nodes := 0;
   ep := chess.en_passant;
-  for i: 0..moves.count-1 {
-    mov := moves.array[i];
+  for :gen_moves mov: << chess {
     cap, castling, hash := make_move(chess, mov);
 
     num_nodes += perft(chess, depth-1);
@@ -913,8 +929,32 @@ perft :: (chess: *Chess, depth: int) -> int {
     unmake_move(chess, mov, cap, castling, hash);
     chess.en_passant = ep;
   }
-
   return num_nodes;
+
+  gen_moves :: (chess: *Chess, body: Code, f: For_Flags) #expand {
+    moves: Moves;
+    unsafe, check := generate_attacks(chess);
+    generate_tactics(unsafe, check, chess, *moves);
+    i := 0;
+    `it := Move16.Quiet;
+    `it_index := 0;
+    while i < moves.count {
+      it = moves[i];
+      #insert body;
+      i += 1;
+      it_index += 1;
+    }
+    moves.count = 0;
+    memset(*moves, 0, size_of(Moves));
+    generate_quiets(unsafe, check, chess, *moves);
+    i = 0;
+    while i < moves.count {
+      it = moves[i];
+      #insert body;
+      i += 1;
+      it_index += 1;
+    }
+  }
 }
 
 #no_reset LateMoveReduction: [64][64] int;
@@ -957,7 +997,7 @@ mvv_lva :: (victim: Piece, attacker: Piece) -> score: int {
 }
 
 __nodes_searched := 0;
-__history_moves:   [13][64] s16;
+__history_moves:   [13][64] s32;
 __killer_moves:    [128][2] Move16;
 __counter_moves:   [13][64] Move16;
 __follow_up:       [13][64][13][64] Move16;
@@ -987,12 +1027,11 @@ clear_hash_table :: () #expand {
 }
 
 Negamax :: struct {
-  items: [80] Move16;
-  score: [80] s16;
+  items: [64] Move16;
+  score: [64] s32;
   count: int;
 
   pv        : Move16;
-  //ttmove    : Move16;
   killer1   : Move16;
   killer2   : Move16;
   counter   : Move16;
@@ -1017,17 +1056,15 @@ init_negamax :: (pv: Move16, killer1: Move16, killer2: Move16, counter: Move16, 
 init_quiescene :: (pv: Move16, ttmove: Move16) -> Quiescene {
   q: Quiescene;
   q.pv = pv;
-  q.ttmove = ttmove;
   q.count = 0;
   return q;
 }
 
 Quiescene :: struct {
-  items: [30] Move16;
-  score: [30] s16;
+  items: [64] Move16;
+  score: [64] s32;
   count: int;
   pv: Move16;
-  ttmove: Move16;
 }
 
 heap_pop :: (using heap: *Quiescene) -> Move16, int {
@@ -1140,16 +1177,9 @@ heap_add :: (using heap: *Negamax, item: Move16, num: int) {
 
 add_move :: (chess: *Chess, heap: *Quiescene, from: int, to: int, $flags: Move16, $in_check: bool) {
   using Move16;
-
   score := 0;
   move := to_move16(from, to, flags);
   if move == heap.pv {
-    score = INF;
-    heap_add(heap, move, score);
-    return;
-  } else if move == heap.ttmove {
-    score = INF - 1;
-    heap_add(heap, move, score);
     return;
   }
 
@@ -1168,16 +1198,10 @@ add_move :: (chess: *Chess, heap: *Quiescene, from: int, to: int, $flags: Move16
     heap_add(heap, move, score);
   }
 
-  #if in_check && (flags == Quiet || flags == Double_Pawn_Push || flags == King_Castle || flags == Queen_Castle) {
+  #if (flags == Quiet || flags == Double_Pawn_Push || flags == King_Castle || flags == Queen_Castle) {
     piece := cast(int) piece_at(chess, from);
     score = __history_moves[piece][to];
     heap_add(heap, move, score); // TODO: evasion history maybe?
-  }
-
-  #if !in_check && (flags == Quiet || flags == Double_Pawn_Push) {
-    //|| flags == King_Castle || flags == Queen_Castle) {
-    // TODO: FIX Later!
-    #assert(false);
   }
 }
 
@@ -1248,36 +1272,16 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
   heap_add(heap, move, score);
 }
 
-Moves :: struct {
+Moves :: struct(perft1 := false) {
   count: int;
-  array: [80] Move16;
-}
-
-
-for_expansion :: (using heap: *$Q/Quiescene, code: Code, f: For_Flags) #expand {
-  i := 0;
-  while heap.count > 0 {
-    mov, score := heap_pop(heap);
-    `it, `it_index := mov, i;
-    #insert code;
-    i += 1;
-  }
-}
-
-for_expansion :: (using heap: *Negamax, code: Code, f: For_Flags) #expand {
-  i := 0;
-  while heap.count > 0 {
-    mov, score := heap_pop(heap);
-    `it, `it_index := mov, i;
-    `move_score := score;
-    #insert code;
-    i += 1;
-  }
+  array: [64] Move16;
 }
 
 add_move :: (chess: *Chess, using moves: *Moves, from: int, to: int, $flags: Move16, $in_check: bool) {
-  move := to_move16(from, to, flags);
-  array[count] = move;
+  #if moves.perft1 == false {
+    move := to_move16(from, to, flags);
+    array[count] = move;
+  }
   count += 1;
 }
 
@@ -1447,35 +1451,6 @@ initialize_chess_game_memory :: (using c: *ChessGame) {
   MAX :: 500;
 }
 
-generate_moves :: (using c: *ChessGame, movegen: *$T, fifty: int) -> ChessFlags {
-  status := generate_moves(*chess, movegen);
-  if status == ChessFlags.Checkmate || status == ChessFlags.Stalemate {
-    return status;
-  }
-
-  if fifty >= 100 {
-    return ChessFlags.Fifty;
-  }
-
-  hash_val := c.hash;
-  count := 0;
-  repeating := 0;
-  for < repeat : c.rtable {
-    if hash_val == repeat then {
-      repeating += 1;
-      if repeating > 1 then {
-        return ChessFlags.Threefold_Repetition;
-      }
-    }
-
-    count += 1;
-    if count > fifty
-      break;
-  }
-
-  return status;
-}
-
 check_for_repetition :: (using c: *ChessGame, fifty: int) -> ChessFlags {
   if fifty >= 100 {
     return ChessFlags.Fifty;
@@ -1512,7 +1487,7 @@ make_move :: (c: *ChessGame, move: Move16) -> Piece, Castling, u64 {
 
   c.ply += 1;
   c.maxply = max(c.maxply, c.ply);
-  prefetch(*ttable.entries[key], Prefetch_Hint.T0);
+  //prefetch(*ttable.entries[key], Prefetch_Hint.T0);
   return cap, castling, hash;
 
   make_move_nnue :: (using c: *ChessGame, move: Move16) #expand {

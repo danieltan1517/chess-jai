@@ -459,6 +459,11 @@ get_move16_from :: (mov: Move16) -> from: int {
   return  xx (cast_mov & 0xFC00) >> 10;
 }
 
+get_move16_flag :: (mov: Move16) -> flag: Move16 {
+  cast_mov := cast(int) mov;
+  return  mov & (xx 0xF);
+}
+
 // Type of move, From, To.
 decode_move16 :: inline (mov: Move16) -> flags: Move16, from: int, to: int {
   // NOTE: this cast is neccesssary to prevent the release build from doing something stupid...
@@ -1034,7 +1039,6 @@ generate_check_captures :: (unsafe: u64, check: u64, chess: *Chess, $turn: Turn,
   king_file := file_of(king_sq);
   pieces := king|queen|rook|bishop|knight|pawn;
   opponent_pieces := chess.occupied & ~pieces;
-  assert(chess.turn == turn, "Compiler Bug: Turn should be %, not %", chess.turn, turn);
 
   pinned : u64 = 0;
   opp_qr := get_queen(chess, opp) | get_rook(chess, opp);
@@ -1120,7 +1124,6 @@ generate_check_quiets :: (unsafe: u64, check: u64, chess: *Chess, $turn: Turn, m
   pawn    := get_pawn(chess, turn);
   king_sq := bit_scan_forward(king);
   pieces := king|queen|rook|bishop|knight|pawn;
-  assert(chess.turn == turn, "Compiler Bug: Turn should be %, not %", chess.turn, turn);
 
   pinned : u64 = 0;
   opp_qr := get_queen(chess, opp) | get_rook(chess, opp);
@@ -1199,7 +1202,6 @@ generate_quiets_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T) 
   bishop  := get_bishop(chess, turn);
   knight  := get_knight(chess, turn); 
   pawn    := get_pawn(chess, turn);
-  assert(chess.turn == turn, "Compiler Bug: Turn should be %, not %", chess.turn, turn);
 
   king_sq := bit_scan_forward(king);
   king_file := file_of(king_sq);
@@ -1326,7 +1328,6 @@ generate_tactics_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T)
   pawn    := get_pawn(chess, turn);
   king_sq := bit_scan_forward(king);
   king_file := file_of(king_sq);
-  assert(chess.turn == turn, "Compiler Bug: Turn should be %, not %", chess.turn, turn);
   pieces := king|queen|rook|bishop|knight|pawn;
   opponent_pieces := chess.occupied & ~pieces;
   pinned : u64 = 0;
@@ -1456,7 +1457,6 @@ generate_tactics_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T)
 }
 
 file_of :: inline (i: int) -> u64 {
-  //assert(0 <= i && i <= 63);
   f := i & 7;
   file: u64 = (cast(u64) file_a) << f;
   return file;
@@ -1524,23 +1524,10 @@ generate_attacks :: (chess: *Chess, $turn: Turn) -> att: u64, check: u64 {
 
 bitloop :: (bitboard: *u64, body: Code, flags: For_Flags) #expand {
   loop := << bitboard;
-  `it_index: int;
-  `it: u64;
   while loop {
-
-    // BUG: until this gets fixed, I will be using inline assembly.
-    /*`it_index := bit_scan_forward(loop);
+    `it_index := bit_scan_forward(loop);
     `it := cast(u64) (1 << it_index);
-    loop = popbit(loop);*/
-
-    #asm { 
-      reg: gpr === c;
-      bsf.q reg, loop;
-      mov.q it_index, reg;
-      mov.q it, 1;
-      shl.q it, reg;
-      blsr.q loop, loop;
-    }
+    loop = popbit(loop);
     #insert body;
   }
 }
@@ -1961,6 +1948,7 @@ get_black_pieces :: inline p => p.b_king | p.b_queen | p.b_rook | p.b_bishop | p
 
 
 piece_at :: (chess: *Chess, index: int) -> Piece #expand {
+  //assert(0 <= index && index <= 63, "piece_at out of bounds: %\n", index);
   return chess.pieces[index];
 }
 
