@@ -308,7 +308,6 @@ console_write_command :: (engines: *[..] UCI_Engine, str: string, chess: *Chess,
   case "fen";
     // TODO: is reset(chess, moves_arr) neccessary??
     reset(chess, moves_arr);
-    print("%\n", moves_arr.count);
     while str && str[0] == #char " " {
       advance(*str, 1);
     }
@@ -955,6 +954,7 @@ ui_handle_move_made :: (chess: *Chess, moves_arr: *[..] Move16, mov: Move16) {
   array_reset(moves_arr);
   // TODO: FIX!!!
   status := generate_moves(chess, moves_arr);
+  print_chess(chess);
 
   if status == ChessFlags.Checkmate {
     __game_status_text = "Checkmate.";

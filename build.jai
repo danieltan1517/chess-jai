@@ -94,7 +94,6 @@ build_release :: (executable_name: string, file_names: [] string, workspace_name
 
   compiler_begin_intercept(w);
   // add all the files
-  // add all the files
   for file_names {
     add_build_file(tprint("%/%", #filepath, it), w);  
   }
@@ -107,13 +106,6 @@ build_release :: (executable_name: string, file_names: [] string, workspace_name
     }
   }
   set_build_options_dc(.{do_output=false});
-}
-
-install :: () {
-  // sudo apt install libc++abi-dev   --- Dear ImGui
-  // sudo apt install libgl-dev       --- opengl 
-  // sudo apt install libglfw3-dev     --- glfw
-  // https://github.com/Matthies/NN
 }
 
 

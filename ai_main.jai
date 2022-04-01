@@ -5,7 +5,7 @@
 main :: () {
   nnue_init();
   init_global_bitboards();
-  initialize_ai_globals();
+  test_is_legal();
   chess: ChessGame;
   initialize_chess_game_memory(*chess);
   chess_startpos(*chess);
