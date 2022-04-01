@@ -468,7 +468,14 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
   pv :: (chess: *Chess, body: Code, f: For_Flags) #expand {
     stage: enum {PV; CAPTURES; KILLERS; QUIETS; END; } = .PV;
     killers: [] Move16 = __killer_moves[ply];
-    moves := init_negamax(ttmove, killers[0], killers[1], counter, followup1, followup2);
+    moves: Negamax;
+    moves.count = 0;
+    moves.pv = ttmove;
+    moves.killer1 = killers[0];
+    moves.killer2 = killers[1];
+    moves.counter = counter;
+    moves.follow_up1 = followup1;
+    moves.follow_up2 = followup2;
 
     unsafe: u64 = 0;
     check: u64 = 0;
@@ -517,7 +524,10 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
 
   probcut :: (chess: *Chess, body: Code, f: For_Flags) #expand {
     stage: enum {PV; CAPTURES; QUIETS; END; } = .PV;
-    moves := init_negamax(ttmove, 0, 0, 0, 0, 0);
+    moves: Negamax; 
+    moves.count = 0;
+    moves.pv = ttmove;
+
     unsafe: u64 = 0;
     check: u64 = 0;
     while true {
@@ -781,7 +791,9 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
 
   pv :: (chess: *Chess, body: Code, f: For_Flags) #expand {
     stage: enum {PV; CAPTURES; QUIETS; END; } = .PV;
-    moves := init_negamax(ttmove, 0, 0, 0, 0, 0);
+    moves: Negamax; 
+    moves.count = 0;
+    moves.pv = ttmove;
 
     unsafe: u64 = 0;
     check: u64 = 0;
@@ -1031,18 +1043,6 @@ Negamax :: struct {
   count: int;
   items: [64] Move16;
   score: [64] s32;
-}
-
-init_negamax :: (pv: Move16, killer1: Move16, killer2: Move16, counter: Move16, follow_up1: Move16, follow_up2: Move16) -> Negamax {
-  n: Negamax;
-  n.count = 0;
-  n.pv      = pv;
-  n.killer1 = killer1;
-  n.killer2 = killer2;
-  n.counter = counter;
-  n.follow_up1 = follow_up1;
-  n.follow_up2 = follow_up2;
-  return n;
 }
 
 heap_pop :: (using heap: *Negamax) -> Move16, int {
