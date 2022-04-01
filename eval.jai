@@ -7,10 +7,10 @@ nnue_init :: () {
 evaluate :: (chess: *ChessGame, fifty: int) -> int {
   TF, score := trivial_evaluation(chess, fifty); 
   if TF return score;
-  return nnue_evaluate(chess, fifty);
-} 
 
-WIN_SCORE :: 5_000;
+  eval := nnue_evaluate(chess);
+  return (eval * (100-fifty)) / 200;
+} 
 
 DirtyPiece :: struct {
   dirtyNum: s32;
@@ -36,8 +36,7 @@ NNUEdata :: struct {
 } 
 
 #scope_file
-
-nnue_evaluate :: (chess: *ChessGame, fifty: int) -> int {
+nnue_evaluate :: (chess: *ChessGame) -> int {
   pieces : [33] s32;
   squares: [33] s32;
   pieces[0] = xx Piece.W_KING;
@@ -67,8 +66,8 @@ nnue_evaluate :: (chess: *ChessGame, fifty: int) -> int {
     a_nnue[i] = chess.nnue.data + chess.ply - i;
     i += 1;
   }
-  eval := __nnue_evaluate_incr(xx chess.turn, pieces.data, squares.data, a_nnue.data);
-  return (eval * (100 - fifty)) / 200;
+
+  return __nnue_evaluate_incr(xx chess.turn, *pieces[0], *squares[0], *a_nnue[0]);
 }
 
 // We use trivial evaluation to deal with endgame positions.
@@ -103,6 +102,8 @@ trivial_evaluation :: (using chess: *Chess, fifty: int) -> bool, int {
     } 
   }
   return false, 0;
+
+  WIN_SCORE :: 5_000;
 
   eval_winning_position :: (strong_king: u64, q: u64, r: u64, b: u64, n: u64, p: u64, weak_king: u64) -> int {
     win := bit_scan_forward(strong_king);
@@ -151,4 +152,4 @@ trivial_evaluation :: (using chess: *Chess, fifty: int) -> bool, int {
 nnue :: #foreign_library "nnue-probe/src/libnnueprobe";
 __nnue_init :: (eval_file: *u8) #c_call #foreign nnue "nnue_init"; 
 __nnue_evaluate_incr :: (player: s32, pieces: *s32, squares: *s32, nnue_data: **NNUEdata) -> s32 #foreign nnue "nnue_evaluate_incremental";
-__nnue_evaluate :: (player: s32, pieces: *s32, squares: *s32) -> s32 #foreign nnue "nnue_evaluate";
+//__nnue_evaluate :: (player: s32, pieces: *s32, squares: *s32) -> s32 #foreign nnue "nnue_evaluate";
