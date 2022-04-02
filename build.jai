@@ -87,7 +87,7 @@ build_release :: (executable_name: string, file_names: [] string, workspace_name
   target_options.output_executable_name = executable_name;
   target_options.optimization_level = .RELEASE;
   target_options.temporary_storage_size = 262144;
-  set_optimization_level(*target_options, 3, 0); 
+  set_optimization_level(*target_options, 3, 2); 
   target_options.stack_trace = false;
 
   set_build_options(target_options, w);

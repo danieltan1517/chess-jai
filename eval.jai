@@ -44,7 +44,12 @@ nnue_evaluate :: (chess: *ChessGame) -> int {
   pieces[1] = xx Piece.W_KING;
   squares[1] = xx bit_scan_forward(chess.b_king);
 
-  assert(squares[0] != -1 && squares[1] != -1);
+  if squares[0] == -1 || squares[1] == -1 {
+    print_chess(chess);
+    assert(squares[0] != -1 && squares[1] != -1);
+  } 
+
+
   index := 2;
   for p, i: chess.pieces {
     if p == Piece.NONE || p == Piece.W_KING || p == Piece.B_KING {

@@ -97,6 +97,7 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
 }
 
 negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := true, alpha := -INF, beta := INF, fifty: int) -> int {
+  //print_chess(chess);
   ply := chess.ply;
   pv_node := alpha != beta-1;
   if (__nodes_searched & 1024) && stdin_stop_signal()
@@ -242,14 +243,13 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
     vic := piece_at(chess, to);
 
     // piece
-    if chess.depth>4 && ply>0 && moves_searched>0 {
+    if chess.depth>9 && ply>0 && moves_searched>0 {
       if move_score < (depth*-8192) then
         continue;
-      if flags == Move16.Capture && PVALUE[att] > PVALUE[vic] && see(chess,move) < -100*depth  then
+      if flags == Move16.Capture && PVALUE[att] > PVALUE[vic] && see(chess,move) < -350*depth  then
         continue;
-      else if flags <= Move16.Double_Pawn_Push && see(chess,move) < -150*depth then
+      else if flags <= Move16.Double_Pawn_Push && see(chess,move) < -90*depth*depth then
         continue;
-
       // Late Move Pruning. Search the Root Plies Exhuastively
       if flags <= Move16.Double_Pawn_Push && moves_searched > LateMovePruning[depth][improving] then
         break;
@@ -299,7 +299,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
       if in_check(chess) {
         // do not reduce depth on check.
         eval = -negamax(chess, depth, null_flag, single_ext, -alpha-1, -alpha, next_fifty);
-      } else if cap != Piece.NONE || flags > Move16.Double_Pawn_Push {
+      } else if flags > Move16.Double_Pawn_Push {
         eval = -negamax(chess, depth+ext-1, null_flag, single_ext, -alpha-1, -alpha, next_fifty);
       } else if depth > 2 && status == ChessFlags.Normal && flags <= Move16.Double_Pawn_Push {
         // Late Move Reduction when not in check and not giving check.
@@ -310,8 +310,13 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
           R += 1;
         if move_score < 0 then 
           R += -move_score / 15000;
+        else if move_score > 10_000*depth then
+          R -= 2;
         #if null_flag == false || single_ext == false 
           R += 2;
+        if ext then {
+          R /= 2;
+        }
         eval = -negamax(chess, depth+ext-R-1, null_flag, single_ext, -alpha-1, -alpha, next_fifty);
       } else {
         // do normal search.
@@ -671,6 +676,9 @@ perft_divide :: (chess: *Chess, depth: int) -> int {
   ep := chess.en_passant;
   for i: 0..moves.count-1 {
     move := moves.array[i];
+    if !is_legal(chess, move) {
+      continue;
+    }
     cap, flags, hash := make_move(chess, move);
     move_count := perft(chess, depth-1);
     _, from, to := decode_move16(move);
@@ -907,11 +915,11 @@ pv_table: [128] PV_Line;
 perft :: (chess: *Chess, depth: int) -> int {
   if depth == 0 then return 1;
 
-  if depth == 1 then {
+  /*if depth == 1 then {
     moves: Moves(true);
     generate_moves(chess, *moves);
     return moves.count;
-  }
+  }*/
 
   num_nodes := 0;
   ep := chess.en_passant;
@@ -927,23 +935,31 @@ perft :: (chess: *Chess, depth: int) -> int {
 
   gen_moves :: (chess: *Chess, body: Code, f: For_Flags) #expand {
     moves: Moves;
-    unsafe, check := generate_attacks(chess);
-    generate_tactics(unsafe, check, chess, *moves);
+    //unsafe, check := generate_attacks(chess);
+    generate_tactics(0, 0, chess, *moves);
     i := 0;
     `it := Move16.Quiet;
     `it_index := 0;
     while i < moves.count {
       it = moves[i];
+      if !is_legal(chess, it) {
+        i += 1;
+        continue;
+      }
       #insert body;
       i += 1;
       it_index += 1;
     }
     moves.count = 0;
     memset(*moves, 0, size_of(Moves));
-    generate_quiets(unsafe, check, chess, *moves);
+    generate_quiets(0, 0, chess, *moves);
     i = 0;
     while i < moves.count {
       it = moves[i];
+      if !is_legal(chess, it) {
+        i += 1;
+        continue;
+      }
       #insert body;
       i += 1;
       it_index += 1;
@@ -1150,17 +1166,17 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
     score = __history_moves[piece][to];
 
     if move == heap.counter then {
-      COUNTER_BONUS :: 1500;
+      COUNTER_BONUS :: 2500;
       score += COUNTER_BONUS;
     }
 
     if move == heap.follow_up1 then {
-      CONTINUE_BONUS :: 4500;
+      CONTINUE_BONUS :: 1000;
       score += CONTINUE_BONUS;
     }
 
     if move == heap.follow_up2 then {
-      CONTINUE_BONUS :: 4500;
+      CONTINUE_BONUS :: 1000;
       score += CONTINUE_BONUS;
     }
   }
@@ -1375,6 +1391,7 @@ check_for_repetition :: (using c: *ChessGame, fifty: int) -> ChessFlags {
 make_move :: (c: *ChessGame, move: Move16) -> Piece, Castling {
   __nodes_searched += 1;
   flags, from, to := decode_move16(move);
+  //print("make %1%2\n", cast(serialized_bb)from, cast(serialized_bb)to);
   piece := c.pieces[from];
   move32: Move32;
   move32.mov16 = move;
@@ -1453,6 +1470,8 @@ make_move :: (c: *ChessGame, move: Move16) -> Piece, Castling {
 }
 
 unmake_move :: (c: *ChessGame, move: Move16, cap: Piece, castling: Castling) {
+  //f, from, to := decode_move16(move);
+  //print("unmake %1%2\n", cast(serialized_bb)from, cast(serialized_bb)to);
   hash := pop(*c.rtable);
   unmake_move(*c.chess, move, cap, castling, hash);
   pop(*c.moves);
@@ -1562,7 +1581,7 @@ unmake_null_move :: (c: *ChessGame, ep: u64) {
 }
 
 legal_move :: (chess: *Chess, mov: Move16, it_index: int, stage: $T, place: string) #expand {
-  if is_legal(chess, mov) {
+  /*if is_legal(chess, mov) {
     return;
   }
   cc := cast(*ChessGame) chess;
@@ -1573,11 +1592,11 @@ legal_move :: (chess: *Chess, mov: Move16, it_index: int, stage: $T, place: stri
   print("invalid move, move score = %\n", it_index);
   print_chess(chess);
   print("%1%2 = %3\n", cast(serialized_bb)from, cast(serialized_bb)to, cast(Move16)flags);
-  print("white bishop\n");
-  print_bitboard(chess.w_bishop);
+  print("white pawn\n");
+  print_bitboard(chess.w_pawn);
   print("occupied\n");
   print_bitboard(chess.occupied);
-  assert(false, "INVALID MOVE\n");
+  assert(false, "INVALID MOVE\n");*/
 }
 
 
