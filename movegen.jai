@@ -221,9 +221,6 @@ unmake_null_move :: (chess: *Chess, ep: u64, hash: u64) #expand {
 }
 
 make_move :: (chess: *Chess, move: Move16) -> captured: Piece, Castling, hash: u64 {
-  //validate_pawns(chess, move, "make move begin");
-  //defer validate_pawns(chess, move, "make move end");
-
   flags, sq, to_sq := decode_move16(move);
   hash := chess.hash;
   chess.hash ^= zobrist_en_passant(chess.en_passant);
@@ -296,10 +293,6 @@ make_move :: (chess: *Chess, move: Move16) -> captured: Piece, Castling, hash: u
 }
 
 unmake_move :: (chess: *Chess, move: Move16, cap: Piece, castling: Castling, hash: u64) {
-  /*validate_pawns(chess, move, "undo begin");
-  defer {
-    validate_pawns(chess, move, "undo end");
-  }*/
   NONE : int : cast(int) Piece.NONE;
 
   // we incremental update on make move, but in undo, just assign 
@@ -377,6 +370,19 @@ unmake_move :: (chess: *Chess, move: Move16, cap: Piece, castling: Castling, has
 
   chess.turn ^= 1;
   PawnSide :: Piece.[Piece.W_PAWN, Piece.B_PAWN];
+}
+
+validate_pieces :: (chess: *Chess, move: Move16, str: string) {
+  for i: 0..12 {
+    for j: i+1..12 {
+      if chess.bitboard[i] & chess.bitboard[j] then {
+        f, from, to := decode_move16(move);
+        print("%1%2: %3\n", cast(serialized_bb)from, cast(serialized_bb)to , f);
+        print_chess(chess);
+        assert(false);
+      }
+    }
+  }
 }
 
 validate_pawns :: (chess: *Chess, move: Move16, str: string) {
@@ -524,7 +530,7 @@ decode_move16 :: inline (mov: Move16) -> flags: Move16, from: int, to: int {
 }
 
 bishop_moves :: (sq: int, occ: u64) -> u64 #expand {
-  assert(0 <= sq && sq <= 63);
+  //assert(0 <= sq && sq <= 63);
   using magic_bishop[sq];
   occ &= mask;
   occ *= magic;
@@ -533,7 +539,7 @@ bishop_moves :: (sq: int, occ: u64) -> u64 #expand {
 }
 
 rook_moves :: (sq: int, occ: u64) -> u64 {
-  assert(0 <= sq && sq <= 63);
+  //assert(0 <= sq && sq <= 63);
   using magic_rook[sq];
   occ &= mask;
   occ *= magic;
@@ -679,7 +685,7 @@ generate_tactics :: (unsafe: u64, check: u64, chess: *Chess, movegen: *$T) {
   }
 
   generate_tactics :: (unsafe: u64, check: u64, chess: *Chess, $turn: Turn, move_gen: *$T) {
-    assert(chess.turn == turn);
+    //assert(chess.turn == turn);
     num_checks := popcount(check);
     if num_checks > 1 then {
       king    := get_king(chess, turn);
@@ -1022,7 +1028,7 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
   }
 
   in_check :: (chess: *Chess, $turn: Turn, king_bit: u64, to_bitboard: u64, occupied: u64) -> bool {
-    assert(popcount(king_bit) == 1);
+    //assert(popcount(king_bit) == 1);
     opp :: turn ^ 1;
     // & occupied = ep capture.
     pawn := get_pawn(chess, opp) & ~to_bitboard & occupied;
@@ -1060,7 +1066,7 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
 // reasons, hopefully we will be able to handle this case robustly,
 // but for now, just get something off the ground.
 generate_moves_for :: (chess: *Chess, $turn: Turn, move_gen: *$T) -> ChessFlags {
-  assert(chess.turn == turn);
+  //assert(chess.turn == turn);
   opp :: turn ^ 1; 
   unsafe, check := generate_attacks(chess, opp);
   num_checks := popcount(check);
@@ -1101,7 +1107,7 @@ promotion_rank :: (turn: $Turn) -> u64 #expand {
 }
 
 generate_check_captures :: (unsafe: u64, check: u64, chess: *Chess, $turn: Turn, move_gen: *$T) {
-  assert(chess.turn == turn);
+  //assert(chess.turn == turn);
   opp :: turn ^ 1; 
   occupied := chess.occupied;
   en_passant := chess.en_passant;
@@ -1188,7 +1194,7 @@ generate_check_captures :: (unsafe: u64, check: u64, chess: *Chess, $turn: Turn,
 }
 
 generate_check_quiets :: (unsafe: u64, check: u64, chess: *Chess, $turn: Turn, move_gen: *$T) {
-  assert(chess.turn == turn);
+  //assert(chess.turn == turn);
   opp :: turn ^ 1; 
   occupied := chess.occupied;
   king    := get_king(chess, turn);
@@ -1267,7 +1273,7 @@ generate_check_quiets :: (unsafe: u64, check: u64, chess: *Chess, $turn: Turn, m
 }
 
 generate_quiets_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T) {
-  assert(chess.turn == turn);
+  //assert(chess.turn == turn);
   opp :: turn ^ 1; 
   occupied := chess.occupied;
   en_passant := chess.en_passant;
@@ -1390,7 +1396,7 @@ generate_quiets_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T) 
 }
 
 generate_tactics_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T) {
-  assert(chess.turn == turn);
+  //assert(chess.turn == turn);
   opp :: turn ^ 1; 
   occupied := chess.occupied;
   en_passant := chess.en_passant;
@@ -2022,7 +2028,7 @@ get_black_pieces :: inline p => p.b_king | p.b_queen | p.b_rook | p.b_bishop | p
 
 
 piece_at :: (chess: *Chess, index: int) -> Piece #expand {
-  assert(0 <= index && index <= 63, "piece_at out of bounds: %\n", index);
+  //assert(0 <= index && index <= 63, "piece_at out of bounds: %\n", index);
   return chess.pieces[index];
 }
 
@@ -2229,6 +2235,15 @@ zugzwang :: inline (using c: *Chess) -> bool {
   return w_pieces == 0 || b_pieces == 0;
 }
 
+print_move :: (move: Move16) {
+  if move == 0 {
+    print("(none)\n");
+    return;
+  }
+  flags, from, to := decode_move16(move);
+  print("%1%2 => %3\n", cast(serialized_bb)from, cast(serialized_bb)to, flags);
+}
+
 print_chess :: (chess: *Chess) {
   loop(xx serialized_bb.a8, "8 ");
   loop(xx serialized_bb.a7, "7 ");
@@ -2251,30 +2266,30 @@ print_chess :: (chess: *Chess) {
       case Piece.NONE;
         print(". ");
       case Piece.W_KING;
-        print("K ");
+        print("♚ ");
       case Piece.W_QUEEN;
-        print("Q ");
+        print("♛ ");
       case Piece.W_ROOK;
-        print("R ");
+        print("♜ ");
       case Piece.W_BISHOP;
-        print("B ");
+        print("♝ ");
       case Piece.W_KNIGHT;
-        print("N ");
+        print("♞ ");
       case Piece.W_PAWN;
-        print("P ");
+        print("♟︎ ");
 
       case Piece.B_KING;
-        print("k ");
+        print("♔ ");
       case Piece.B_QUEEN;
-        print("q ");
+        print("♕ ");
       case Piece.B_ROOK;
-        print("r ");
+        print("♖ ");
       case Piece.B_BISHOP;
-        print("b ");
+        print("♗ ");
       case Piece.B_KNIGHT;
-        print("n ");
+        print("♘ ");
       case Piece.B_PAWN;
-        print("p ");
+        print("♗ ");
       }
     }
     print("\n");
