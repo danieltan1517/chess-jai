@@ -253,7 +253,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag := true, $single_ext := tr
     vic := piece_at(chess, to);
 
     // piece
-    if chess.depth>7 && ply>0 && moves_searched>0 {
+    if chess.depth>3 && ply>0 && moves_searched>0 {
       if flags <= Move16.Double_Pawn_Push && move_score < -20000*depth then
         continue;
       if flags == Move16.Capture && PVALUE[att] > PVALUE[vic] && see(chess,move) < -350*depth  then
@@ -816,9 +816,6 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
     // skip bap captures. SEE algorithm.
     if is_bad_capture(move, pos_check) then
       continue;
-    // capture score is too low. skip!
-    if !pos_check && move_score < -50000*ply then
-      break;
 
     cap, flags := make_move(chess, move);
     next_fifty := 0;

@@ -945,10 +945,12 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
     case Piece.W_PAWN;
       #if turn == Turn.BLACK return false;
       adv := pawn_advance(from_bit, turn) & ~occupied;
-      adv2 := pawn_advance(adv, turn) & ~occupied;
+      adv2 := pawn_advance(adv, turn) & ~occupied & cast(u64)rank_3;
       cap  := pawn_captures(from_bit, turn) & (occupied|chess.en_passant) & ~pieces;
       moves = adv|adv2|cap;
       if from_bit & cast(u64)(rank_1|rank_8)
+        return false;
+      if flags == Move16.Double_Pawn_Push && to_bitboard != adv2 && (from_bit & cast(u64)rank_2) == 0
         return false;
       if flags <= Move16.Ep_Capture && to_bitboard & cast(u64)(rank_1|rank_8)
         return false;
@@ -1002,10 +1004,12 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
     case Piece.B_PAWN;
       #if turn == Turn.WHITE return false;
       adv := pawn_advance(from_bit, turn) & ~occupied;
-      adv2 := pawn_advance(adv, turn) & ~occupied;
+      adv2 := pawn_advance(adv, turn) & ~occupied & cast(u64)rank_6;
       cap  := pawn_captures(from_bit, turn) & (occupied|chess.en_passant) & ~pieces;
       moves = adv|adv2|cap;
       if from_bit & cast(u64)(rank_1|rank_8)
+        return false;
+      if flags == Move16.Double_Pawn_Push && to_bitboard != adv2 && (from_bit & cast(u64)rank_7) == 0
         return false;
       if flags <= Move16.Ep_Capture && to_bitboard & cast(u64)(rank_1|rank_8)
         return false;
@@ -2334,6 +2338,15 @@ test_is_legal :: () {
 
   chess_fen(*chess, "rnbqkbnr/pppppppp/8/8/4B3/8/PPPPPPPP/RNBQK1NR w KQkq - 0 1");
   assert(!is_legal(*chess, to_move16(xx serialized_bb.e1, xx serialized_bb.g1, Move16.King_Castle)));
+
+  chess_fen(*chess, "rnbqkbnr/pppppppp/8/8/8/4P3/PPPP1PPP/RNBQKBNR w KQkq - 0 1");
+  assert(!is_legal(*chess, to_move16(xx serialized_bb.e3, xx serialized_bb.e5, Move16.Double_Pawn_Push)));
+  assert(!is_legal(*chess, to_move16(xx serialized_bb.e3, xx serialized_bb.e5, Move16.Quiet)));
+
+  chess_fen(*chess, "rnbqkbnr/pppp1ppp/4p3/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1");
+  assert(!is_legal(*chess, to_move16(xx serialized_bb.e6, xx serialized_bb.e4, Move16.Double_Pawn_Push)));
+  assert(!is_legal(*chess, to_move16(xx serialized_bb.e6, xx serialized_bb.e4, Move16.Quiet)));
+
 
   print("is_legal :: () test cases passed. \n");
 }
