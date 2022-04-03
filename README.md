@@ -61,6 +61,7 @@ The chess GUI uses the glfw3 and gl libraries.
 * History Leaf Pruning
 * Singular Search Extensions
 * Check Extensions
+* Recapture Extensions
 
 ### Transposition Table
 * 3-fold repetition & fifty-move rule (still some bugs.)
