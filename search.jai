@@ -750,9 +750,6 @@ perft_divide :: (chess: *Chess, depth: int) -> int {
   ep := chess.en_passant;
   for i: 0..moves.count-1 {
     move := moves.array[i];
-    if !is_legal(chess, move) {
-      continue;
-    }
     cap, flags, hash := make_move(chess, move);
     move_count := perft(chess, depth-1);
     _, from, to := decode_move16(move);
@@ -1160,7 +1157,8 @@ heap_add :: (using heap: *Negamax, item: Move16, num: int) {
   // want to find minimum element
   // and get rid of the min
   if count >= items.count then {
-    return;  
+    print("full\n");
+    count -= 1;
   }
 
   items[count] = item;
@@ -1192,8 +1190,6 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
   }
 
   #if flags == Capture {
-    // TODO: try different capture move scoring techniques.
-    
     vic := norm(piece_at(chess, to));
     att := piece_at(chess, from);
     score = mvv_lva(vic, att) + __cap_history[att][to][vic];
@@ -1210,18 +1206,23 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
   }
 
   #if flags == Knight_Promotion || flags == Bishop_Promotion || flags == Rook_Promotion {
+    #if heap.N == 16 then {
+      return;
+    }
     score = 8000;
   }
 
-  #if flags == Queen_Promotion {
+  #if flags == Queen_Promotion || flags == Queen_Promotion_Capture {
     score = 20000;
   }
 
-  #if flags == Queen_Promotion_Capture || flags == Bishop_Promotion_Capture 
-    || flags == Knight_Promotion_Capture || flags == Rook_Promotion_Capture {
-    score = 20000;
-  } 
+  #if flags == Bishop_Promotion_Capture || flags == Knight_Promotion_Capture || flags == Rook_Promotion_Capture {
+    #if heap.N == 16 then return;
+    score = 8000;
+  }
+
   #if flags == King_Castle || flags == Queen_Castle {
+    #if heap.N == 16 then return;
     score = 19500;
   }
 
