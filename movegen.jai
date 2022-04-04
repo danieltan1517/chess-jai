@@ -950,7 +950,7 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
       moves = adv|adv2|cap;
       if from_bit & cast(u64)(rank_1|rank_8)
         return false;
-      if flags == Move16.Double_Pawn_Push && to_bitboard != adv2 && (from_bit & cast(u64)rank_2) == 0
+      if flags == Move16.Double_Pawn_Push && (to_bitboard != adv2 || (from_bit & cast(u64)rank_2) == 0)
         return false;
       if flags <= Move16.Ep_Capture && to_bitboard & cast(u64)(rank_1|rank_8)
         return false;
@@ -1009,7 +1009,7 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
       moves = adv|adv2|cap;
       if from_bit & cast(u64)(rank_1|rank_8)
         return false;
-      if flags == Move16.Double_Pawn_Push && to_bitboard != adv2 && (from_bit & cast(u64)rank_7) == 0
+      if flags == Move16.Double_Pawn_Push && (to_bitboard != adv2 || (from_bit & cast(u64)rank_7) == 0)
         return false;
       if flags <= Move16.Ep_Capture && to_bitboard & cast(u64)(rank_1|rank_8)
         return false;
