@@ -102,6 +102,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
   pv_node := alpha != beta-1;
   if (__nodes_searched & 1024) && stdin_stop_signal()
     return 0;
+  __nodes_searched += 1;
   defer {
     memset(*pv_table[ply+1], 0, size_of(PV_Line));
     __killer_moves[ply+1][1] = 0;
@@ -775,6 +776,7 @@ INF :: 0x7FFF; // Alias
 quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
   if (__nodes_searched & 1024) && stdin_stop_signal()
     return 0;
+  __nodes_searched += 1;
   ply := chess.ply;
   pv_node := alpha != beta-1;
   entry := transposition_table_lookup(chess.hash);
@@ -1156,10 +1158,8 @@ heap_add :: (using heap: *Negamax, item: Move16, num: int) {
   // not correct at all. probably 
   // want to find minimum element
   // and get rid of the min
-  if count >= items.count then {
-    print("full\n");
+  if count >= items.count then
     count -= 1;
-  }
 
   items[count] = item;
   score[count] = xx num;
@@ -1460,7 +1460,6 @@ check_for_repetition :: (using c: *ChessGame, fifty: int) -> ChessFlags {
 }
 
 make_move :: (c: *ChessGame, move: Move16) -> Piece, Castling {
-  __nodes_searched += 1;
   flags, from, to := decode_move16(move);
   piece := c.pieces[from];
   move32: Move32;
