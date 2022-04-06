@@ -223,33 +223,33 @@ nnue_init :: (file_name: string) -> bool {
 
     // Read transformer
     for i: 0..(kHalfDimensions-1) {
-      ft_biases[i] = xx (<<cast(*u16)(data));
+      ft_biases[i] = <<cast, no_check (*s16)(data);
       data += 2;
     }
 
     for i: 0..(kHalfDimensions*FtInDims)-1 {
-      ft_weights[i] = cast(s16) (<<cast(*u16)(data));
+      ft_weights[i] = <<cast(*s16)(data);
       data += 2;
     }
 
     // Read network
     data += 4;
     for i: 0..31 {
-      hidden1_biases[i] = xx (<<cast(*u32)(data));
+      hidden1_biases[i] = <<cast, no_check(*s32)(data);
       data += 4;
     }
 
     data = read_hidden_weights(hidden1_weights, 512, data);
 
     for i: 0..31 {
-      hidden2_biases[i] = xx (<<cast(*u32)(data));
+      hidden2_biases[i] = <<cast, no_check(*s32)(data);
       data += 4;
     }
 
     data = read_hidden_weights(hidden2_weights, 32, data);
     
     for i: 0..0 {
-      output_biases[i] = xx (<<cast(*u32)(data));
+      output_biases[i] = <<cast(*s32)(data);
       data += 4;
     }
 
@@ -380,7 +380,6 @@ IndexList :: struct {
 nnue_evaluate :: (player: s32, pieces: *s32, squares: *s32) -> s32 {
   nnue: NNUEdata;
   nnue.accumulator.computedAccumulation = 0;
-  print("oops\n");  
   pos: Position;
   pos.nnue[0] = *nnue;
   pos.nnue[1] = null;

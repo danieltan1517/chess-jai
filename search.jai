@@ -193,7 +193,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
 
       #if cut == true then {
         if depth > 4 && abs(beta) < 20_000 then {
-          prob_beta := beta + 150;
+          prob_beta := beta + 250;
           ep := chess.en_passant;
           for :probcut move, move_score: chess.chess {
             flags, from, to := decode_move16(move);
@@ -1206,18 +1206,22 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
   }
 
   #if flags == Knight_Promotion || flags == Bishop_Promotion || flags == Rook_Promotion {
-    #if heap.N == 16 then {
+    #if heap.N == 16 then
       return;
-    }
     score = 8000;
   }
 
-  #if flags == Queen_Promotion || flags == Queen_Promotion_Capture {
+  #if flags == Queen_Promotion {
+    score = 20000;
+  }
+
+  #if flags == Queen_Promotion_Capture {
     score = 20000;
   }
 
   #if flags == Bishop_Promotion_Capture || flags == Knight_Promotion_Capture || flags == Rook_Promotion_Capture {
-    #if heap.N == 16 then return;
+    #if heap.N == 16 then 
+      return;
     score = 8000;
   }
 
