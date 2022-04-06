@@ -100,7 +100,7 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
 negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, $cut: bool, alpha: int, beta: int, fifty: int) -> int {
   ply := chess.ply;
   pv_node := alpha != beta-1;
-  if (__nodes_searched & 1024) && stdin_stop_signal()
+  if (__nodes_searched & 2048) && stdin_stop_signal()
     return 0;
   __nodes_searched += 1;
   defer {
@@ -161,7 +161,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
           new_score := quiescene(chess, alpha, beta, fifty);
           return ifx new_score > score then new_score else score;
         }
-        score += 225;
+        score += 250;
         if score < beta && depth == 2 {
           new_score := quiescene(chess, alpha, beta, fifty);
           if new_score < beta {
@@ -774,7 +774,7 @@ INF :: 0x7FFF; // Alias
 // search capture moves only, we do this to avoid horizon effect
 // see: https://www.chessprogramming.org/Quiescence_Search
 quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
-  if (__nodes_searched & 1024) && stdin_stop_signal()
+  if (__nodes_searched & 2048) && stdin_stop_signal()
     return 0;
   __nodes_searched += 1;
   ply := chess.ply;
