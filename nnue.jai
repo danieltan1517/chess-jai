@@ -591,10 +591,10 @@ refresh_accumulator :: (pos: *Position) {
         column := cast(*void) *ft_weights[offset];
         acc_ptr := cast(*void) acc.data;
         for j: 0..NUM_REGS-1 {
-          #asm AVX {
+          #asm AVX, AVX2 {
             movups.x v1:, [acc_ptr];
             movups.x v2:, [column];
-            paddd.x  v1, v1, v2;
+            paddw.x  v1, v1, v2;
             movups.x [acc_ptr], v1;
             add.q column, 32;
             add.q acc_ptr, 32;
@@ -810,26 +810,10 @@ affine_txfm :: (input: *s8, output: *void, inDims: u32, outDims: u32, biases: *s
     }
 
     //__m256i mul = _mm256_set1_epi16(factor), prod, signs;
-    xmm_vec:  [16] u16;
-    xmm_vec[0] = factor;
-    xmm_vec[1] = factor;
-    xmm_vec[2] = factor;
-    xmm_vec[3] = factor;
-    xmm_vec[4] = factor;
-    xmm_vec[5] = factor;
-    xmm_vec[6] = factor;
-    xmm_vec[7] = factor;
-    xmm_vec[8] = factor;
-    xmm_vec[9] = factor;
-    xmm_vec[10] = factor;
-    xmm_vec[11] = factor;
-    xmm_vec[12] = factor;
-    xmm_vec[13] = factor;
-    xmm_vec[14] = factor;
-    xmm_vec[15] = factor;
-    xmm_ptr := xmm_vec.data;
     #asm AVX, AVX2 {
-      movups.y mul:, [xmm_ptr];
+      movd xmm0: vec, factor;
+      pbroadcastw ymm0: vec, xmm0;
+      movups.y mul:, ymm0;
 
       // prod = _mm256_maddubs_epi16(mul, _mm256_unpacklo_epi8(first, second));
       punpcklbw.y xmm_reg:, first, second;
@@ -919,29 +903,12 @@ affine_propagate :: (input: *s8, biases: *s32, weights: *s8) -> s32 {
   }
   
   //  prod = _mm256_madd_epi16(prod, _mm256_set1_epi16(1));
-  xmm_vec:  [16] u16;
-  xmm_vec[0] = 1;
-  xmm_vec[1] = 1;
-  xmm_vec[2] = 1;
-  xmm_vec[3] = 1;
-  xmm_vec[4] = 1;
-  xmm_vec[5] = 1;
-  xmm_vec[6] = 1;
-  xmm_vec[7] = 1;
-  xmm_vec[8] = 1;
-  xmm_vec[9] = 1;
-  xmm_vec[10] = 1;
-  xmm_vec[11] = 1;
-  xmm_vec[12] = 1;
-  xmm_vec[13] = 1;
-  xmm_vec[14] = 1;
-  xmm_vec[15] = 1;
-  xmm_ptr := xmm_vec.data;
-
   value: s32 = 0;
   #asm AVX, AVX2 {
-    movups.y temp:, [xmm_ptr];
-    pmaddwd.y prod, prod, temp;
+    mov one: gpr, 1;
+    movd xvector: vec, one;
+    pbroadcastw ymm0: vec, xvector;
+    pmaddwd.y prod, prod, ymm0;
 
     //__m128i sum = _mm_add_epi32(_mm256_castsi256_si128(prod), _mm256_extracti128_si256(prod, 1));
     extracti128 xmm0:, prod, 1;
@@ -961,7 +928,7 @@ affine_propagate :: (input: *s8, biases: *s32, weights: *s8) -> s32 {
     add.q value, reg3;
   }
 
-  return xx value;
+  return value;
 }
 
 
