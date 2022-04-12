@@ -176,8 +176,8 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
     }
 
     #if cut == true then {
-      if depth > 4 && abs(beta) < 20_000 then {
-        prob_beta := beta + 250;
+      if depth > 6 && abs(beta) < 20_000 then {
+        prob_beta := beta + 125;
         ep := chess.en_passant;
         for :probcut move, move_score: chess.chess {
           flags, from, to := decode_move16(move);
@@ -1195,20 +1195,20 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
 
     piece := cast(int) piece_at(chess, from);
     score = __history_moves[piece][to];
-
+    bonus := abs(score)/2;
     if move == heap.counter then {
-      COUNTER_BONUS :: 9000;
-      score += abs(score)/3 + COUNTER_BONUS;
+      COUNTER_BONUS :: 1000;
+      score += bonus + COUNTER_BONUS;
     }
 
     if move == heap.follow_up1 then {
-      CONTINUE_BONUS :: 9000;
-      score += abs(score)/3 + CONTINUE_BONUS;
+      CONTINUE_BONUS :: 1000;
+      score += bonus + CONTINUE_BONUS;
     }
 
     if move == heap.follow_up2 then {
-      CONTINUE_BONUS :: 9000;
-      score += abs(score)/3 + CONTINUE_BONUS;
+      CONTINUE_BONUS :: 1000;
+      score += bonus + CONTINUE_BONUS;
     }
   }
 
