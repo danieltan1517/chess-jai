@@ -215,8 +215,8 @@ make_null_move :: (chess: *Chess) -> ep: u64, hash: u64 #expand {
 }
 
 unmake_null_move :: (chess: *Chess, ep: u64, hash: u64) #expand {
-  chess.turn ^= 1;
   chess.hash = hash;
+  chess.turn ^= 1;
   chess.en_passant = ep;
 }
 
@@ -752,6 +752,7 @@ ChessFlags :: enum {
   Insufficent_Material;
   Threefold_Repetition;
   Fifty;
+  Stop;
 }
 
 init_global_bitboards :: () {
@@ -891,8 +892,19 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
     if (flags == Move16.Double_Pawn_Push || flags >= Move16.Ep_Capture) && (piece != Piece.W_PAWN && piece != Piece.B_PAWN)
       return false;
     // capture
-    if (flags == Move16.Capture || flags >= Move16.Knight_Promotion_Capture) && opp_piece == Piece.NONE then
-      return false;
+    if (flags == Move16.Capture || flags >= Move16.Knight_Promotion_Capture) then {
+      if opp_piece == Piece.NONE then {
+        return false;
+      }
+      #if turn == Turn.WHITE {
+        if opp_piece >= Piece.W_KING && opp_piece <= Piece.W_PAWN
+          return false;
+      }
+      #if turn == Turn.BLACK {
+        if opp_piece >= Piece.B_KING && opp_piece <= Piece.B_PAWN
+          return false;
+      }
+    }
     if (flags == Move16.King_Castle || flags == Move16.Queen_Castle) && (piece != Piece.W_KING && piece != Piece.B_KING)
       return false;
 
@@ -956,9 +968,9 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
         return false;
       if flags <= Move16.Ep_Capture && to_bitboard & cast(u64)(rank_1|rank_8)
         return false;
-      if flags >= Move16.Knight_Promotion_Capture && (to_bitboard & (cast(u64)(rank_1|rank_8)) & cap) == 0
+      if flags >= Move16.Knight_Promotion_Capture && (to_bitboard & (cast(u64)(rank_8)) & cap) == 0
         return false;
-      if flags >= Move16.Knight_Promotion && flags <= Move16.Queen_Promotion && (to_bitboard & (cast(u64)(rank_1|rank_8)) & adv) == 0
+      if flags >= Move16.Knight_Promotion && flags <= Move16.Queen_Promotion && (to_bitboard & (cast(u64)(rank_8)) & adv) == 0
         return false;
 
     case Piece.B_KING;
@@ -1017,9 +1029,9 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
         return false;
       if flags <= Move16.Ep_Capture && to_bitboard & cast(u64)(rank_1|rank_8)
         return false;
-      if flags >= Move16.Knight_Promotion_Capture && (to_bitboard & (cast(u64)(rank_1|rank_8)) & cap) == 0
+      if flags >= Move16.Knight_Promotion_Capture && (to_bitboard & (cast(u64)(rank_1)) & cap) == 0
         return false;
-      if flags >= Move16.Knight_Promotion && flags <= Move16.Queen_Promotion && (to_bitboard & (cast(u64)(rank_1|rank_8)) & adv) == 0
+      if flags >= Move16.Knight_Promotion && flags <= Move16.Queen_Promotion && (to_bitboard & (cast(u64)(rank_1)) & adv) == 0
         return false;
     }
     // illegal piece move.
@@ -2319,6 +2331,9 @@ test_is_legal :: () {
   chess_fen(*chess, "rnbqkB1r/pppppppp/4b3/2N5/5n2/4P3/PPPP1PPP/RNBQK2R w KQkq - 0 1");
   assert(!is_legal(*chess, to_move16(xx serialized_bb.e8, xx serialized_bb.g8, Move16.King_Castle)));
 
+  chess_fen(*chess, "6rk/5ppp/8/6N1/2Q5/8/6K1/8 w - - 0 1");
+  assert(is_legal(*chess, to_move16(xx serialized_bb.g5, xx serialized_bb.f7, Move16.Capture)));
+
   chess_fen(*chess, "rnbqk2r/pppp1ppp/3Bb3/2N2p2/5n2/4P3/PPPP1PPP/RNBQK2R w KQkq - 0 1");
   assert(!is_legal(*chess, to_move16(xx serialized_bb.e8, xx serialized_bb.g8, Move16.King_Castle)));
 
@@ -2350,7 +2365,6 @@ test_is_legal :: () {
   chess_fen(*chess, "rnbqkbnr/pppp1ppp/4p3/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1");
   assert(!is_legal(*chess, to_move16(xx serialized_bb.e6, xx serialized_bb.e4, Move16.Double_Pawn_Push)));
   assert(!is_legal(*chess, to_move16(xx serialized_bb.e6, xx serialized_bb.e4, Move16.Quiet)));
-
 
   print("is_legal :: () test cases passed. \n");
 }
