@@ -9,7 +9,6 @@ main :: () {
   initialize_chess_game_memory(*chess);
   chess_startpos(*chess);
   fifty := 0;
-
   setup_stdin(); // set STDIN to non-blocking.
   while true {
     reset_stop_signal();

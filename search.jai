@@ -27,28 +27,27 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
     chess.ply = 0;
     chess.maxply =  0; 
     chess.depth = cur_depth;
-    print("call negamax()\n");
     score = negamax(chess, cur_depth, true, true, true, alpha, beta, fifty);
     time_taken := get_time() - time_begin;
     if stop_signal_triggered() then 
       break;
 
     if score <= alpha then {
-      alpha -= delta;
       print("info depth % lowerbound %\n", cur_depth, score);
+      alpha = max(alpha-delta, -INF);
       delta += delta + 4 * depth / 5;
       continue;
     }
 
     if score >= beta then {
       print("info depth % upperbound %\n", cur_depth, score);
-      beta += delta;
+      beta = min(beta+delta, INF);
       delta += delta + 4 * depth / 5;
       continue;
     }
 
-    alpha = score - delta;
-    beta = score + delta;
+    alpha = min(score - delta, -INF);
+    beta  = max(score + delta, INF);
     best_move = pv_table[0][0];
     print_stats(cur_depth);
     cur_depth += 1;
@@ -101,6 +100,16 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
   if (__nodes_searched & 2048) && stdin_stop_signal()
     return 0;
   __nodes_searched += 1;
+
+  // mate distance pruning
+  if ply > 0 then {
+    alpha = max(alpha,-INF+ply);
+    beta  = min(beta,  INF-ply);
+    if alpha >= beta then {
+      return alpha;
+    }
+  }
+
   defer {
     memset(*pv_table[ply+1], 0, size_of(PV_Line));
     __killer_moves[ply+1][1] = 0;
@@ -118,20 +127,11 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
   if depth <= 0 then
     return quiescene(chess, alpha, beta, fifty);
 
-  // mate distance pruning
-  if ply > 0 then {
-    alpha = max(alpha,-INF+ply);
-    beta  = min(beta,  INF-ply);
-    if alpha >= beta then
-      return alpha;
-  }
+  if ply && fifty >= 100 then
+    return 0+ply;
 
   status := check_for_repetition(chess, fifty);
-  if status == ChessFlags.Fifty && ply then
-    return 0 + ply;
-  if status == ChessFlags.Stop then
-    return 0 + ply;
-  if status == ChessFlags.Threefold_Repetition && !pv_node 
+  if !pv_node && status == ChessFlags.Threefold_Repetition
     return 0 + ply;
 
   array_add(*chess.eval, -cast(s16)INF);
@@ -143,22 +143,24 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
       improving := get_improving(chess);
 
       // reverse futility pruning. stockfish has margin at 214*depth
-      margin := 100 *(depth-improving);
+      margin := 175 *(depth-improving);
       if depth < 12 && (eval-margin) >= beta then {
         return eval;
       }
 
       // razoring.
-      if depth <= 3 && eval + (225*depth) <= alpha {
+      if depth <= 5 && eval + (200*depth) <= alpha {
         score := quiescene(chess, alpha, beta, fifty);
-        if (score <= alpha)
+        if score <= alpha then
           return score;
       }
 
       // null move pruning. check for zugzwang before searching.
       #if null_flag == true then {
         if depth > 3 then {
-          R := 4 + depth/4 + min((eval-beta) / 256, 3);
+          R := 4 + depth/4;
+          if eval >= beta then
+            R += min((eval-beta) / 256, 3);
           ep := make_null_move(chess);
           score := -negamax(chess, depth-R-1, false, false, false, -beta, -beta + 1, fifty);
           unmake_null_move(chess, ep);
@@ -211,7 +213,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
 
   ep := chess.en_passant;
   hash_flag := TFLAGS.ALPHA;
-  cap_moves: [64] Move16;
+  cap_moves: [32] Move16;
   quiet_moves: [64] Move16;
   num_captures := 0;
   num_quiets := 0;
@@ -266,19 +268,18 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
     }
 
     ext := 0;
-    /*if move == ttmove && to == pto && depth>=7 && flags >= Move16.Capture && move_score > 35_000*depth
+    if move == ttmove && to == pto && depth>=7 && flags >= Move16.Capture && move_score > 35_000*depth
       ext = 1;
-    else */#if single_ext == true {
+    else #if single_ext == true {
       // singular extension:
       // if one move is better than all the rest, then we consider this singular
       // "singular" is determined by checking all other moves at a shallow depth on a nullwindow
       if ply>0 && depth>=7 && ply<chess.depth && move == ttmove && ttentry != null && cast(int)ttentry.depth >= depth-3 
          && abs(ttentry.score) < 20_000 && ttentry.flag == TFLAGS.ALPHA {
-     
         singular_beta := ttentry.score - 3*depth;
         chess.excluded_move = move;
         chess.exply = ply;
-        score := negamax(chess, depth/2, null_flag, false, cut, singular_beta-1, singular_beta, fifty);
+        score := negamax(chess, depth/2-1, null_flag, false, cut, singular_beta-1, singular_beta, fifty);
         chess.excluded_move = Move16.Quiet;
         chess.exply = INF;
         if score < singular_beta then {
@@ -321,7 +322,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
         if R < 0 then
           R = 0;
         eval = -negamax(chess, depth+ext-R-1, null_flag, single_ext, cut, -alpha-1, -alpha, next_fifty);
-      } else if flags <= Move16.Double_Pawn_Push {
+      } else if depth>2 && flags <= Move16.Double_Pawn_Push {
         // Late Move Reduction when not in check and not giving check.
         R := LateMoveReduction[min(depth,63)][min(moves_searched,63)];
         R += cast(int)(!pv_node);
@@ -329,17 +330,17 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
         #if null_flag == false || cut == false || single_ext == false
           R += 2;  // needed to prevent search explosion.
         if ext==1
-          R /= 4;
+          R -= 4;
         else if move_score < INF-10
           R -= move_score / 20_480;
         else 
-          R /= 2;
+          R -= 2;
         if R < 0 then
           R = 0;
         eval = -negamax(chess, depth+ext-R-1, null_flag, single_ext, cut, -alpha-1, -alpha, next_fifty);
       } else {
         // do normal search.
-        eval = -negamax(chess, depth-1, null_flag, single_ext, cut, -alpha-1, -alpha, next_fifty);
+        eval = -negamax(chess, depth+ext-1, null_flag, single_ext, cut, -alpha-1, -alpha, next_fifty);
       }
 
       // search the move again that has failed to be proved to be bad with normal alpha beta score bounds
@@ -373,11 +374,14 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
     moves_searched += 1;
   }
 
-  if move_count == 0 then 
+  if move_count == 0 then
     return ifx in_check(chess) then -INF+ply else 0+ply;
 
-  if status == ChessFlags.Threefold_Repetition || status == ChessFlags.Fifty then
-    return 0+ply;
+  if status == ChessFlags.Threefold_Repetition || status == ChessFlags.Fifty then {
+    hash_flag = TFLAGS.EXACT;
+    alpha = 0+ply;
+    depth = 100;
+  }
 
   if pv_node && hash_flag == TFLAGS.EXACT && get_move16_flag(bmove) > Move16.Double_Pawn_Push then {
     update_tactics(chess, bmove, depth, cap_moves, num_captures);
@@ -480,18 +484,12 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
       if !pv_node && ply>0 && entry.depth >= depth {
         value := entry.score;
         flag  := entry.flag;
-        if flag == {
-        case TFLAGS.EXACT;
-        `return value;
-        
-        case TFLAGS.ALPHA;
-        if value <= alpha then
-          `return alpha; 
-        
-        case TFLAGS.BETA;
-        if value >= beta then
-          `return beta; 
-        }
+        if flag == TFLAGS.EXACT
+          `return value;
+        if flag == TFLAGS.ALPHA && value <= alpha
+          `return alpha;
+        if flag == TFLAGS.BETA && value >= beta
+          `return beta;
       }
       return entry;
     }
@@ -557,10 +555,9 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
           stage = .END;
           generate_quiets(unsafe, check, chess, *moves);
         case .END;
-          return;
+          return; // terminate loop
         }
       }
-
       `it, `it_index := heap_pop(*moves);
       #insert body;
     }
@@ -588,7 +585,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
           unsafe, check = generate_attacks(chess);
           generate_tactics(unsafe, check, chess, *moves);
         case .END;
-          return;
+          return; // terminate loop
         }
       }
 
@@ -696,10 +693,6 @@ perft_all :: () {
   }
 
   perft_run :: (depth: int, expected: int) #expand {
-    /*if expected >= 250_000_000 {
-      print("Skipping depth: %, too many nodes: %\n", depth, expected);
-      return;
-    }*/
     time_taken := get_time();
     nodes := perft(*chess, depth);
     time_taken = get_time() - time_taken;
@@ -756,7 +749,6 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
   best_move := Move16.Quiet;
 
   ttmove  := Move16.Quiet;
-  assert(ply<127, "oops\n");
   if pv_table[ply][0] && get_move16_flag(pv_table[ply][0]) >= Move16.Capture then {
     ttmove = pv_table[ply][0];
   } else if entry != null && get_move16_flag(entry.ttmove) >= Move16.Capture then {
@@ -778,6 +770,7 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
         return alpha; 
       }
     }
+
     if alpha < eval then {
       hash_flag = TFLAGS.EXACT;
       alpha = eval; 
@@ -855,7 +848,7 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
           stage = .END;
           generate_quiets(unsafe, check, chess, *moves);
         case .END;
-          return;
+          return; // terminate loop
         }
       }
       `it, `it_index := heap_pop(*moves);
@@ -1402,10 +1395,6 @@ initialize_chess_game_memory :: (using c: *ChessGame) {
 }
 
 check_for_repetition :: (using c: *ChessGame, fifty: int) -> ChessFlags {
-  if fifty >= 100 {
-    return ChessFlags.Fifty;
-  }
-
   hash_val := c.hash;
   count := 0;
   repeat_count := 0;
@@ -1418,10 +1407,6 @@ check_for_repetition :: (using c: *ChessGame, fifty: int) -> ChessFlags {
       break;
   }
 
-  if repeat_count >= 3 then {
-    print("stop.\n");
-    return ChessFlags.Stop;
-  }
   if repeat_count >= 2 then
     return ChessFlags.Threefold_Repetition;
   return ChessFlags.Normal;

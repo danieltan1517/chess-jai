@@ -752,7 +752,6 @@ ChessFlags :: enum {
   Insufficent_Material;
   Threefold_Repetition;
   Fifty;
-  Stop;
 }
 
 init_global_bitboards :: () {
@@ -865,7 +864,7 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
     }
     
     occupied := chess.occupied;
-    if (from_bit & occupied) == 0 then
+    if (from_bit & pieces) == 0 || (to_bitboard & pieces) then
       return false;
 
     opp_piece := piece_at(chess, to);
@@ -2319,6 +2318,13 @@ print_chess :: (chess: *Chess) {
 test_is_legal :: () {
   init_global_bitboards();
   chess: Chess;
+
+  chess_fen(*chess, "2r3rk/5Npp/8/8/8/8/7K/8 b - - 0 1");
+  assert(!is_legal(*chess, to_move16(xx serialized_bb.g8, xx serialized_bb.f8, Move16.Quiet)));
+  assert(!is_legal(*chess, to_move16(xx serialized_bb.c8, xx serialized_bb.f8, Move16.Quiet)));
+  assert(!is_legal(*chess, to_move16(xx serialized_bb.c8, xx serialized_bb.c2, Move16.Quiet)));
+  assert(!is_legal(*chess, to_move16(xx serialized_bb.h8, xx serialized_bb.g8, Move16.Capture)));
+
   chess_fen(*chess, "rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKB1R w KQkq - 0 1");
   assert(!is_legal(*chess, to_move16(xx serialized_bb.e1, xx serialized_bb.g1, Move16.King_Castle)));
 
