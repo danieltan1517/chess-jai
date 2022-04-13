@@ -45,7 +45,7 @@ The chess GUI uses the glfw3 and gl libraries.
 * Legal/Psuedo Legal Move Generation
 * Staged Move Generation
 
-### Search, Extensions Pruning
+### Search
 * Negamax Search with Alpha-Beta Pruning
 * Principle Variation Search
 * Iterative Deepening
