@@ -146,7 +146,10 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
     depth -= 3;
   }
 
-  array_add(*chess.eval, -cast(s16)INF);
+  // NOTE: we make eval really high,
+  // so we will look at checks much more
+  // carefully, when improving=1, more branches to look at.
+  array_add(*chess.eval, INF);
   defer pop(*chess.eval);
   if ply>0 && !pv_node && status == ChessFlags.Normal && !in_check(chess) {
     eval := ifx ttentry then ttentry.score else evaluate(chess, fifty);
