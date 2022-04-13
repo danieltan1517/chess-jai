@@ -1604,13 +1604,13 @@ generate_attacks :: (chess: *Chess, $turn: Turn) -> att: u64, check: u64 {
   att |= pawn_bitboard;
   check |= pawn_captures(opp_king, opp) & pawn;
 
-  att |= rook_area(chess, turn);
-  att |= bishop_area(chess, turn);
+  queen_rook := queen | rook;
+  att |= rook_area(queen_rook, occupied);
+  queen_bishop := queen | bishop;
+  att |= bishop_area(queen_bishop, occupied);
 
   k_sq := bit_scan_forward(opp_king);
-  queen_rook := queen | rook;
   check |= rook_moves(k_sq, occupied) & queen_rook;
-  queen_bishop := queen | bishop;
   check |= bishop_moves(k_sq, occupied) & queen_bishop;
   return att, check;
 }
@@ -1906,13 +1906,8 @@ __bishop_moves :: (sq: u64, occ: u64) -> u64 {
   return ne ^ se ^ sw ^ nw;
 }
 
-rook_area :: (chess: *Chess, $turn: Turn) -> u64 {
-  opp :: turn ^ 1;
-  qr := get_queen(chess, turn) | get_rook(chess, turn);
+rook_area :: (qr: u64, occ: u64) -> u64 {
   if qr == 0 return 0;
-
-  opp_king := get_king(chess, opp);
-  occ := chess.occupied & ~opp_king;
   NOT_A :: cast(u64) (~file_a);
   NOT_H :: cast(u64) (~file_h);
 
@@ -1923,13 +1918,8 @@ rook_area :: (chess: *Chess, $turn: Turn) -> u64 {
   return n | s | e | w;
 }
 
-bishop_area :: (chess: *Chess, $turn: Turn) -> u64 {
-  opp :: turn ^ 1;
-  qb := get_queen(chess, turn) | get_bishop(chess, turn);
+bishop_area :: (qb: u64, occ: u64) -> u64 {
   if qb == 0 return 0;
-
-  opp_king := get_king(chess, opp);
-  occ := chess.occupied & ~opp_king;
   NOT_A :: cast(u64) (~file_a);
   NOT_H :: cast(u64) (~file_h);
 
