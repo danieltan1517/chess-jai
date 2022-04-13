@@ -952,21 +952,20 @@ ui_handle_move_made :: (chess: *Chess, moves_arr: *[..] Move16, mov: Move16) {
   array_add(*move_record, record_move);
 
   array_reset(moves_arr);
-  // TODO: FIX!!!
-  status := generate_moves(chess, moves_arr);
-  print_chess(chess);
+  generate_moves(chess, moves_arr);
+  check := in_check(chess);
 
-  if status == ChessFlags.Checkmate {
+  if check && moves_arr.count == 0 {
     __game_status_text = "Checkmate.";
     timer_on = false;
-  } else if status == ChessFlags.Stalemate {
+  } else if (!check && moves_arr.count == 0) {
     __game_status_text = "Stalemate.";
     timer_on = false;
-  } else if status == ChessFlags.Threefold_Repetition {
+  } else if false {
     __game_status_text = "Stalemate by threefold repetition.";
     array_reset(moves_arr);
     timer_on = false;
-  } else if status == ChessFlags.Check {
+  } else if check {
     __game_status_text = "Check.";
   } else {
     __game_status_text = "";
