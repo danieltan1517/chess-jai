@@ -108,7 +108,6 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
   pv_node := alpha != beta-1;
   if (__nodes_searched & 2048) && stdin_stop_signal()
     return 0;
-  __nodes_searched += 1;
 
   // mate distance pruning
   if ply > 0 then {
@@ -155,13 +154,13 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
     improving := get_improving(chess);
 
     // reverse futility pruning. stockfish has margin at 214*depth
-    margin := 75 *(depth-improving);
+    margin := 175 *(depth-improving);
     if depth < 14 && (eval-margin) >= beta then {
       return eval;
     }
 
     // razoring.
-    if depth <= 9 && eval + (175*(depth-improving)) <= alpha {
+    if depth <= 9 && eval + (200*depth) <= alpha {
       score := quiescene(chess, alpha, beta, fifty);
       if score <= alpha then
         return score;
@@ -189,8 +188,8 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
     }
 
     #if cut == true then {
-      if depth > 4 && abs(beta) < 20_000 then {
-        prob_beta := beta + 50;
+      if depth > 5 && abs(beta) < 20_000 then {
+        prob_beta := beta + 125;
         ep := chess.en_passant;
         for :probcut move, move_score: chess.chess {
           flags, from, to := decode_move16(move);
@@ -748,7 +747,6 @@ INF :: S16_MAX; // Alias
 quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
   if (__nodes_searched & 2048) && stdin_stop_signal()
     return 0;
-  __nodes_searched += 1;
   ply := chess.ply;
   pv_node := alpha != beta-1;
   entry := transposition_table_lookup(chess.hash);
@@ -1427,6 +1425,7 @@ check_for_repetition :: (using c: *ChessGame, fifty: int) -> ChessFlags {
 }
 
 make_move :: (c: *ChessGame, move: Move16) -> Piece, Castling {
+  __nodes_searched += 1;
   flags, from, to := decode_move16(move);
   piece := c.pieces[from];
   move32: Move32;
@@ -1596,6 +1595,7 @@ piece_to :: (mov: Move32) -> int, int #expand {
 }
 
 make_null_move :: (c: *ChessGame) -> ep: u64 {
+  __nodes_searched += 1;
   ep, hash := make_null_move(*c.chess);
   null_move: Move32 = Move32.{0, 0};
   array_add(*c.moves, null_move);
