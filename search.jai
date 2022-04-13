@@ -35,19 +35,28 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
     if score <= alpha then {
       print("info depth % lowerbound %\n", cur_depth, score);
       alpha = max(alpha-delta, -INF);
-      delta += delta + 4 * depth / 5;
+      delta += delta + depth / 5;
       continue;
     }
 
     if score >= beta then {
       print("info depth % upperbound %\n", cur_depth, score);
       beta = min(beta+delta, INF);
-      delta += delta + 4 * depth / 5;
+      delta += delta + depth / 5;
       continue;
     }
 
-    alpha = min(score - delta, -INF);
-    beta  = max(score + delta, INF);
+    if score < -INF+20 {
+      alpha = -INF;
+      beta  = score+1;
+    } else if score > INF-20 {
+      alpha = score-1;
+      beta  = INF;
+    } else {
+      alpha = max(score - delta, -INF);
+      beta  = min(score + delta, INF);
+    }
+
     best_move = pv_table[0][0];
     print_stats(cur_depth);
     cur_depth += 1;
@@ -109,7 +118,6 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
       return alpha;
     }
   }
-
   // transposition lookup.
   ttentry := transposition_table_lookup(chess.hash);
   ttmove  := Move16.Quiet;
