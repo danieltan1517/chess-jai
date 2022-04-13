@@ -64,7 +64,7 @@ main :: () {
   }
 
   {
-    engine_name := "leviathan";
+    engine_name := "ceij";
     ai_chess_engine_path := join(#filepath, "resources/", engine_name);
     engine, success := init_uci_engine(engine_name, ai_chess_engine_path);
     if !success then {
@@ -144,7 +144,7 @@ handle_command_line :: () #expand {
       w_is_human = true;
       b_is_human = false;
       `white_side = true;
-      b_engine_name = "leviathan";
+      b_engine_name = "ceij";
     case "hh";
       w_is_human = true;
       b_is_human = true;
@@ -153,13 +153,13 @@ handle_command_line :: () #expand {
       w_is_human = false;
       b_is_human = false;
       `white_side = true;
-      w_engine_name = "leviathan";
-      b_engine_name = "leviathan";
+      w_engine_name = "ceij";
+      b_engine_name = "ceij";
     case "ch";
       w_is_human = false;
       b_is_human = true;
       `white_side = false;
-      w_engine_name = "leviathan";
+      w_engine_name = "ceij";
     }
   }
 }

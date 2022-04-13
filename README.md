@@ -1,6 +1,6 @@
-# Jai-Chess AI with User Interface
+# Chess Engine in Jai
 
-This Jai-Chess AI is a hobby project designed to test out and find bugs with the Jai Compiler.
+This Chess Engine in Jai is a hobby project designed to test out and find bugs with the Jai Compiler.
 
 ## How to Build:
 Type `jai build.jai -- ui` to build the chess engine GUI.
@@ -46,25 +46,31 @@ The chess GUI uses the glfw3 and gl libraries.
 * Staged Move Generation
 
 ### Search, Extensions Pruning
+* Negamax Search with Alpha-Beta Pruning
+* Principle Variation Search
 * Iterative Deepening
 * Aspiration Window Search
 * Internal Iterative Deepening
-* Negamax search with Alpha-Beta Pruning
-* Principle Variation Search
-* SEE Quiescene Search Pruning
-* Prob Cut
-* Late Move Reduction/Pruning
+
+### Pruning and Reductions
 * Null Move Pruning w/ Verification
+* Low Depth SEE Pruning
 * Reverse Futility Pruning/Static Move Pruning
+* Delta Pruning
+* SEE Quiescene Search Pruning
 * Razoring
 * Mate Distance Pruning
-* History Leaf Pruning
+* History Leaf Reduction/Pruning
+* Prob Cut
+* Late Move Reduction/Pruning
+
+### Extensions
 * Singular Search Extensions
 * Check Extensions
 * Recapture Extensions
 
 ### Transposition Table
-* 3-fold repetition & fifty-move rule (still some bugs.)
+* 3-fold repetition & Fifty-move Rule
 * Zobrist Hashing w/ Incremental Update
 * Prefetch Transposition Table Entries
 * Aging
@@ -74,6 +80,7 @@ The chess GUI uses the glfw3 and gl libraries.
 * Transposition Table Hash Move
 * Killer Moves Move Ordering
 * History Moves Move Ordering
+* Tactical History Move Ordering
 * Countermove Heuristic
 * Follow Up Heuristic
 * Relative History Move Ordering
@@ -83,5 +90,6 @@ The chess GUI uses the glfw3 and gl libraries.
 * Simple Mop-Up Endgame Evaluation.
 
 ## Still needs to be implemented
+* verify is_legal functions correctly
 * UCI not fully supported 
 * Check out [NNUE-pytorch](https://github.com/glinscott/nnue-pytorch/blob/master/docs/nnue.md)

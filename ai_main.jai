@@ -177,12 +177,8 @@ reset_stop_signal :: () #expand {
 
 uci_response :: #string DONE
 uciok
-id name leviathan
+id name ceij
 id author Daniel Tan
-info string Those who hope in the Lord will renew their strength.
-info string They will soar on wings like eagles. They will run and
-info string not grow weary, they will walk and not be faint.
-info string -- Isaiah 40:31
 DONE;
 
 // TODO: does this actually do getline, or can

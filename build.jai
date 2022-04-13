@@ -4,7 +4,7 @@
 ui_exe :: "jai-chess";
 ui_file_names :: string.["ui_main.jai", "movegen.jai"];
 
-ai_exe :: "leviathan";
+ai_exe :: "ceij";
 ai_file_names :: string.["ai_main.jai", "search.jai", "eval.jai", "movegen.jai"];
 //ai_file_names :: string.["nnue.jai"];
 
