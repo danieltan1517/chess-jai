@@ -762,8 +762,10 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
   hash_flag := TFLAGS.ALPHA;
   pos_check := in_check(chess);
   if !pos_check {
-    // no standing pat while in check, only when position is normal
-    eval := evaluate(chess, fifty);
+    // no standing pat while in check 
+    // probe the score from the tt entry,
+    // if no score, evaluate.
+    eval := ifx entry then entry.score else evaluate(chess, fifty);
     if eval >= beta then {
       return beta;
     }

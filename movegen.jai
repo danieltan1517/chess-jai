@@ -1604,23 +1604,14 @@ generate_attacks :: (chess: *Chess, $turn: Turn) -> att: u64, check: u64 {
   att |= pawn_bitboard;
   check |= pawn_captures(opp_king, opp) & pawn;
 
+  att |= rook_area(chess, turn);
+  att |= bishop_area(chess, turn);
+
   k_sq := bit_scan_forward(opp_king);
   queen_rook := queen | rook;
   check |= rook_moves(k_sq, occupied) & queen_rook;
-  while queen_rook {
-    sq := bit_scan_forward(queen_rook);
-    att |= rook_moves(sq, occupied);
-    queen_rook = popbit(queen_rook);
-  }
-
   queen_bishop := queen | bishop;
   check |= bishop_moves(k_sq, occupied) & queen_bishop;
-  while queen_bishop {
-    sq := bit_scan_forward(queen_bishop);
-    att |= bishop_moves(sq, occupied);
-    queen_bishop = popbit(queen_bishop);
-  }
-
   return att, check;
 }
 
@@ -1913,6 +1904,40 @@ __bishop_moves :: (sq: u64, occ: u64) -> u64 {
   sw := smear_southwest(sq, ~((occ>>9) & (xx ~ file_h)));
   nw := smear_northwest(sq, ~((occ<<7) & (xx ~ file_h)));
   return ne ^ se ^ sw ^ nw;
+}
+
+rook_area :: (chess: *Chess, $turn: Turn) -> u64 {
+  opp :: turn ^ 1;
+  qr := get_queen(chess, turn) | get_rook(chess, turn);
+  if qr == 0 return 0;
+
+  opp_king := get_king(chess, opp);
+  occ := chess.occupied & ~opp_king;
+  NOT_A :: cast(u64) (~file_a);
+  NOT_H :: cast(u64) (~file_h);
+
+  n := smear_north(qr << 8, ~(occ<<8));
+  s := smear_south(qr >> 8, ~(occ>>8));
+  e := smear_east ((qr << 1) & NOT_A, ~((occ<<1) & NOT_A));
+  w := smear_west ((qr >> 1) & NOT_H, ~((occ>>1) & NOT_H));
+  return n | s | e | w;
+}
+
+bishop_area :: (chess: *Chess, $turn: Turn) -> u64 {
+  opp :: turn ^ 1;
+  qb := get_queen(chess, turn) | get_bishop(chess, turn);
+  if qb == 0 return 0;
+
+  opp_king := get_king(chess, opp);
+  occ := chess.occupied & ~opp_king;
+  NOT_A :: cast(u64) (~file_a);
+  NOT_H :: cast(u64) (~file_h);
+
+  ne := smear_northeast((qb << 9) & NOT_A, ~((occ<<9) & NOT_A));
+  se := smear_southeast((qb >> 7) & NOT_A, ~((occ>>7) & NOT_A));
+  sw := smear_southwest((qb >> 9) & NOT_H, ~((occ>>9) & NOT_H));
+  nw := smear_northwest((qb << 7) & NOT_H, ~((occ<<7) & NOT_H));
+  return ne | se | sw | nw;
 }
 
 print_bitboard :: (b: u64) {
