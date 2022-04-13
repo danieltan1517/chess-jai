@@ -227,6 +227,7 @@ make_move :: (chess: *Chess, move: Move16) -> captured: Piece, Castling, hash: u
   chess.en_passant = 0;
   from := cast(u64) (1 << sq);
   to   := cast(u64) (1 << to_sq);
+  assert(to != chess.w_king && to != chess.b_king);
   castling := chess.castling;
   chess.occupied ^= from;
   chess.occupied |= to;
@@ -869,6 +870,8 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
 
     opp_piece := piece_at(chess, to);
     if flags == Move16.Ep_Capture then {
+      if piece_at(chess, to) != Piece.NONE
+        return false;
       if to_bitboard != chess.en_passant {
         return false;
       }
