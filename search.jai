@@ -766,9 +766,7 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
   pos_check := in_check(chess);
   if !pos_check {
     // no standing pat while in check 
-    // probe the score from the tt entry,
-    // if no score, evaluate.
-    eval := ifx entry then entry.score else evaluate(chess, fifty);
+    eval := evaluate(chess, fifty);
     if eval >= beta then {
       return beta;
     }
@@ -891,7 +889,7 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
 
   transposition_table_lookup :: (hash: u64) -> *ttable.TTEntry #expand {
     key  := hash % TSIZE;
-    //prefetch(*ttable.entries[key], Prefetch_Hint.T0);
+    prefetch(*ttable.entries[key], Prefetch_Hint.T0);
     entry := *ttable.entries[key];
     if entry.hash == hash then
       entry.age = search_age;
@@ -899,18 +897,15 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
     if !pv_node && entry.hash == hash then {
       value := entry.score;
       flag  := entry.flag;
-      if flag == {
-      case TFLAGS.EXACT;
-      `return value;
+      if flag == TFLAGS.EXACT then
+        `return value;
       
-      case TFLAGS.ALPHA;
-      if value <= alpha then
+      if flag == TFLAGS.ALPHA && value <= alpha then
         `return alpha; 
       
-      case TFLAGS.BETA;
-      if value >= beta then
+      if flag == TFLAGS.BETA && value >= beta then
         `return beta; 
-      }
+
       return entry;
     }
 
@@ -920,7 +915,7 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
   // quiescene TT
   transposition_table_store :: (hash: u64) #expand {
     key  := hash % TSIZE;
-    //prefetch(*ttable.entries[key], Prefetch_Hint.T0);
+    prefetch(*ttable.entries[key], Prefetch_Hint.T0);
     entry := *ttable.entries[key];
     if entry.depth <= 0 then {
       entry.hash   = hash;
