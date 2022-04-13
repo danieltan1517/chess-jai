@@ -475,7 +475,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
   print_curr_move :: () #expand {
     if ply==0 && chess.depth>10 {
       time := get_time();
-      if (time-time_begin)>3 then {
+      if `alpha > -INF+20 && `alpha < INF-20 && (time-time_begin)>3 then {
         print("info depth %1 currmove %2%3 currmovenumber %4\n", chess.depth, cast(serialized_bb)`from, cast(serialized_bb)`to, `moves_searched+1);
       } 
     }
