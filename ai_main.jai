@@ -177,7 +177,7 @@ reset_stop_signal :: () #expand {
 
 uci_response :: #string DONE
 uciok
-id name ceij
+id name ceij -- Chess Engine in Jai
 id author Daniel Tan
 DONE;
 
