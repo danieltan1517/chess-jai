@@ -4,7 +4,7 @@
 search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
   // this is basically a fancy wrapper around negamax, negamax does all the work, this just sets everything up.
   time_begin = get_time();
-  clear_hash_table();
+  //clear_hash_table();
   memset(pv_table.data, 0, size_of(type_of(pv_table)));
   memset(__cap_history.data, 0, size_of(type_of(__cap_history)));
   memset(__history_moves.data, 0, size_of(type_of(__history_moves)));
@@ -348,17 +348,17 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
         R := LateMoveReduction[min(depth,63)][min(moves_searched,63)];
         R += cast(int)(!pv_node);
         R += improving^1;
-        R -= ext;
+        R -= ext*2;
 
         #if null_flag == false || cut == false || single_ext == false
-          R += depth/3;  // needed to prevent search explosion.
+          R += depth/4;  // needed to prevent search explosion.
 
         if move_score > INF-10 then 
-          R /= 2;
+          R -= depth/4;
         else 
           R -= move_score / 20_480;
         R = max(0, R);
-        eval = -negamax(chess, depth-R-1, null_flag, single_ext, cut, -alpha-1, -alpha, next_fifty);
+        eval = -negamax(chess, depth+ext-R-1, null_flag, single_ext, cut, -alpha-1, -alpha, next_fifty);
       } else {
         // do normal search.
         eval = -negamax(chess, depth+ext-1, null_flag, single_ext, cut, -alpha-1, -alpha, next_fifty);
