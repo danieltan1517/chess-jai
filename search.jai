@@ -9,8 +9,7 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
   memset(__cap_history.data, 0, size_of(type_of(__cap_history)));
   memset(__history_moves.data, 0, size_of(type_of(__history_moves)));
   memset(__killer_moves.data,  0, size_of(type_of(__killer_moves)));
-  memset(__counter_moves.data, 0, size_of(type_of(__counter_moves)));
-  memset(__follow_up.data, 0, size_of(type_of(__follow_up)));
+  memset(__counter_history.data, 0, size_of(type_of(__counter_history)));
   __nodes_searched = 0;
   score : int; 
   best_move : Move16;
@@ -210,7 +209,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
       if depth > 5 && abs(beta) < 20_000 then {
         prob_beta := beta + 125;
         ep := chess.en_passant;
-        for :probcut move, move_score: chess.chess {
+        for :probcut move, move_score: chess {
           flags, from, to := decode_move16(move);
           pfrom := piece_at(chess, from);
          
@@ -240,8 +239,6 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
   moves_searched := 0;
 
   improving := get_improving(chess);
-  counter  := get_counter_move(chess);
-  followup1, followup2 := get_follow_up_move(chess);
 
   move_count := 0;
   bmove := Move16.Quiet;
@@ -259,7 +256,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
     return -1;
   }
 
-  for :pv move, move_score : chess.chess {
+  for :pv move, move_score : chess {
     move_count += 1;
     #if single_ext == false {
       if ply == chess.exply && move == chess.excluded_move then {
@@ -408,7 +405,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
   }
 
   if pv_node && hash_flag == TFLAGS.EXACT && get_move16_flag(bmove) > Move16.Double_Pawn_Push then {
-    update_tactics(chess, bmove, depth, cap_moves, num_captures);
+    update_tactics(chess, bmove, depth, cap_moves, num_captures, quiet_moves, num_quiets);
   }
 
   #if single_ext == false {
@@ -420,9 +417,13 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
   }
   return alpha;
 
-  update_tactics :: (chess: *ChessGame, move: Move16, depth: int, cap_moves: []Move16, num_captures: int) {
+  update_tactics :: (chess: *ChessGame, move: Move16, depth: int, cap_moves: []Move16, num_captures: int, quiet_moves: []Move16, num_quiets: int) {
     ply := chess.ply;
     incr : s32 = min(cast(s32)(depth*depth), 128);
+    prev1, to1 := get_prev_move(chess, 1);
+    prev2, to2 := get_prev_move(chess, 2);
+    prev4, to4 := get_prev_move(chess, 4);
+
     for i: 0..num_captures-1 {
       prev_move := cap_moves[i];
       if prev_move != move {
@@ -434,6 +435,18 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
       }
     }
 
+    // decrement all quiet moves which < alpha.
+    for i: 0..num_quiets-1 {
+      quiet_move := quiet_moves[i];
+      from := get_move16_from(quiet_move);
+      p := piece_at(chess, from);
+      to := get_move16_to(quiet_move);
+      incr_history(*__history_moves[p][to], -incr);
+      incr_history(*__counter_history[prev1][to1][p][to], -incr);
+      incr_history(*__counter_history[prev2][to2][p][to], -incr);
+      incr_history(*__counter_history[prev4][to4][p][to], -incr);
+    }
+
     from := get_move16_from(move);
     p := piece_at(chess, from);
     to := get_move16_to(move);
@@ -443,7 +456,10 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
 
   update_quiet :: (chess: *ChessGame, move: Move16, depth: int, quiet_moves: []Move16, num_quiets: int, cap_moves: []Move16, num_captures: int) {
     ply := chess.ply;
-    incr : s32 = min(cast(s32) (depth*depth), 576);
+    incr : s32 = min(cast(s32) (depth*depth), 512);
+    prev1, to1 := get_prev_move(chess, 1);
+    prev2, to2 := get_prev_move(chess, 2);
+    prev4, to4 := get_prev_move(chess, 4);
 
     // decrement all quiet moves which < alpha.
     for i: 0..num_quiets-1 {
@@ -453,6 +469,9 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
         p := piece_at(chess, from);
         to := get_move16_to(prev_move);
         incr_history(*__history_moves[p][to], -incr);
+        incr_history(*__counter_history[prev1][to1][p][to], -incr);
+        incr_history(*__counter_history[prev2][to2][p][to], -incr);
+        incr_history(*__counter_history[prev4][to4][p][to], -incr);
       }
     }
 
@@ -469,12 +488,9 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
     p := piece_at(chess, get_move16_from(move));
     to := get_move16_to(move);
     incr_history(*__history_moves[p][to], incr);
-
-    // update countermove heuristic
-    update_countermove(chess, move);
-
-    // update follow up heuristic
-    update_followup(chess, move);
+    incr_history(*__counter_history[prev1][to1][p][to], incr);
+    incr_history(*__counter_history[prev2][to2][p][to], incr);
+    incr_history(*__counter_history[prev4][to4][p][to], incr);
 
     if move != __killer_moves[ply][0] then {
       __killer_moves[ply][1] = __killer_moves[ply][0];
@@ -501,16 +517,15 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
     }
   }
 
-
-  pv :: (chess: *Chess, body: Code, f: For_Flags) #expand {
+  pv :: (chess: *ChessGame, body: Code, f: For_Flags) #expand {
     // main principle variation search move picker.
     stage: enum {PV; CAPTURES; KILLERS; QUIETS; END; } = .PV;
     killers: [] Move16 = __killer_moves[ply];
     moves: Negamax(64);
     moves.count = 0;
-    moves.counter = counter;
-    moves.follow_up1 = followup1;
-    moves.follow_up2 = followup2;
+    moves.counter = get_countermove_history(chess, 1);
+    moves.follow1 = get_countermove_history(chess, 2);
+    moves.follow2 = get_countermove_history(chess, 4);
 
     unsafe: u64 = 0;
     check: u64 = 0;
@@ -550,11 +565,14 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
     }
   }
 
-  probcut :: (chess: *Chess, body: Code, f: For_Flags) #expand {
+  probcut :: (chess: *ChessGame, body: Code, f: For_Flags) #expand {
     stage: enum {PV; CAPTURES; QUIETS; END; } = .PV;
     moves: Negamax(16); 
     moves.count = 0;
     moves.pv = ifx ttmove > get_move16_flag(Move16.Double_Pawn_Push) ttmove else 0;
+    moves.counter = get_countermove_history(chess, 1);
+    moves.follow1 = get_countermove_history(chess, 2);
+    moves.follow2 = get_countermove_history(chess, 4);
 
     unsafe: u64 = 0;
     check: u64 = 0;
@@ -809,7 +827,7 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
   // search captures only, captures negate the fifty move rule
   ep := chess.en_passant;
   move_count := 0;
-  for :pv move, move_score: chess.chess {
+  for :pv move, move_score: chess {
     move_count += 1;
     type, from, to := decode_move16(move);
 
@@ -852,11 +870,14 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
   tt_store(chess.hash, alpha, hash_flag, 0, best_move);
   return alpha;
 
-  pv :: (chess: *Chess, body: Code, f: For_Flags) #expand {
+  pv :: (chess: *ChessGame, body: Code, f: For_Flags) #expand {
     stage: enum {PV; CAPTURES; QUIETS; END; } = .PV;
     moves: Negamax(16); 
     moves.count = 0;
     moves.pv = ttmove;
+    moves.counter = get_countermove_history(chess, 1);
+    moves.follow1 = get_countermove_history(chess, 2);
+    moves.follow2 = get_countermove_history(chess, 4);
 
     unsafe: u64 = 0;
     check: u64 = 0;
@@ -911,8 +932,8 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
 }
 
 PV_Line :: struct {
-  argmove: [100] Move16;
   move_count: u16;
+  argmove: [79] Move16;
 }
 
 operator [] :: (using p: PV_Line, index: int) -> Move16 {
@@ -1019,8 +1040,7 @@ __nodes_searched := 0;
 __cap_history:     [13][64][7] s32;
 __history_moves:   [13][64] s32;
 __killer_moves:    [128][2] Move16;
-__counter_moves:   [13][64] Move16;
-__follow_up:       [13][64][13][64] Move16;
+__counter_history: [13][64][13][64] s32;
 
 // get something off the ground.
 TSIZE :: 0x8000;
@@ -1049,9 +1069,9 @@ Negamax :: struct(N: int) {
   pv        : Move16;
   killer1   : Move16;
   killer2   : Move16;
-  counter   : Move16;
-  follow_up1: Move16;
-  follow_up2: Move16;
+  counter   : *[13][64] s32;
+  follow1: *[13][64] s32;
+  follow2: *[13][64] s32;
   count: s16;
   items: [N] Move16;
   score: [N] s32;
@@ -1181,22 +1201,7 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
     }
 
     piece := cast(int) piece_at(chess, from);
-    score = __history_moves[piece][to];
-    bonus := abs(score)/2;
-    if move == heap.counter then {
-      COUNTER_BONUS :: 1000;
-      score += bonus + COUNTER_BONUS;
-    }
-
-    if move == heap.follow_up1 then {
-      CONTINUE_BONUS :: 1000;
-      score += bonus + CONTINUE_BONUS;
-    }
-
-    if move == heap.follow_up2 then {
-      CONTINUE_BONUS :: 1000;
-      score += bonus + CONTINUE_BONUS;
-    }
+    score = __history_moves[piece][to] + (<<heap.counter)[piece][to] + (<<heap.follow1)[piece][to] + (<<heap.follow2)[piece][to];
   }
 
   norm :: (p: Piece) -> Piece #expand {
@@ -1494,24 +1499,13 @@ unmake_move :: (c: *ChessGame, move: Move16, cap: Piece, castling: Castling) {
   c.ply -= 1;
 }
 
-// used for countermove heuristic.
-get_counter_move :: (c: *ChessGame) -> Move16 {
-  if c.ply > 0 {
-    prev := c.moves.count-1;
-    prev_move := c.moves[prev];
-    piece, to := piece_to(prev_move);
-    return __counter_moves[piece][to];
-  }
-  return Move16.Quiet;
-}
+get_prev_move :: (chess: *ChessGame, num: int) -> piece: int, to: int {
+  if chess.ply < num return 0, 0;
 
-update_countermove :: (c: *ChessGame, move: Move16) #expand {
-  if c.ply > 0 {
-    prev := c.moves.count-1;
-    prev_move := c.moves[prev];
-    piece, to := piece_to(prev_move);
-    __counter_moves[piece][to] = move;
-  }
+  idx := chess.moves.count-num;
+  prev_move := chess.moves[idx];
+  piece, to := piece_to(prev_move);
+  return piece, to;
 }
 
 update_followup :: (c: *ChessGame, move: Move16) #expand {
@@ -1535,34 +1529,6 @@ update_followup :: (c: *ChessGame, move: Move16) #expand {
     __follow_up[piece1][to1][piece2][to2] = move;
   }
 
-}
-
-get_follow_up_move :: (c: *ChessGame) -> Move16, Move16 {
-  follow1 := Move16.Quiet;
-  follow2 := Move16.Quiet;
-  if c.ply >= 2 {
-    // previous 2 move.
-    prev2 := c.moves.count-2;
-    piece1, to1 := piece_to(c.moves[prev2]);
-
-    // previous 1 move.
-    prev1 := c.moves.count-1;
-    piece2, to2 := piece_to(c.moves[prev1]);
-
-    follow1 = __follow_up[piece1][to1][piece2][to2];
-  }
-
-  if c.ply >= 4 {
-    prev2 := c.moves.count-4;
-    piece1, to1 := piece_to(c.moves[prev2]);
-
-    // previous 1 move.
-    prev1 := c.moves.count-2;
-    piece2, to2 := piece_to(c.moves[prev1]);
-    follow2 = __follow_up[piece1][to1][piece2][to2];
-  }
-
-  return follow1, follow2;
 }
 
 get_improving :: (using c: *ChessGame) -> int {
@@ -1596,3 +1562,8 @@ unmake_null_move :: (c: *ChessGame, ep: u64) {
   c.ply -= 1;
 }
 
+
+get_countermove_history :: (chess: *ChessGame, num: int) -> *[13][64]s32 {
+  prev, to := get_prev_move(chess, 1);
+  return *__counter_history[prev][to];
+}
