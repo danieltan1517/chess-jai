@@ -123,7 +123,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
 
   // tt probe.
   tthit: bool; 
-  ttentry: ttable.TTEntry;
+  ttentry: TTData;
 
   // need to account for singular search extensions while probing.
   #if single_ext == false {
@@ -351,7 +351,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
         R -= ext;
 
         #if null_flag == false || cut == false || single_ext == false
-          R *= 2;  // needed to prevent search explosion.
+          R += depth/3;  // needed to prevent search explosion.
 
         if move_score > INF-10 then 
           R /= 2;
@@ -600,18 +600,18 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
   }
 }
 
-tt_probe :: (hash: u64, alpha: int, beta: int, depth: int) -> bool, ttable.TTEntry {
+tt_probe :: (hash: u64, alpha: int, beta: int, depth: int) -> bool, TTData {
   key  := hash % TSIZE;
   prefetch(*ttable.entries[key], Prefetch_Hint.T0);
   entry := ttable.entries[key];
   if entry.hash == hash then {
     ttable.entries[key].age = search_age;
-    return true, entry;
+    return true, entry.data;
   }
-  return false, entry;
+  return false, entry.data;
 }
 
-tt_prune :: (tthit: bool, ttentry: *ttable.TTEntry, ply: int, pv_node: bool, alpha: int, beta: int, depth: int) #expand {
+tt_prune :: (tthit: bool, ttentry: *TTData, ply: int, pv_node: bool, alpha: int, beta: int, depth: int) #expand {
   if tthit then {
     if !pv_node && ply>0 && ttentry.depth >= depth {
       score := ttentry.score;
@@ -1049,14 +1049,22 @@ ttable: struct {
   entries:  [TSIZE] TTEntry;
 
   TTEntry :: struct {
-    hash  :  u64;
-    flag  : TFLAGS;
-    depth : u8;
-    ttmove: Move16;
-    score : s16;
-    age   : u8;
+    hash: u64;
+    union {
+      using data: TTData;
+      padding: u64;
+    }
   }
 }
+
+TTData :: struct {
+  flag  : TFLAGS;
+  depth : u8;
+  ttmove: Move16;
+  score : s16;
+  age   : u8;
+}
+
 search_age : u8 = 0;
 
 TFLAGS :: enum u8 { EXACT; ALPHA; BETA; }

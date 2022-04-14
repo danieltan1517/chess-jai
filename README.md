@@ -23,27 +23,24 @@ The chess GUI uses the glfw3 and gl libraries.
 * New game using the `Ctrl+N` Key
 * Implements UCI (Universal Chess Interface) Protocol to communicate with any UCI compatible chess engine (e.g. Stockfish, RubiChess)
 * Can do Human vs Computer, Computer vs Human, Human vs Human, and Computer vs Computer.
-* Parse and load FEN strings
-* Uses https://github.com/Destaq/chess_graph/blob/master/elo_reading/openings_sheet.csv for opening book
-* Opening Book (need to clean up memory usage)
+* Parse and Loads FEN strings
 * Engine vs. Engine Implemented (e.g. Stockfish vs Komodo)
 * Multi-engine support
 * Console command-line
 
-## AI Chess Engine Features
-* Estimated AI Rating: 3000 
-* Supports UCI protocol
-* Parse and load FEN strings
+## Chess Engine in Jai
+* Estimated elo: 3000 
+* UCI protocol
 
 ### Board Representation
 * 8x8 Board
+* Legal/Psuedo Legal Move Generation
+* Staged Move Generation
 * Bitboards with Little Endian Rank-File Mapping
-* Magic bitboards
+* Magic Bitboards
 * Kogge-Stone Algorithm
 * Move generator generates 210 million positions per second
 * Moves encoded as 16-bit integers
-* Legal/Psuedo Legal Move Generation
-* Staged Move Generation
 
 ### Search
 * Negamax Search with Alpha-Beta Pruning
@@ -70,6 +67,7 @@ The chess GUI uses the glfw3 and gl libraries.
 * Recapture Extensions
 
 ### Transposition Table
+* 16-bit Transposition Table Hash Entries
 * 3-fold repetition & Fifty-move Rule
 * Zobrist Hashing w/ Incremental Update
 * Prefetch Transposition Table Entries
