@@ -81,8 +81,7 @@ The chess GUI uses the glfw3 and gl libraries.
 * Killer Moves Move Ordering
 * History Moves Move Ordering
 * Tactical History Move Ordering
-* Countermove Heuristic
-* Follow Up Heuristic
+* Countermove and Follow Up History Move Ordering
 * Relative History Move Ordering
 
 ### Evaluation
