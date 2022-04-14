@@ -117,12 +117,28 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
       return alpha;
     }
   }
-  // transposition lookup.
-  ttentry := transposition_table_lookup(chess.hash);
+
+  // cannot trust that tt_entry will remain the same.
+  // it can be overwritten by accident due to hash collisions
+  // esp. during multi-threading. need to copy out the ttentry.
+
+  // tt probe.
+  tthit: bool; 
+  ttentry: ttable.TTEntry;
+
+  // need to account for singular search extensions while probing.
+  #if single_ext == false {
+    if ply != chess.exply then
+      tthit, ttentry = tt_probe(chess.hash, alpha, beta, depth);
+  } else {
+    tthit, ttentry = tt_probe(chess.hash, alpha, beta, depth);
+  }
+
+  tt_prune(tthit, *ttentry, ply, pv_node, alpha, beta, depth);
   ttmove  := Move16.Quiet;
   if pv_table[ply][0] then
     ttmove = pv_table[ply][0];
-  else if ttentry != null then
+  else if tthit then
     ttmove = ttentry.ttmove;
 
   if depth <= 0 then
@@ -152,7 +168,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
   array_add(*chess.eval, INF);
   defer pop(*chess.eval);
   if ply>0 && !pv_node && status == ChessFlags.Normal && !in_check(chess) {
-    eval := ifx ttentry then ttentry.score else evaluate(chess, fifty);
+    eval := ifx tthit then ttentry.score else evaluate(chess, fifty);
     chess.eval[chess.eval.count-1] = cast(s16) eval;
     improving := get_improving(chess);
 
@@ -274,7 +290,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
 
     ext := 0;
     #if single_ext == true {
-      if ply>0 && depth>=7 && ply<chess.depth && move == ttmove && ttentry != null && cast(int)ttentry.depth >= depth-3 
+      if ply>0 && depth>=7 && ply<chess.depth && move == ttmove && tthit && cast(int)ttentry.depth >= depth-3 
          && abs(ttentry.score) < 20_000 && ttentry.flag == TFLAGS.ALPHA {
 
         if to == pto && flags >= Move16.Capture && move_score > 1_200*depth {
@@ -395,7 +411,13 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
     update_tactics(chess, bmove, depth, cap_moves, num_captures);
   }
 
-  transposition_table_store(chess.hash);
+  #if single_ext == false {
+    if ply != chess.exply then {
+      tt_store(chess.hash, alpha, hash_flag, depth, bmove);
+    }
+  } else {
+    tt_store(chess.hash, alpha, hash_flag, depth, bmove);
+  }
   return alpha;
 
   update_tactics :: (chess: *ChessGame, move: Move16, depth: int, cap_moves: []Move16, num_captures: int) {
@@ -479,49 +501,6 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
     }
   }
 
-  transposition_table_lookup :: (hash: u64) -> *ttable.TTEntry #expand {
-    #if single_ext == false {
-      if ply == chess.exply then
-        return null;
-    }
-    key  := hash % TSIZE;
-    prefetch(*ttable.entries[key], Prefetch_Hint.T0);
-    entry := *ttable.entries[key];
-    if entry.hash == hash then {
-      entry.age = search_age;
-      if !pv_node && ply>0 && entry.depth >= depth {
-        value := entry.score;
-        flag  := entry.flag;
-        if flag == TFLAGS.EXACT
-          `return value;
-        if flag == TFLAGS.ALPHA && value <= alpha
-          `return alpha;
-        if flag == TFLAGS.BETA && value >= beta
-          `return beta;
-      }
-      return entry;
-    }
-
-    return null;
-  }
-
-  transposition_table_store :: (hash: u64) #expand {
-    #if single_ext == false {
-      if ply == chess.exply then
-        return;
-    }
-    key  := hash % TSIZE;
-    prefetch(*ttable.entries[key], Prefetch_Hint.T0);
-    entry := *ttable.entries[key];
-    if depth >= entry.depth || entry.age != search_age then {
-      entry.hash   = hash;
-      entry.score  = xx alpha;
-      entry.flag   = hash_flag;
-      entry.depth  = cast, trunc(u8) depth;
-      entry.ttmove = bmove;
-      entry.age    = search_age;
-    }
-  }
 
   pv :: (chess: *Chess, body: Code, f: For_Flags) #expand {
     // main principle variation search move picker.
@@ -601,6 +580,48 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
       #insert body;
     }
   }
+}
+
+tt_probe :: (hash: u64, alpha: int, beta: int, depth: int) -> bool, ttable.TTEntry {
+  key  := hash % TSIZE;
+  prefetch(*ttable.entries[key], Prefetch_Hint.T0);
+  entry := ttable.entries[key];
+  if entry.hash == hash then {
+    ttable.entries[key].age = search_age;
+    return true, entry;
+  }
+  return false, entry;
+}
+
+tt_prune :: (tthit: bool, ttentry: *ttable.TTEntry, ply: int, pv_node: bool, alpha: int, beta: int, depth: int) #expand {
+  if tthit then {
+    if !pv_node && ply>0 && ttentry.depth >= depth {
+      score := ttentry.score;
+      flag  := ttentry.flag;
+      if flag == TFLAGS.EXACT then
+        `return score;
+      if flag == TFLAGS.ALPHA && score <= alpha then
+        `return alpha;
+      if flag == TFLAGS.BETA && score >= beta then
+        `return beta;
+    }
+  }
+}
+
+tt_store :: (hash: u64, score: int, flag: TFLAGS, depth: int, ttmove: Move16) {
+  key  := hash % TSIZE;
+  entry: ttable.TTEntry;
+  entry.hash = hash;
+  entry.score = cast(s16) score;
+  entry.flag = flag;
+  entry.depth = cast, trunc(u8) depth;
+  entry.ttmove = ttmove;
+  entry.age = search_age;
+
+  prefetch(*ttable.entries[key], Prefetch_Hint.T0);
+  ttentry := *ttable.entries[key];
+  if depth >= ttentry.depth || ttentry.age != search_age then 
+    memcpy(ttentry, *entry, size_of(ttable.TTEntry));
 }
 
 // perft results are found here: https://www.chessprogramming.org/Perft_Results
@@ -752,14 +773,15 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
     return 0;
   ply := chess.ply;
   pv_node := alpha != beta-1;
-  entry := transposition_table_lookup(chess.hash);
+  tthit, ttentry := tt_probe(chess.hash, alpha, beta, 0);
+  tt_prune(tthit, *ttentry, ply, pv_node, alpha, beta, 0);
   best_move := Move16.Quiet;
 
   ttmove  := Move16.Quiet;
   if pv_table[ply][0] && get_move16_flag(pv_table[ply][0]) >= Move16.Capture then {
     ttmove = pv_table[ply][0];
-  } else if entry != null && get_move16_flag(entry.ttmove) >= Move16.Capture then {
-    ttmove = entry.ttmove;
+  } else if tthit && get_move16_flag(ttentry.ttmove) >= Move16.Capture then {
+    ttmove = ttentry.ttmove;
   }
 
   hash_flag := TFLAGS.ALPHA;
@@ -827,7 +849,7 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
     return -INF+ply;
   }
 
-  transposition_table_store(chess.hash);
+  tt_store(chess.hash, alpha, hash_flag, 0, best_move);
   return alpha;
 
   pv :: (chess: *Chess, body: Code, f: For_Flags) #expand {
@@ -885,45 +907,6 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
       return see(chess, move) < 0;
     }
     return false;
-  }
-
-  transposition_table_lookup :: (hash: u64) -> *ttable.TTEntry #expand {
-    key  := hash % TSIZE;
-    prefetch(*ttable.entries[key], Prefetch_Hint.T0);
-    entry := *ttable.entries[key];
-    if entry.hash == hash then
-      entry.age = search_age;
-
-    if !pv_node && entry.hash == hash then {
-      value := entry.score;
-      flag  := entry.flag;
-      if flag == TFLAGS.EXACT then
-        `return value;
-      
-      if flag == TFLAGS.ALPHA && value <= alpha then
-        `return alpha; 
-      
-      if flag == TFLAGS.BETA && value >= beta then
-        `return beta; 
-
-      return entry;
-    }
-
-    return null;
-  }
-
-  // quiescene TT
-  transposition_table_store :: (hash: u64) #expand {
-    key  := hash % TSIZE;
-    prefetch(*ttable.entries[key], Prefetch_Hint.T0);
-    entry := *ttable.entries[key];
-    if entry.depth <= 0 then {
-      entry.hash   = hash;
-      entry.score  = xx alpha;
-      entry.flag   = hash_flag;
-      entry.depth  = 0;
-      entry.ttmove = best_move;
-    }
   }
 }
 
