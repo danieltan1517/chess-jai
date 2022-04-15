@@ -2341,12 +2341,22 @@ fuzzing_is_legal :: () {
   
   count := 0;
 
-  count = fuzzer(*chess);
+  /*count = fuzzer(*chess);
   print("Total Moves: %\n", count);
 
   chess.turn ^= 1;
 
   count = fuzzer(*chess);
+  print("Total Moves: %\n", count);*/
+
+  /*chess_fen(*chess, "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - -");
+  count = fuzzer(*chess);
+  assert(count == 14, "fail. total moves: %, expected: %\n", count, 14);
+  print("Total Moves: %\n", count);*/
+
+  chess_fen(*chess, "n1n5/PPPk4/8/8/8/8/4Kppp/5N1N b - - 0 1");
+  count = fuzzer(*chess);
+  assert(count == 24, "fail. total moves: %, expected: %\n", count, 14);
   print("Total Moves: %\n", count);
 
   fuzzer :: (chess: *Chess) -> int {
