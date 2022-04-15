@@ -959,7 +959,7 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
     case Piece.W_PAWN;
       #if turn == Turn.BLACK return false;
       adv := pawn_advance(from_bit, turn) & ~occupied;
-      adv2 := pawn_advance(adv, turn) & ~occupied & cast(u64)rank_3;
+      adv2 := pawn_advance(adv & cast(u64)rank_3, turn) & ~occupied;
       cap  := pawn_captures(from_bit, turn) & (occupied|chess.en_passant) & ~pieces;
       moves = adv|adv2|cap;
       if from_bit & cast(u64)(rank_1|rank_8)
@@ -1020,7 +1020,7 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
     case Piece.B_PAWN;
       #if turn == Turn.WHITE return false;
       adv := pawn_advance(from_bit, turn) & ~occupied;
-      adv2 := pawn_advance(adv, turn) & ~occupied & cast(u64)rank_6;
+      adv2 := pawn_advance(adv & cast(u64)rank_6, turn) & ~occupied;
       cap  := pawn_captures(from_bit, turn) & (occupied|chess.en_passant) & ~pieces;
       moves = adv|adv2|cap;
       if from_bit & cast(u64)(rank_1|rank_8)
@@ -2332,6 +2332,43 @@ print_chess :: (chess: *Chess) {
     print("\n");
   }
 }
+
+fuzzing_is_legal :: () {
+  init_global_bitboards();
+  chess: Chess;
+  chess_startpos(*chess);
+
+  
+  count := 0;
+
+  count = fuzzer(*chess);
+  print("Total Moves: %\n", count);
+
+  chess.turn ^= 1;
+
+  count = fuzzer(*chess);
+  print("Total Moves: %\n", count);
+
+  fuzzer :: (chess: *Chess) -> int {
+    count := 0;
+    for flags: Move16.Quiet .. Move16.Queen_Promotion_Capture {
+      for from: 0..63 {
+        for to: 0..63 {
+          move := to_move16(from, to, flags);
+ 
+          if is_legal(chess, move) {
+ 
+            print_move(move);
+            count += 1;
+ 
+          } 
+        }
+      }
+    }
+    return count;
+  }
+}
+
 
 test_is_legal :: () {
   init_global_bitboards();
