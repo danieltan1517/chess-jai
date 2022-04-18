@@ -186,7 +186,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
 
     // null move pruning. check for zugzwang before searching.
     #if null_flag == true then {
-      if depth > 3 && eval >= beta-512 then {
+      if depth > 3 && eval >= beta then {
         R := 4 + depth/3 + min((eval-beta) / 256, 3);
         ep := make_null_move(chess);
         score := -negamax(chess, depth-R-1, false, false, false, -beta, -beta + 1, fifty);
@@ -1209,7 +1209,10 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
     }
 
     piece := cast(int) piece_at(chess, from);
-    score = __history_moves[piece][to] + (<<heap.counter)[piece][to] + (<<heap.follow1)[piece][to] + (<<heap.follow2)[piece][to];
+    score = __history_moves[piece][to] 
+         + (<<heap.counter)[piece][to] 
+         + (<<heap.follow1)[piece][to] 
+         + ((<<heap.follow2)[piece][to] * 3) / 4;
   }
 
   norm :: (p: Piece) -> Piece #expand {
