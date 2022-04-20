@@ -152,8 +152,6 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
   if ttmove == 0 && tthit then
     ttmove = ttentry.ttmove;
 
-
-
   defer {
     memset(*pv_table[ply+1], 0, size_of(PV_Line));
     __killer_moves[ply+1][1] = 0;
@@ -355,9 +353,8 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
       }
 
       // search the move again that has failed to be proved to be bad with normal alpha beta score bounds
-      if pv_node && eval > alpha then {
+      if pv_node && eval > alpha then 
         eval = -negamax(chess, depth+ext-1, null_flag, single_ext, cut, -beta, -alpha, next_fifty);
-      } 
     }
 
     unmake_move(chess, move, cap, castling);
@@ -374,14 +371,16 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
 
     if eval >= beta then {
       hash_flag = TFLAGS.BETA;
-      alpha = beta;
       // non-captures == Quiet|Pawn Push Moves
       if flags <= Move16.Double_Pawn_Push {
         update_quiet(chess, move, depth, quiet_moves, num_quiets, cap_moves, num_captures);
       } 
-      break;
+      #if single_ext == true {
+        tt_store(chess.hash, beta, TFLAGS.BETA, depth, move);
+      }
+      return beta;
     } 
-
+    
     moves_searched += 1;
   }
 
@@ -398,11 +397,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
     update_tactics(chess, bmove, depth, cap_moves, num_captures, quiet_moves, num_quiets);
   }
 
-  #if single_ext == false {
-    if ply != chess.exply then {
-      tt_store(chess.hash, alpha, hash_flag, depth, bmove);
-    }
-  } else {
+  #if single_ext == true {
     tt_store(chess.hash, alpha, hash_flag, depth, bmove);
   }
   return alpha;
