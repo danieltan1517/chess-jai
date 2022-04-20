@@ -227,7 +227,6 @@ make_move :: (chess: *Chess, move: Move16) -> captured: Piece, Castling, hash: u
   chess.en_passant = 0;
   from := cast(u64) (1 << sq);
   to   := cast(u64) (1 << to_sq);
-  assert(to != chess.w_king && to != chess.b_king);
   castling := chess.castling;
   chess.occupied ^= from;
   chess.occupied |= to;
@@ -625,28 +624,33 @@ do_en_passant_moves :: (chess: *Chess, pawn: u64, en_passant: u64, $turn: Turn, 
     return;
   
   ret : u64 = 0;
-  occupied := chess.occupied;
+  occupied := chess.occupied & ~victim;
   king := get_king(chess, turn) & ep_rank;
+  ksq := bit_scan_forward(king);
   queen_rook := get_queen(chess, opp) | get_rook(chess, opp) & ep_rank;
-  for :bitloop pawn_bitboard, pawn_sq: pawn {
+
+  while pawn {
+    pawn_sq := bit_scan_forward(pawn);
+    pawn_bitboard := cast(u64) (1 << pawn_sq);
     if king == 0 || queen_rook == 0 {
       // do enpassant move.
       add_move(chess, move_gen, pawn_sq, ep_sq, Move16.Ep_Capture, in_check=in_check);
     } else {
-      ksq := bit_scan_forward(king);
-      for :bitloop _, sq: queen_rook {
+      while queen_rook {
+        sq := bit_scan_forward(queen_rook);
         between := between_squares(sq, ksq);
-        erase_both := occupied & ~(victim|pawn_bitboard);
-        if (between & erase_both) == 0 {
-          break pawn_bitboard;
-        }
+        erase_both := occupied & ~pawn_bitboard;
+        if (between & erase_both) == 0 
+          return;
+        queen_rook = popbit(queen_rook);
       }
 
       // do enpassant move.
       add_move(chess, move_gen, pawn_sq, ep_sq, Move16.Ep_Capture, in_check=in_check);
     }
-  }
 
+    pawn = popbit(pawn);
+  }
 
   EP_RANK :: ($turn: Turn) -> u64 #expand {
     #if turn == Turn.WHITE
@@ -1168,7 +1172,7 @@ generate_check_captures :: (unsafe: u64, check: u64, chess: *Chess, $turn: Turn,
   check_sq := bit_scan_forward(check);
   // TODO: en passant capture!
   if pawn_advance(en_passant, opp) == check {
-    do_en_passant_moves(chess, pawn, en_passant, turn, move_gen, in_check=true);
+    do_en_passant_moves(chess, pawn, en_passant, turn, move_gen, check, in_check=true);
   }
 
   queen_rook := rook_moves(check_sq, occupied) & (queen|rook);
@@ -2447,6 +2451,10 @@ test_is_legal :: () {
   chess_fen(*chess, "rnbqkbnr/pppp1ppp/4p3/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1");
   assert(!is_legal(*chess, to_move16(xx serialized_bb.e6, xx serialized_bb.e4, Move16.Double_Pawn_Push)));
   assert(!is_legal(*chess, to_move16(xx serialized_bb.e6, xx serialized_bb.e4, Move16.Quiet)));
+
+  chess_fen(*chess, "r1b1kb1r/pq3ppp/2p5/3p4/4N3/6P1/PP3PBP/R1BQ1RK1 b kq - 0 12");
+  assert(is_legal(*chess, to_move16(xx serialized_bb.d5, xx serialized_bb.e4, Move16.Capture)));
+
 
   print("is_legal :: () test cases passed. \n");
 }

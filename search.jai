@@ -349,12 +349,8 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
         R += cast(int)(!pv_node);
         R += improving^1;
         R -= ext*2;
-
-        #if null_flag == false || cut == false || single_ext == false
-          R += depth/4;  // needed to prevent search explosion.
-
         if move_score > INF-10 then 
-          R -= depth/4;
+          R -= depth/2;
         else 
           R -= move_score / 20_480;
         R = max(0, R);
@@ -469,9 +465,9 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
         p := piece_at(chess, from);
         to := get_move16_to(prev_move);
         incr_history(*__history_moves[p][to], -incr);
-        incr_history(*__counter_history[prev1][to1][p][to], -incr);
+        incr_history(*__counter_history[prev1][to1][p][to], -incr*2);
         incr_history(*__counter_history[prev2][to2][p][to], -incr);
-        incr_history(*__counter_history[prev4][to4][p][to], -incr);
+        incr_history(*__counter_history[prev4][to4][p][to], -incr/2);
       }
     }
 
@@ -488,9 +484,9 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
     p := piece_at(chess, get_move16_from(move));
     to := get_move16_to(move);
     incr_history(*__history_moves[p][to], incr);
-    incr_history(*__counter_history[prev1][to1][p][to], incr);
+    incr_history(*__counter_history[prev1][to1][p][to], incr*2);
     incr_history(*__counter_history[prev2][to2][p][to], incr);
-    incr_history(*__counter_history[prev4][to4][p][to], incr);
+    incr_history(*__counter_history[prev4][to4][p][to], incr/2);
 
     if move != __killer_moves[ply][0] then {
       __killer_moves[ply][1] = __killer_moves[ply][0];
@@ -1210,9 +1206,9 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
 
     piece := cast(int) piece_at(chess, from);
     score = __history_moves[piece][to] 
-         + (<<heap.counter)[piece][to] 
+         + ((<<heap.counter)[piece][to] * 2)
          + (<<heap.follow1)[piece][to] 
-         + ((<<heap.follow2)[piece][to] * 3) / 4;
+         + ((<<heap.follow2)[piece][to] / 2);
   }
 
   norm :: (p: Piece) -> Piece #expand {
@@ -1578,3 +1574,6 @@ get_countermove_history :: (chess: *ChessGame, num: int) -> *[13][64]s32 {
   prev, to := get_prev_move(chess, 1);
   return *__counter_history[prev][to];
 }
+
+
+
