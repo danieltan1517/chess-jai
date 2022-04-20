@@ -189,7 +189,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
 
     // null move pruning. check for zugzwang before searching.
     #if null_flag == true then {
-      if depth > 3 && eval >= beta then {
+      if depth > 3 && eval >= beta-256 then {
         R := 4 + depth/3 + min((eval-beta) / 256, 3);
         ep := make_null_move(chess);
         score := -negamax(chess, depth-R-1, false, false, false, -beta, -beta + 1, fifty);
@@ -283,10 +283,6 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
         continue;
       else if flags <= Move16.Double_Pawn_Push && see(chess,move) < -90*depth*depth then
         continue;
-
-      /*if flags <= Move16.Double_Pawn_Push && move_score < -40_820*depth then {
-        //break;
-      }*/
     }
 
     ext := 0;
@@ -338,8 +334,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
     if moves_searched == 0 {
       eval = -negamax(chess, depth+ext-1, null_flag, single_ext, cut, -beta, -alpha, next_fifty);
     } else {
-      check_move := in_check(chess);
-      if check_move {
+      if in_check(chess) {
         // do not reduce depth on check.
         eval = -negamax(chess, depth, null_flag, single_ext, cut, -alpha-1, -alpha, next_fifty);
       } else if flags > Move16.Double_Pawn_Push {
@@ -352,13 +347,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
         R := LateMoveReduction[min(depth,63)][min(moves_searched,63)];
         R -= cast(int)(pv_node);
         R -= improving;
-        /*R += improving^1;
-        R -= ext*2;
-        if move_score > INF-10 then 
-          R -= depth/2;
-        else 
-          R -= move_score / 20_480;
-        R = max(0, R);*/
+        R = max(0, R);
         eval = -negamax(chess, depth+ext-R-1, null_flag, single_ext, cut, -alpha-1, -alpha, next_fifty);
       } else {
         // do normal search.
