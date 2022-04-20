@@ -134,11 +134,6 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
   }
 
   tt_prune(tthit, *ttentry, ply, pv_node, alpha, beta, depth);
-  ttmove  := Move16.Quiet;
-  if pv_table[ply][0] then
-    ttmove = pv_table[ply][0];
-  else if tthit then
-    ttmove = ttentry.ttmove;
 
   if depth <= 0 then
     return quiescene(chess, alpha, beta, fifty);
@@ -150,6 +145,15 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
   if !pv_node && status == ChessFlags.Threefold_Repetition
     return 0+ply;
 
+  ttmove  := pv_table[ply][0];
+  if !is_legal(chess, ttmove) then
+    ttmove = 0;
+
+  if ttmove == 0 && tthit then
+    ttmove = ttentry.ttmove;
+
+
+
   defer {
     memset(*pv_table[ply+1], 0, size_of(PV_Line));
     __killer_moves[ply+1][1] = 0;
@@ -157,9 +161,8 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
   }
 
   // internal iterative deepening.
-  if pv_node && depth > 4 && ttmove == 0 {
-    depth -= 3;
-  }
+  if pv_node && depth > 8 && ttmove == 0 then
+    depth -= 1;
 
   // NOTE: we make eval really high,
   // so we will look at checks much more
@@ -173,12 +176,12 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
 
     // reverse futility pruning. stockfish has margin at 214*depth
     margin := 175 *(depth-improving);
-    if depth < 14 && (eval-margin) >= beta then {
+    if depth < 8 && (eval-margin) >= beta then {
       return eval;
     }
 
     // razoring.
-    if depth <= 9 && eval + (200*depth) <= alpha {
+    if depth <= 6 && eval + (200*depth) <= alpha {
       score := quiescene(chess, alpha, beta, fifty);
       if score <= alpha then
         return score;
@@ -276,13 +279,14 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
       d := min(63, depth);
       if flags <= Move16.Double_Pawn_Push && moves_searched > LateMovePruning[d][improving] then
         break;
-      if flags <= Move16.Double_Pawn_Push && move_score < -40_820*depth then {
-        break;
-      }
       if flags == Move16.Capture && PVALUE[att] > PVALUE[vic] && see(chess,move) < -250*depth  then
         continue;
       else if flags <= Move16.Double_Pawn_Push && see(chess,move) < -90*depth*depth then
         continue;
+
+      /*if flags <= Move16.Double_Pawn_Push && move_score < -40_820*depth then {
+        //break;
+      }*/
     }
 
     ext := 0;
@@ -346,14 +350,15 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
       } else if flags <= Move16.Double_Pawn_Push {
         // Late Move Reduction when not in check and not giving check.
         R := LateMoveReduction[min(depth,63)][min(moves_searched,63)];
-        R += cast(int)(!pv_node);
-        R += improving^1;
+        R -= cast(int)(pv_node);
+        R -= improving;
+        /*R += improving^1;
         R -= ext*2;
         if move_score > INF-10 then 
           R -= depth/2;
         else 
           R -= move_score / 20_480;
-        R = max(0, R);
+        R = max(0, R);*/
         eval = -negamax(chess, depth+ext-R-1, null_flag, single_ext, cut, -alpha-1, -alpha, next_fifty);
       } else {
         // do normal search.
