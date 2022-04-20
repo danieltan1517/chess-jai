@@ -133,7 +133,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
     tthit, ttentry = tt_probe(chess.hash, alpha, beta, depth);
   }
 
-  tt_prune(tthit, *ttentry, ply, pv_node, alpha, beta, depth);
+  tt_prune(tthit, ttentry, ply, pv_node, alpha, beta, depth);
 
   if depth <= 0 then
     return quiescene(chess, alpha, beta, fifty);
@@ -173,13 +173,13 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
     improving := get_improving(chess);
 
     // reverse futility pruning. stockfish has margin at 214*depth
-    margin := 175 *(depth-improving);
-    if depth < 8 && (eval-margin) >= beta then {
+    margin := 125 *(depth-improving);
+    if depth < 11 && (eval-margin) >= beta then {
       return eval;
     }
 
     // razoring.
-    if depth <= 6 && eval + (200*depth) <= alpha {
+    if depth <= 7 && eval + (200*depth) <= alpha {
       score := quiescene(chess, alpha, beta, fifty);
       if score <= alpha then
         return score;
@@ -345,7 +345,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
         R := LateMoveReduction[min(depth,63)][min(moves_searched,63)];
         R -= cast(int)(pv_node);
         R -= improving;
-        R -= move_score / 40_000;
+        R -= move_score / 45_000;
         R = max(0, R);
         eval = -negamax(chess, depth+ext-R-1, null_flag, single_ext, cut, -alpha-1, -alpha, next_fifty);
       } else {
@@ -597,7 +597,7 @@ tt_probe :: (hash: u64, alpha: int, beta: int, depth: int) -> bool, TTData {
   return false, entry.data;
 }
 
-tt_prune :: (tthit: bool, ttentry: *TTData, ply: int, pv_node: bool, alpha: int, beta: int, depth: int) #expand {
+tt_prune :: (tthit: bool, ttentry: TTData, ply: int, pv_node: bool, alpha: int, beta: int, depth: int) #expand {
   if tthit then {
     if !pv_node && ply>0 && ttentry.depth >= depth {
       score := ttentry.score;
@@ -778,7 +778,7 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
   ply := chess.ply;
   pv_node := alpha != beta-1;
   tthit, ttentry := tt_probe(chess.hash, alpha, beta, 0);
-  tt_prune(tthit, *ttentry, ply, pv_node, alpha, beta, 0);
+  tt_prune(tthit, ttentry, ply, pv_node, alpha, beta, 0);
   best_move := Move16.Quiet;
 
   ttmove  := Move16.Quiet;
