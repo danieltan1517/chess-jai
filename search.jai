@@ -272,7 +272,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
     vic := piece_at(chess, to);
 
     // piece
-    if chess.depth>4 && ply>0 && moves_searched>0 {
+    if chess.depth>6 && ply>0 && moves_searched>0 {
       // Late Move Pruning. Search the Root Plies Exhuastively
       d := min(63, depth);
       if flags <= Move16.Double_Pawn_Push && moves_searched > LateMovePruning[d][improving] then
@@ -345,6 +345,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
         R := LateMoveReduction[min(depth,63)][min(moves_searched,63)];
         R -= cast(int)(pv_node);
         R -= improving;
+        R -= move_score / 40_000;
         R = max(0, R);
         eval = -negamax(chess, depth+ext-R-1, null_flag, single_ext, cut, -alpha-1, -alpha, next_fifty);
       } else {
