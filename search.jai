@@ -45,16 +45,8 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
       continue;
     }
 
-    if score < -INF+20 {
-      alpha = -INF;
-      beta  = score+1;
-    } else if score > INF-20 {
-      alpha = score-1;
-      beta  = INF;
-    } else {
-      alpha = max(score - delta, -INF);
-      beta  = min(score + delta, INF);
-    }
+    alpha = max(score - delta, -INF);
+    beta  = min(score + delta, INF);
 
     best_move = pv_table[0][0];
     print_stats(cur_depth);
