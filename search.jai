@@ -194,7 +194,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
       }
     }
 
-    if depth > 6 && abs(beta) < 20_000 then {
+    if depth > 5 && abs(beta) < 20_000 then {
       chess.probcut += 1;
       defer chess.probcut -= 1;
       prob_beta := beta + 155 - 46 * improving;
@@ -334,11 +334,11 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
         R := LateMoveReduction[min(depth,63)][min(moves_searched,63)];
         R -= cast(int)(pv_node);
         R -= improving;
-        R -= chess.probcut*2;
+        R += chess.probcut*2;
         if R > 0x7FFF_FFF-2 then
           R -= 6;
         else
-          R -= move_score / 40_480;
+          R -= move_score / 30_480;
         R = max(0, R);
         eval = -negamax(chess, depth+ext-R-1, null_flag, single_ext, -alpha-1, -alpha, next_fifty);
       } else {
@@ -518,7 +518,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
             heap_add(*moves, ttmove, 0x7FFF_FFFF);
             moves.pv = ttmove;
           } 
-          if is_legal(chess, hash_move) then {
+          if ttmove != hash_move && is_legal(chess, hash_move) then {
             heap_add(*moves, hash_move, 0x7FFF_FFFF-1);
             moves.hashmove = hash_move;
           }
@@ -568,7 +568,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
             heap_add(*moves, ttmove, 0x7FFF_FFFF);
             moves.pv = ttmove;
           }
-          if is_legal(chess, hash_move) then {
+          if ttmove != hash_move && is_legal(chess, hash_move) then {
             heap_add(*moves, hash_move, 0x7FFF_FFFF-1);
             moves.pv = hash_move;
           }
@@ -601,7 +601,8 @@ tt_probe :: (hash: u64, alpha: int, beta: int, depth: int) -> bool, TTData {
 tt_prune :: (tthit: bool, ttentry: TTData, ply: int, pv_node: bool, alpha: int, beta: int, depth: int) #expand {
   if tthit then {
     if !pv_node && ply>0 && ttentry.depth >= depth {
-      score := ttentry.score;
+      score := ttscore(ttentry.score);
+
       flag  := ttentry.flag;
       if flag == TFLAGS.EXACT then
         `return score;
@@ -610,6 +611,14 @@ tt_prune :: (tthit: bool, ttentry: TTData, ply: int, pv_node: bool, alpha: int, 
       if flag == TFLAGS.BETA && score >= beta then
         `return beta;
     }
+  }
+
+  ttscore :: (score: int) -> int #expand {
+    if score > INF-20  then
+      return score - ply;
+    else if score < -INF+20 then
+      return score + ply;
+    return score;
   }
 }
 
@@ -880,7 +889,7 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
             heap_add(*moves, ttmove, 0x7FFF_FFFF);
             moves.pv = ttmove;
           }
-          if is_legal(chess, hashmove) then {
+          if hashmove != ttmove && is_legal(chess, hashmove) then {
             heap_add(*moves, hashmove, 0x7FFF_FFFF-1);
             moves.pv = hashmove;
           }
