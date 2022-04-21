@@ -4,7 +4,7 @@
 search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
   // this is basically a fancy wrapper around negamax, negamax does all the work, this just sets everything up.
   time_begin = get_time();
-  clear_hash_table();
+  //clear_hash_table();
   memset(pv_table.data, 0, size_of(type_of(pv_table)));
   memset(__cap_history.data, 0, size_of(type_of(__cap_history)));
   memset(__history_moves.data, 0, size_of(type_of(__history_moves)));
@@ -94,14 +94,6 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
 
 }
 
-#no_reset LateMovePruning: [64][2] int;
-#run {
-  for i: 0..63 {
-    LateMovePruning[i][0] = 5 + (i*i) / 2;
-    LateMovePruning[i][1] = 5 + (i*i);
-  }
-}
-
 negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, $cut: bool, alpha: int, beta: int, fifty: int) -> int {
   ply := chess.ply;
   pv_node := alpha != beta-1;
@@ -159,7 +151,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
   }
 
   // internal iterative deepening.
-  if pv_node && depth > 8 && ttmove == 0 then
+  if pv_node && depth > 8 && ttmove == 0 then 
     depth -= 1;
 
   // NOTE: we make eval really high,
@@ -240,6 +232,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
   moves_searched := 0;
 
   improving := get_improving(chess);
+  late_move_prune := 5 + ((depth*depth) / (2-improving));
 
   move_count := 0;
   bmove := Move16.Quiet;
@@ -274,8 +267,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
     // piece
     if chess.depth>6 && ply>0 && moves_searched>0 {
       // Late Move Pruning. Search the Root Plies Exhuastively
-      d := min(63, depth);
-      if flags <= Move16.Double_Pawn_Push && moves_searched > LateMovePruning[d][improving] then
+      if flags <= Move16.Double_Pawn_Push && moves_searched > late_move_prune then
         break;
       if flags == Move16.Capture && PVALUE[att] > PVALUE[vic] && see(chess,move) < -250*depth  then
         continue;
