@@ -335,10 +335,10 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
         R -= cast(int)(pv_node);
         R -= improving;
         R += chess.probcut*2;
-        if R > 0x7FFF_FFF-2 then
+        /*if R > 0x7FFF_FFF-2 then
           R -= 6;
         else
-          R -= move_score / 30_480;
+          R -= move_score / 30_480;*/
         R = max(0, R);
         eval = -negamax(chess, depth+ext-R-1, null_flag, single_ext, -alpha-1, -alpha, next_fifty);
       } else {
