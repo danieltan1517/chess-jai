@@ -231,6 +231,9 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
   improving := get_improving(chess);
   late_move_prune := 3 + ((depth*depth) / (2-improving));
 
+  tt_capture: bool = false;
+  tt_quiet: bool   = false;
+
   move_count := 0;
   bmove := Move16.Quiet;
   pto := prev_to(chess);
@@ -280,6 +283,8 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
         if to == pto && flags >= Move16.Capture && move_score > 1_200*depth {
           // recapture extension.
           ext = 1;
+          tt_capture = true;
+          tt_quiet   = false;
         } else {
           // singular extension:
           // if one move is better than all the rest, then we consider this singular
@@ -292,6 +297,8 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
           chess.exply = INF;
           if score < singular_beta then {
             ext = 1;
+            tt_capture = flags > Move16.Double_Pawn_Push;
+            tt_quiet   = flags <= Move16.Double_Pawn_Push;
           } else if singular_beta >= beta then {
             return singular_beta;
           } else if ttentry.score >= beta then {
@@ -332,13 +339,25 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
       } else if flags <= Move16.Double_Pawn_Push {
         // Late Move Reduction when not in check and not giving check.
         R := LateMoveReduction[min(depth,63)][min(moves_searched,63)];
-        R -= cast(int)(pv_node);
         R -= improving;
         R += chess.probcut*2;
-        /*if R > 0x7FFF_FFF-2 then
+        if pv_node then {
+          R -= 15 / (3 + depth);
+          R -= 1;
+        }
+
+        // increase reduction if capture.
+        if tt_capture then
+          R += 1;
+
+        // decrease reduction if quiet.
+        if tt_quiet then 
+          R -= 1;
+
+        if R > 0x7FFF_FFF-2 then
           R -= 6;
         else
-          R -= move_score / 30_480;*/
+          R -= move_score / 48_480;
         R = max(0, R);
         eval = -negamax(chess, depth+ext-R-1, null_flag, single_ext, -alpha-1, -alpha, next_fifty);
       } else {
