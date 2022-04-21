@@ -70,6 +70,7 @@ The chess GUI uses the glfw3 and gl libraries.
 * 16-bit Transposition Table Hash Entries
 * 3-fold repetition & Fifty-move Rule
 * Zobrist Hashing w/ Incremental Update
+* Transposition Table Probing in Non PV Nodes
 * Prefetch Transposition Table Entries
 * Aging
 
