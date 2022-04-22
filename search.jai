@@ -316,7 +316,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
     }
     cap, castling := make_move(chess, move);
     eval := 0;
-    if moves_searched == 0 {
+    if ext==1 || moves_searched == 0 {
       eval = -negamax(chess, depth+ext-1, null_flag, single_ext, -beta, -alpha, next_fifty);
     } else {
       if in_check(chess) {
@@ -374,7 +374,6 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
     } 
 
     if eval >= beta then {
-      hash_flag = TFLAGS.BETA;
       // non-captures == Quiet|Pawn Push Moves
       if flags <= Move16.Double_Pawn_Push {
         update_quiet(chess, move, depth, quiet_moves, num_quiets, cap_moves, num_captures);
@@ -599,7 +598,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
 
 tt_probe :: (hash: u64, alpha: int, beta: int, depth: int) -> bool, TTData {
   key  := hash % TSIZE;
-  prefetch(*ttable.entries[key], Prefetch_Hint.T0);
+  //prefetch(*ttable.entries[key], Prefetch_Hint.T0);
   entry := ttable.entries[key];
   if entry.hash == hash then {
     ttable.entries[key].age = search_age;
@@ -632,6 +631,7 @@ tt_prune :: (tthit: bool, ttentry: TTData, ply: int, pv_node: bool, alpha: int, 
 
 tt_store :: (hash: u64, score: int, flag: TFLAGS, depth: int, ttmove: Move16) {
   key  := hash % TSIZE;
+  prefetch(*ttable.entries[key], Prefetch_Hint.T0);
   entry: ttable.TTEntry;
   entry.hash = hash;
   entry.score = cast(s16) score;
@@ -640,7 +640,6 @@ tt_store :: (hash: u64, score: int, flag: TFLAGS, depth: int, ttmove: Move16) {
   entry.ttmove = ttmove;
   entry.age = search_age;
 
-  prefetch(*ttable.entries[key], Prefetch_Hint.T0);
   ttentry := *ttable.entries[key];
   if depth >= ttentry.depth || ttentry.age != search_age then 
     memcpy(ttentry, *entry, size_of(ttable.TTEntry));
@@ -1446,6 +1445,8 @@ make_move :: (c: *ChessGame, move: Move16) -> Piece, Castling {
   make_move_nnue(c, move);
 
   cap, castling, hash := make_move(*c.chess, move);
+  key := hash % TSIZE;
+  prefetch(*ttable.entries[key], Prefetch_Hint.T0);
   array_add(*c.moves, move32);
   array_add(*c.rtable, hash);
 
@@ -1576,6 +1577,8 @@ make_null_move :: (c: *ChessGame) -> ep: u64 {
   memcpy(*c.nnue[c.ply+1].accumulator, *c.nnue[c.ply].accumulator, size_of(Accumulator));
   c.ply += 1;
   c.maxply = max(c.maxply, c.ply);
+  key := hash % TSIZE;
+  prefetch(*ttable.entries[key], Prefetch_Hint.T0);
   return ep;
 }
 
