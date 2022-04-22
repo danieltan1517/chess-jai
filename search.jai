@@ -535,10 +535,16 @@ negamax :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int) ->
           if is_legal(chess, killers[0]) {
             heap_add(*moves, killers[0], 0x7FFF_FFFF);
             moves.killer1 = killers[0];
-          } 
+            moves.k1_legal = true;
+          } else {
+            moves.k1_legal = false;
+          }
           if is_legal(chess, killers[1]) {
             heap_add(*moves, killers[1], 0x7FFF_FFFF-1);
             moves.killer2 = killers[1];
+            moves.k2_legal = true;
+          } else {
+            moves.k2_legal = false;
           }
         case .QUIETS;
           stage = .END;
@@ -1082,6 +1088,8 @@ Negamax :: struct(N: int) {
   counter : *[13][64] s32;
   follow1 : *[13][64] s32;
   follow2 : *[13][64] s32;
+  k1_legal := false;
+  k2_legal := false;
   count   : s16;
   items   : [N] Move16;
   score   : [N] s32;
@@ -1205,8 +1213,10 @@ add_move :: (chess: *Chess, heap: *Negamax, from: int, to: int, $flags: Move16, 
 
   #if flags == Quiet || flags == Double_Pawn_Push {
     if move == heap.killer1 {
+      assert(heap.k1_legal);
       return;
     } else if move == heap.killer2 {
+      assert(heap.k2_legal);
       return;
     }
 
