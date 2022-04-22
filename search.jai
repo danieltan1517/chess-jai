@@ -24,9 +24,10 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
     }
     reset_temporary_storage();
     chess.ply = 0;
+    chess.node_state = NodeState.NULL | NodeState.SSE;
     chess.maxply = 0; 
     chess.depth = cur_depth;
-    score = negamax(chess, cur_depth, true, true, alpha, beta, fifty);
+    score = negamax(chess, cur_depth, alpha, beta, fifty);
     time_taken := get_time() - time_begin;
     if stop_signal_triggered() then 
       break;
@@ -86,7 +87,7 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
 
 }
 
-negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, alpha: int, beta: int, fifty: int) -> int {
+negamax :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int) -> int {
   ply := chess.ply;
   pv_node := alpha != beta-1;
   if (__nodes_searched & 2048) && stdin_stop_signal()
@@ -105,11 +106,11 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
   // esp. during multi-threading. need to copy out the ttentry.
 
   // tt probe.
-  tthit: bool; 
+  tthit: bool = false; 
   ttentry: TTData;
 
   // need to account for singular search extensions while probing.
-  #if single_ext == false {
+  if chess.node_state & NodeState.SSE {
     if ply != chess.exply then
       tthit, ttentry = tt_probe(chess.hash, alpha, beta, depth);
   } else {
@@ -164,31 +165,34 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
         return score;
     }
 
-    // null move pruning. check for zugzwang before searching.
-    #if null_flag == true then {
-      if depth > 3 && eval >= beta-256 then {
-        R := 4 + depth/3 + min((eval-beta) / 256, 3);
-        ep := make_null_move(chess);
-        score := -negamax(chess, depth-R-1, false, false, -beta, -beta + 1, fifty);
-        unmake_null_move(chess, ep);
-     
-        if score >= beta then {
-          // null move w/ verification at higher depths.
-          if depth>12 || zugzwang(chess) then {
-            score = negamax(chess, depth-R-1, false, false, beta-1, beta, fifty);
-            if score >= beta then 
-              return beta;
-          } else {
-            return beta;
-          }
-        }
+    // null move pruning w/ verification at higher depths.
+    if chess.node_state & NodeState.NULL && depth > 3 && eval >= beta-512 then {
+      R := 4 + depth/3 + min((eval-beta) / 256, 3);
+      ep := make_null_move(chess);
+      node_state := chess.node_state;
+      chess.node_state = 0;
+      assert(chess.node_state == 0, "Null Move Pruning Wrong.");
+      score := -negamax(chess, depth-R-1, -beta, -beta + 1, fifty);
+      unmake_null_move(chess, ep);
+      chess.node_state = node_state;
+
+      // verification at higher depths.
+      if depth>12 || zugzwang(chess) then {
+        node_state := chess.node_state;
+        chess.node_state = 0;
+        score = negamax(chess, depth-R-1, beta-1, beta, fifty);
+        chess.node_state = node_state;
       }
+    
+      if score >= beta then
+        return beta;
     }
 
-    if depth > 5 && abs(beta) < 20_000 then {
+    // prob cut.
+    prob_beta := beta + 125 - 46 * improving;
+    if depth > 5 && abs(beta) < 20_000 && !(tthit && ttentry.depth >= depth-3 && ttentry.score != 0 && ttentry.score < prob_beta) then {
       chess.probcut += 1;
       defer chess.probcut -= 1;
-      prob_beta := beta + 155 - 46 * improving;
       ep := chess.en_passant;
       for :probcut move, move_score: chess {
         flags, from, to := decode_move16(move);
@@ -198,13 +202,14 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
         cap, castling := make_move(chess, move);
         score := -quiescene(chess, -prob_beta, -prob_beta+1, 0);
         if score >= prob_beta then
-          score = -negamax(chess, depth-4, null_flag, false, -prob_beta, -prob_beta + 1, 0);
+          score = -negamax(chess, depth-4, -prob_beta, -prob_beta + 1, 0);
     
         // unmake move.
         unmake_move(chess, move, cap, castling);
         chess.en_passant = ep;
     
         if score >= prob_beta then {
+          tt_store(chess.hash, prob_beta, TFLAGS.BETA, depth-4, move);
           return score;
         }
       }
@@ -243,10 +248,8 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
 
   for :pv move, move_score : chess {
     move_count += 1;
-    #if single_ext == false {
-      if ply == chess.exply && move == chess.excluded_move then {
-        continue;
-      }
+    if chess.node_state & NodeState.SSE && ply == chess.exply && move == chess.excluded_move then {
+      continue;
     }
 
     flags, from, to := decode_move16(move);
@@ -267,34 +270,34 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
     }
 
     ext := 0;
-    #if single_ext == true {
-      if ply>0 && depth>=7 && ply<chess.depth && move == hash_move && tthit && cast(int)ttentry.depth >= depth-3 
-         && abs(ttentry.score) < 20_000 && ttentry.flag == TFLAGS.ALPHA {
+    if chess.node_state & NodeState.SSE && ply>0 && depth>=7 && ply<chess.depth && move == hash_move && tthit && cast(int)ttentry.depth >= depth-3 
+       && abs(ttentry.score) < 20_000 && ttentry.flag == TFLAGS.ALPHA {
 
-        if to == pto && flags >= Move16.Capture && move_score > 1_200*depth {
-          // recapture extension.
+      if to == pto && flags >= Move16.Capture {
+        // recapture extension.
+        ext = 1;
+        tt_capture = true;
+        tt_quiet   = false;
+      } else {
+        // singular extension:
+        // if one move is better than all the rest, then we consider this singular
+        // "singular" is determined by checking all other moves at a shallow depth on a nullwindow
+        singular_beta := ttentry.score - 3*depth;
+        chess.excluded_move = move;
+        chess.exply = ply;
+        chess.node_state ^= NodeState.SSE;
+        score := negamax(chess, depth/2-1, singular_beta-1, singular_beta, fifty);
+        chess.node_state ^= NodeState.SSE;
+        chess.excluded_move = Move16.Quiet;
+        chess.exply = INF;
+        if score < singular_beta then {
           ext = 1;
-          tt_capture = true;
-          tt_quiet   = false;
-        } else {
-          // singular extension:
-          // if one move is better than all the rest, then we consider this singular
-          // "singular" is determined by checking all other moves at a shallow depth on a nullwindow
-          singular_beta := ttentry.score - 3*depth;
-          chess.excluded_move = move;
-          chess.exply = ply;
-          score := negamax(chess, depth/2-1, null_flag, false, singular_beta-1, singular_beta, fifty);
-          chess.excluded_move = Move16.Quiet;
-          chess.exply = INF;
-          if score < singular_beta then {
-            ext = 1;
-            tt_capture = flags > Move16.Double_Pawn_Push;
-            tt_quiet   = flags <= Move16.Double_Pawn_Push;
-          } else if singular_beta >= beta then {
-            return singular_beta;
-          } else if ttentry.score >= beta then {
-            ext = -2;
-          }
+          tt_capture = flags > Move16.Double_Pawn_Push;
+          tt_quiet   = flags <= Move16.Double_Pawn_Push;
+        } else if singular_beta >= beta then {
+          return singular_beta;
+        } else if ttentry.score >= beta then {
+          ext = -2;
         }
       }
     }
@@ -317,25 +320,22 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
     cap, castling := make_move(chess, move);
     eval := 0;
     if ext==1 || moves_searched == 0 {
-      eval = -negamax(chess, depth+ext-1, null_flag, single_ext, -beta, -alpha, next_fifty);
+      eval = -negamax(chess, depth+ext-1, -beta, -alpha, next_fifty);
     } else {
       if in_check(chess) {
         // do not reduce depth on check.
-        eval = -negamax(chess, depth, null_flag, single_ext, -alpha-1, -alpha, next_fifty);
+        eval = -negamax(chess, depth, -alpha-1, -alpha, next_fifty);
       } else if flags > Move16.Double_Pawn_Push {
         // captures. promotions.
         R := 1 - 4 * move_score / (abs(move_score) + 24576);
         R = max(0, R);
-        eval = -negamax(chess, depth+ext-R-1, null_flag, single_ext, -alpha-1, -alpha, next_fifty);
+        eval = -negamax(chess, depth+ext-R-1, -alpha-1, -alpha, next_fifty);
       } else if flags <= Move16.Double_Pawn_Push {
         // Late Move Reduction when not in check and not giving check.
         R := LateMoveReduction[min(depth,63)][min(moves_searched,63)];
         R -= improving;
         R += chess.probcut*2;
-        if pv_node then {
-          R -= 15 / (3 + depth);
-          R -= 1;
-        }
+        R -= cast(int) pv_node;
 
         // increase reduction if capture.
         if tt_capture then
@@ -344,21 +344,17 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
         // decrease reduction if quiet.
         if tt_quiet then 
           R -= 1;
-
-        if R > 0x7FFF_FFF-2 then
-          R -= 6;
-        else
-          R -= move_score / 48_480;
+        R -= move_score / 15_480;
         R = max(0, R);
-        eval = -negamax(chess, depth+ext-R-1, null_flag, single_ext, -alpha-1, -alpha, next_fifty);
+        eval = -negamax(chess, depth+ext-R-1, -alpha-1, -alpha, next_fifty);
       } else {
         // do normal search.
-        eval = -negamax(chess, depth+ext-1, null_flag, single_ext, -alpha-1, -alpha, next_fifty);
+        eval = -negamax(chess, depth+ext-1, -alpha-1, -alpha, next_fifty);
       }
 
       // search the move again that has failed to be proved to be bad with normal alpha beta score bounds
       if pv_node && eval > alpha then 
-        eval = -negamax(chess, depth+ext-1, null_flag, single_ext, -beta, -alpha, next_fifty);
+        eval = -negamax(chess, depth+ext-1, -beta, -alpha, next_fifty);
     }
 
     unmake_move(chess, move, cap, castling);
@@ -378,9 +374,9 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
       if flags <= Move16.Double_Pawn_Push {
         update_quiet(chess, move, depth, quiet_moves, num_quiets, cap_moves, num_captures);
       } 
-      #if single_ext == true {
+
+      if chess.node_state & NodeState.SSE 
         tt_store(chess.hash, beta, TFLAGS.BETA, depth, move);
-      }
       return beta;
     } 
     
@@ -396,13 +392,12 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
     depth = 100;
   }
 
-  if pv_node && hash_flag == TFLAGS.EXACT && get_move16_flag(bmove) > Move16.Double_Pawn_Push then {
+  if pv_node && hash_flag == TFLAGS.EXACT && get_move16_flag(bmove) > Move16.Double_Pawn_Push then 
     update_tactics(chess, bmove, depth, cap_moves, num_captures, quiet_moves, num_quiets);
-  }
 
-  #if single_ext == true {
+  if chess.node_state & NodeState.SSE 
     tt_store(chess.hash, alpha, hash_flag, depth, bmove);
-  }
+
   return alpha;
 
   update_tactics :: (chess: *ChessGame, move: Move16, depth: int, cap_moves: []Move16, num_captures: int, quiet_moves: []Move16, num_quiets: int) {
@@ -785,7 +780,7 @@ perft_divide :: (chess: *Chess, depth: int) -> int {
 }
 
 INF :: S16_MAX; // Alias
-      
+
 #import "Machine_X64";
 // search capture moves only, we do this to avoid horizon effect
 // see: https://www.chessprogramming.org/Quiescence_Search
@@ -816,7 +811,7 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
     if eval >= beta then {
       return beta;
     }
-  
+
     // delta pruning:
     if can_delta_prune(chess) {
       if eval < (alpha - 975) then {
@@ -838,7 +833,7 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
     type, from, to := decode_move16(move);
 
     // skip bad captures w/ SEE algorithm.
-    if is_bad_capture(move, pos_check) then
+    if pos_check == false && bad_capture(from, to) then
       continue;
 
     cap, flags := make_move(chess, move);
@@ -927,15 +922,11 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
   }
 
   // a bad capture => true, a good capture => false
-  is_bad_capture :: (move: Move16, check: bool) -> bool #expand {
-    if check == true then
-      return false;
-
-    _, from, to := decode_move16(move);
+  bad_capture :: (from: int, to: int) -> bool #expand {
     pfrom := cast(int) piece_at(chess, from);
     pto   := cast(int) piece_at(chess, to);
     if PVALUE[pfrom] > PVALUE[pto] then {
-      return see(chess, move) < 0;
+      return see(chess, `move) < 0;
     }
     return false;
   }
@@ -1387,10 +1378,16 @@ ChessGame :: struct {
   excluded_move: Move16;
   exply: int;
   probcut: s8 = 0;
+  node_state: NodeState;
   moves: [..] Move32;
   rtable: [..] u64;
   eval: [..] s16;
 } 
+
+NodeState :: enum_flags u8 {
+  NULL;
+  SSE;
+}
 
 Move32 :: struct {
   mov16: Move16;
