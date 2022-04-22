@@ -138,7 +138,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
   }
 
   // internal iterative deepening.
-  if pv_node && depth > 8 && ttmove == 0 then 
+  if pv_node && depth > 8 && ttmove == 0 && hash_move == 0 then 
     depth -= 1;
 
   // NOTE: we make eval really high,
