@@ -129,7 +129,7 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
     return 0+ply;
 
   ttmove := pv_table[ply][0];
-  hash_move := ttentry.ttmove;
+  hash_move := ifx tthit then ttentry.ttmove else Move16.Quiet;
 
   defer {
     memset(*pv_table[ply+1], 0, size_of(PV_Line));
