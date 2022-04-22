@@ -91,7 +91,6 @@ negamax :: (chess: *ChessGame, depth: int, $null_flag: bool, $single_ext: bool, 
   pv_node := alpha != beta-1;
   if (__nodes_searched & 2048) && stdin_stop_signal()
     return 0;
-
   // mate distance pruning
   if ply > 0 then {
     alpha = max(alpha,-INF+ply);
@@ -610,18 +609,16 @@ tt_probe :: (hash: u64, alpha: int, beta: int, depth: int) -> bool, TTData {
 }
 
 tt_prune :: (tthit: bool, ttentry: TTData, ply: int, pv_node: bool, alpha: int, beta: int, depth: int) #expand {
-  if tthit then {
-    if !pv_node && ply>0 && ttentry.depth >= depth {
-      score := ttscore(ttentry.score);
+  if tthit && !pv_node && ply>0 && ttentry.depth >= depth {
+    score := ttscore(ttentry.score);
 
-      flag  := ttentry.flag;
-      if flag == TFLAGS.EXACT then
-        `return score;
-      if flag == TFLAGS.ALPHA && score <= alpha then
-        `return alpha;
-      if flag == TFLAGS.BETA && score >= beta then
-        `return beta;
-    }
+    flag  := ttentry.flag;
+    if flag == TFLAGS.EXACT then
+      `return score;
+    if flag == TFLAGS.ALPHA && score <= alpha then
+      `return alpha;
+    if flag == TFLAGS.BETA && score >= beta then
+      `return beta;
   }
 
   ttscore :: (score: int) -> int #expand {
