@@ -344,7 +344,7 @@ negamax :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int) ->
         // decrease reduction if quiet.
         if tt_quiet then 
           R -= 1;
-        R -= move_score / 15_480;
+        R -= move_score / 40_480;
         R = max(0, R);
         eval = -negamax(chess, depth+ext-R-1, -alpha-1, -alpha, next_fifty);
       } else {
