@@ -4,7 +4,7 @@
 search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
   // this is basically a fancy wrapper around negamax, negamax does all the work, this just sets everything up.
   time_begin = get_time();
-  // clear_hash_table();
+  clear_hash_table();
   memset(pv_table.data, 0, size_of(type_of(pv_table)));
   memset(__cap_history.data, 0, size_of(type_of(__cap_history)));
   memset(__history_moves.data, 0, size_of(type_of(__history_moves)));

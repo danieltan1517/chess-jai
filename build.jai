@@ -11,7 +11,13 @@ ai_file_names :: string.["ai_main.jai", "search.jai", "eval.jai", "movegen.jai"]
 #run {
   args_option : enum { debug; release;} = .debug;
   choice : enum { ai_compile; ui_compile;} = .ai_compile;
-  args := compiler_get_command_line_arguments();
+  w := compiler_create_workspace("workspace");
+  if !w {
+    print("Workspace creation failed.\n");
+    return;
+  }
+  target_options := get_build_options(w);
+  args := target_options.compile_time_command_line;
   for arg: args {
     if arg == {
     case "debug";
@@ -41,18 +47,13 @@ ai_file_names :: string.["ai_main.jai", "search.jai", "eval.jai", "movegen.jai"]
 
   if args_option == {
   case .debug;
-    build_debug(exe, file_names, "debug");
+    build_debug(w, exe, file_names);
   case .release;
-    build_release(exe, file_names, "release");
+    build_release(w, exe, file_names);
   }
 }
 
-build_debug :: (executable_name: string, file_names: [] string, workspace_name: string) {
-  w := compiler_create_workspace(workspace_name);
-  if !w {
-    print("Workspace creation failed.\n");
-    return;
-  }
+build_debug :: (w: Workspace, executable_name: string, file_names: [] string) {
   target_options := get_build_options(w);
   target_options.output_executable_name = executable_name;
   target_options.optimization_level = .DEBUG;
@@ -77,12 +78,7 @@ build_debug :: (executable_name: string, file_names: [] string, workspace_name: 
   set_build_options_dc(.{do_output=false});
 }
 
-build_release :: (executable_name: string, file_names: [] string, workspace_name: string) {
-  w := compiler_create_workspace(workspace_name);
-  if !w {
-    print("Workspace creation failed.\n");
-    return;
-  }
+build_release :: (w: Workspace, executable_name: string, file_names: [] string) {
   target_options := get_build_options(w);
   target_options.output_executable_name = executable_name;
   target_options.optimization_level = .RELEASE;
