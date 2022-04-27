@@ -4,7 +4,7 @@
 search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
   // this is basically a fancy wrapper around negamax, negamax does all the work, this just sets everything up.
   time_begin = get_time();
-  clear_hash_table();
+  //clear_hash_table();
   memset(pv_table.data, 0, size_of(type_of(pv_table)));
   memset(__cap_history.data, 0, size_of(type_of(__cap_history)));
   memset(__history_moves.data, 0, size_of(type_of(__history_moves)));
@@ -1445,6 +1445,23 @@ check_for_repetition :: (using c: *ChessGame, fifty: int) -> ChessFlags {
 make_move :: (c: *ChessGame, move: Move16) -> Piece, Castling {
   __nodes_searched += 1;
   flags, from, to := decode_move16(move);
+
+  {
+    bk := bit_scan_forward(c.b_king);
+    wk := bit_scan_forward(c.w_king);
+    if to == bk || to == wk {
+      print("Error. King can be captured.\n");
+      print_chess(c);
+      print_move(move);
+      mov := pop(*c.moves);
+      unmake_move(c, mov.mov16, 0, c.castling);
+      print_chess(c);
+      print_move(mov.mov16);
+      assert(false);
+    }
+  }
+
+
   piece := c.pieces[from];
   move32: Move32;
   move32.mov16 = move;
@@ -1577,6 +1594,7 @@ piece_to :: (mov: Move32) -> int, int #expand {
 
 make_null_move :: (c: *ChessGame) -> ep: u64 {
   __nodes_searched += 1;
+  assert(!in_check(c), "error. null move caused in check.\n");
   ep, hash := make_null_move(*c.chess);
   null_move: Move32 = Move32.{0, 0};
   array_add(*c.moves, null_move);
