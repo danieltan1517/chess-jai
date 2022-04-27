@@ -966,7 +966,11 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
       adv2 := pawn_advance(adv & cast(u64)rank_3, turn) & ~occupied;
       cap  := pawn_captures(from_bit, turn) & (occupied|chess.en_passant) & ~pieces;
       moves = adv|adv2|cap;
+
+      // TODO: handle bad case of pawn quiet moves on rank1/rank8
       if from_bit & cast(u64)(rank_1|rank_8)
+        return false;
+      if (flags == Move16.Quiet || flags == Move16.Capture) && (to_bitboard & cast(u64)(rank_1|rank_8))
         return false;
       if flags == Move16.Double_Pawn_Push && (to_bitboard != adv2 || (from_bit & cast(u64)rank_2) == 0)
         return false;
@@ -1028,6 +1032,8 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
       cap  := pawn_captures(from_bit, turn) & (occupied|chess.en_passant) & ~pieces;
       moves = adv|adv2|cap;
       if from_bit & cast(u64)(rank_1|rank_8)
+        return false;
+      if (flags == Move16.Quiet || flags == Move16.Capture) && (to_bitboard & cast(u64)(rank_1|rank_8))
         return false;
       if flags == Move16.Double_Pawn_Push && (to_bitboard != adv2 || (from_bit & cast(u64)rank_7) == 0)
         return false;
@@ -2307,43 +2313,47 @@ print_chess :: (chess: *Chess) {
       case Piece.NONE;
         print(". ");
       case Piece.W_KING;
-        print("♚ ");
+        print("K ");
       case Piece.W_QUEEN;
-        print("♛ ");
+        print("Q ");
       case Piece.W_ROOK;
-        print("♜ ");
+        print("R ");
       case Piece.W_BISHOP;
-        print("♝ ");
+        print("B ");
       case Piece.W_KNIGHT;
-        print("♞ ");
+        print("N ");
       case Piece.W_PAWN;
-        print("♟︎ ");
+        print("P ");
 
       case Piece.B_KING;
-        print("♔ ");
+        print("k ");
       case Piece.B_QUEEN;
-        print("♕ ");
+        print("q ");
       case Piece.B_ROOK;
-        print("♖ ");
+        print("r ");
       case Piece.B_BISHOP;
-        print("♗ ");
+        print("b ");
       case Piece.B_KNIGHT;
-        print("♘ ");
+        print("n ");
       case Piece.B_PAWN;
-        print("♗ ");
+        print("p ");
       }
     }
     print("\n");
   }
 }
 
+//#run fuzzing_is_legal();
 fuzzing_is_legal :: () {
   init_global_bitboards();
   chess: Chess;
   chess_startpos(*chess);
-
+  chess_fen(*chess, "2r2rk1/p1p2pp1/2p1b2p/3pP3/6P1/5PB1/PP5P/K2q2pR w - - 0 1");
   
   count := 0;
+  count = fuzzer(*chess);
+  assert(count == 0, "fail. total moves: %, expected: %\n", count, 0);
+  print("Total Moves: %\n", count);
 
   /*count = fuzzer(*chess);
   print("Total Moves: %\n", count);
@@ -2368,11 +2378,15 @@ fuzzing_is_legal :: () {
   assert(count == 0, "fail. total moves: %, expected: %\n", count, 14);
   print("Total Moves: %\n", count);*/
 
-  chess_fen(*chess, "2r3Qk/6pp/7N/8/8/6K1/8/8 b - - 0 1");
+  /*chess_fen(*chess, "2r3Qk/6pp/7N/8/8/6K1/8/8 b - - 0 1");
   count = fuzzer(*chess);
   assert(count == 1, "fail. total moves: %, expected: %\n", count, 14);
-  print("Total Moves: %\n", count);
+  print("Total Moves: %\n", count);*/
 
+  /*chess_fen(*chess, "rn3rk1/p4pp1/1q1bb2p/1B1pN3/3P2PB/8/PPQ2P1P/2KR3R w - - 0 1");
+  count = fuzzer(*chess);
+  assert(count == 55, "fail. total moves: %, expected: %\n", count, 14);
+  print("Total Moves: %\n", count);*/
 
   fuzzer :: (chess: *Chess) -> int {
     count := 0;

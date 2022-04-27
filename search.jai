@@ -580,7 +580,7 @@ negamax :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int) ->
           }
           if ttmove != hash_move && is_legal(chess, hash_move) then {
             heap_add(*moves, hash_move, 0x7FFF_FFFF-1);
-            moves.pv = hash_move;
+            moves.hashmove = hash_move;
           }
         case .CAPTURES;
           stage = .END;
@@ -899,7 +899,7 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
           }
           if hashmove != ttmove && is_legal(chess, hashmove) then {
             heap_add(*moves, hashmove, 0x7FFF_FFFF-1);
-            moves.pv = hashmove;
+            moves.hashmove = hashmove;
           }
         case .CAPTURES;
           unsafe, check = generate_attacks(chess);
@@ -1457,6 +1457,14 @@ make_move :: (c: *ChessGame, move: Move16) -> Piece, Castling {
       unmake_move(c, mov.mov16, 0, c.castling);
       print_chess(c);
       print_move(mov.mov16);
+
+
+      mov = pop(*c.moves);
+      unmake_move(c, mov.mov16, 0, c.castling);
+      print_chess(c);
+      print_move(mov.mov16);
+
+
       assert(false);
     }
   }
