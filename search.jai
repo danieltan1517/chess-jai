@@ -13,8 +13,8 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
   __nodes_searched = 0;
   score : int; 
   best_move : Move16;
-  alpha: int = -INF;
-  beta:  int =  INF;
+  alpha: int = -INF+1;
+  beta:  int =  INF-1;
   delta := 50;
   cur_depth := 1;
   while cur_depth <= depth { 
@@ -34,20 +34,20 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
 
     if score <= alpha then {
       print("info depth % lowerbound %\n", cur_depth, score);
-      alpha = max(alpha-delta, -INF);
+      alpha = max(alpha-delta, -INF+1);
       delta += delta + depth / 5;
       continue;
     }
 
     if score >= beta then {
       print("info depth % upperbound %\n", cur_depth, score);
-      beta = min(beta+delta, INF);
+      beta = min(beta+delta, INF-1);
       delta += delta + depth / 5;
       continue;
     }
 
-    alpha = max(score - delta, -INF);
-    beta  = min(score + delta, INF);
+    alpha = max(score - delta, -INF+1);
+    beta  = min(score + delta, INF-1);
 
     best_move = pv_table[0][0];
     print_stats(cur_depth);
@@ -110,7 +110,7 @@ negamax :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int) ->
   ttentry: TTData;
 
   // need to account for singular search extensions while probing.
-  if chess.node_state & NodeState.SSE {
+  if (chess.node_state & NodeState.SSE) == 0 {
     if ply != chess.exply then
       tthit, ttentry = tt_probe(chess.hash, alpha, beta, depth);
   } else {
@@ -225,7 +225,7 @@ negamax :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int) ->
   moves_searched := 0;
 
   improving := get_improving(chess);
-  late_move_prune := 3 + ((depth*depth) / (2-improving));
+  late_move_prune := 5 + ((depth*depth) / (2-improving));
 
   tt_capture: bool = false;
   tt_quiet: bool   = false;
@@ -234,14 +234,11 @@ negamax :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int) ->
   bmove := Move16.Quiet;
   pto := prev_to(chess);
   prev_to :: (chess: ChessGame) -> int {
-    if chess.ply >= 2 {
+    if chess.ply >= 1 {
       count := chess.moves.count;
       prev_move1 := chess.moves[count-1].mov16;
-      to1 := get_move16_to(prev_move1);
-      prev_move2 := chess.moves[count-2].mov16;
-      to2 := get_move16_to(prev_move2);
-      if to1 == to2
-        return to1;
+      to := get_move16_to(prev_move1);
+      return to;
     }
     return -1;
   }
@@ -271,7 +268,7 @@ negamax :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int) ->
 
     ext := 0;
     if chess.node_state & NodeState.SSE && ply>0 && depth>=7 && ply<chess.depth && move == hash_move && tthit && cast(int)ttentry.depth >= depth-3 
-       && abs(ttentry.score) < 20_000 && ttentry.flag == TFLAGS.ALPHA {
+       && abs(ttentry.score) < 20_000 && ttentry.flag == TFLAGS.ALPHA && abs(alpha) < (INF-50) {
 
       if to == pto && flags >= Move16.Capture {
         // recapture extension.
@@ -332,10 +329,13 @@ negamax :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int) ->
         eval = -negamax(chess, depth+ext-R-1, -alpha-1, -alpha, next_fifty);
       } else if flags <= Move16.Double_Pawn_Push {
         // Late Move Reduction when not in check and not giving check.
-        R := LateMoveReduction[min(depth,63)][min(moves_searched,63)];
+        R := LateMoveReduction[min(depth,63)][min(moves_searched,63)] + 2;
         R -= improving;
         R += chess.probcut*2;
-        R -= cast(int) pv_node;
+        if pv_node then {
+          R -= 1;
+          R -= 15 / (3 + depth);
+        }
 
         // increase reduction if capture.
         if tt_capture then
@@ -344,7 +344,11 @@ negamax :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int) ->
         // decrease reduction if quiet.
         if tt_quiet then 
           R -= 1;
-        R -= move_score / 40_480;
+        if move_score > 0
+          R -= move_score / 15_480;
+        else 
+          R -= move_score / 40_480;
+
         R = max(0, R);
         eval = -negamax(chess, depth+ext-R-1, -alpha-1, -alpha, next_fifty);
       } else {
@@ -371,12 +375,9 @@ negamax :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int) ->
 
     if eval >= beta then {
       // non-captures == Quiet|Pawn Push Moves
-      if flags <= Move16.Double_Pawn_Push {
+      if flags <= Move16.Double_Pawn_Push 
         update_quiet(chess, move, depth, quiet_moves, num_quiets, cap_moves, num_captures);
-      } 
-
-      if chess.node_state & NodeState.SSE 
-        tt_store(chess.hash, beta, TFLAGS.BETA, depth, move);
+      tt_store(chess.hash, beta, TFLAGS.BETA, depth, move);
       return beta;
     } 
     
@@ -395,9 +396,7 @@ negamax :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int) ->
   if pv_node && hash_flag == TFLAGS.EXACT && get_move16_flag(bmove) > Move16.Double_Pawn_Push then 
     update_tactics(chess, bmove, depth, cap_moves, num_captures, quiet_moves, num_quiets);
 
-  if chess.node_state & NodeState.SSE 
-    tt_store(chess.hash, alpha, hash_flag, depth, bmove);
-
+  tt_store(chess.hash, alpha, hash_flag, depth, bmove);
   return alpha;
 
   update_tactics :: (chess: *ChessGame, move: Move16, depth: int, cap_moves: []Move16, num_captures: int, quiet_moves: []Move16, num_quiets: int) {
@@ -623,9 +622,9 @@ tt_prune :: (tthit: bool, ttentry: TTData, ply: int, pv_node: bool, alpha: int, 
 
   ttscore :: (score: int) -> int #expand {
     if score > INF-20  then
-      return score - ply;
+      return INF-ply;
     else if score < -INF+20 then
-      return score + ply;
+      return -INF+ply;
     return score;
   }
 }
@@ -794,6 +793,8 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
   if (__nodes_searched & 2048) && stdin_stop_signal()
     return 0;
   ply := chess.ply;
+  //if ply >= 40 print_chess(chess);
+  //assert(ply < 40, "alpha = %, beta = %, chess = %\n", alpha, beta, chess.node_state);
   pv_node := alpha != beta-1;
   tthit, ttentry := tt_probe(chess.hash, alpha, beta, 0);
   tt_prune(tthit, ttentry, ply, pv_node, alpha, beta, 0);
@@ -807,6 +808,12 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
   hashmove := Move16.Quiet;
   if tthit && ttmove == 0 && get_move16_flag(ttentry.ttmove) >= Move16.Capture then {
     hashmove = ttentry.ttmove;
+  }
+
+  defer {
+    memset(*pv_table[ply+1], 0, size_of(PV_Line));
+    __killer_moves[ply+1][1] = 0;
+    __killer_moves[ply+1][0] = 0;
   }
 
   hash_flag := TFLAGS.ALPHA;
@@ -864,9 +871,8 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
     }
 
     if score >= beta then {
-      hash_flag = TFLAGS.BETA;
-      alpha = beta;
-      break;
+      tt_store(chess.hash, beta, TFLAGS.BETA, 0, move);
+      return beta;
     }
   }
 
