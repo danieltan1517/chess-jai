@@ -222,7 +222,7 @@ negamax :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int) ->
   moves_searched := 0;
 
   improving := get_improving(chess);
-  late_move_prune := 5 + ((depth*depth) / (2-improving));
+  late_move_prune := (7 + (depth*depth)) / (2-improving);
 
   tt_capture: bool = false;
   tt_quiet: bool   = false;
@@ -240,6 +240,7 @@ negamax :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int) ->
     return -1;
   }
 
+  score_margin := -80_000 * depth;
   for :pv move, move_score : chess {
     move_count += 1;
     if (chess.node_state & NodeState.SSE) == 0 && ply == chess.exply && move == chess.excluded_move then {
@@ -255,7 +256,9 @@ negamax :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int) ->
     // piece
     if chess.depth>6 && ply>0 && moves_searched>0 {
       // Late Move Pruning. Search the Root Plies Exhuastively
-      if flags <= Move16.Double_Pawn_Push && moves_searched > late_move_prune then
+      if flags <= Move16.Double_Pawn_Push && (moves_searched > late_move_prune) then
+        break;
+      if flags <= Move16.Double_Pawn_Push && move_score < score_margin then
         break;
       if flags == Move16.Capture && PVALUE[att] > PVALUE[vic] && see(chess,move) < -250*depth  then
         continue;
