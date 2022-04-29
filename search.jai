@@ -34,20 +34,20 @@ search :: (chess: *ChessGame, depth: int, fifty: int) -> Move16 {
 
     if score <= alpha then {
       print("info depth % lowerbound %\n", cur_depth, score);
-      alpha = max(alpha-delta, -INF+1);
+      alpha = max(alpha-delta, -INF);
       delta += delta + depth / 5;
       continue;
     }
 
     if score >= beta then {
       print("info depth % upperbound %\n", cur_depth, score);
-      beta = min(beta+delta, INF-1);
+      beta = min(beta+delta, INF);
       delta += delta + depth / 5;
       continue;
     }
 
-    alpha = max(score - delta, -INF+1);
-    beta  = min(score + delta, INF-1);
+    alpha = max(score - delta, -INF);
+    beta  = min(score + delta, INF);
 
     best_move = pv_table[0][0];
     print_stats(cur_depth);
@@ -171,19 +171,16 @@ negamax :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int) ->
       ep := make_null_move(chess);
       node_state := chess.node_state;
       chess.node_state = 0;
-      assert(chess.node_state == 0, "Null Move Pruning Wrong.");
       score := -negamax(chess, depth-R-1, -beta, -beta + 1, fifty);
       unmake_null_move(chess, ep);
-      chess.node_state = node_state;
 
       // verification at higher depths.
       if depth>12 || zugzwang(chess) then {
-        node_state := chess.node_state;
         chess.node_state = 0;
         score = negamax(chess, depth-R-1, beta-1, beta, fifty);
-        chess.node_state = node_state;
       }
     
+      chess.node_state = node_state;
       if score >= beta then
         return beta;
     }
@@ -245,7 +242,7 @@ negamax :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int) ->
 
   for :pv move, move_score : chess {
     move_count += 1;
-    if chess.node_state & NodeState.SSE && ply == chess.exply && move == chess.excluded_move then {
+    if (chess.node_state & NodeState.SSE) == 0 && ply == chess.exply && move == chess.excluded_move then {
       continue;
     }
 
@@ -634,7 +631,7 @@ tt_store :: (hash: u64, score: int, flag: TFLAGS, depth: int, ttmove: Move16) {
   prefetch(*ttable.entries[key], Prefetch_Hint.T0);
   entry: ttable.TTEntry;
   entry.hash = hash;
-  entry.score = cast(s16) score;
+  entry.score = cast (s16) score;
   entry.flag = flag;
   entry.depth = cast, trunc(u8) depth;
   entry.ttmove = ttmove;
