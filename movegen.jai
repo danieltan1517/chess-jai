@@ -1491,19 +1491,17 @@ generate_tactics_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T)
   safe_sqs := cast(Bitboard) ~unsafe;
   not_occu := cast(Bitboard) ~occupied;
   #if turn == Turn.WHITE {
-    handle_castling(Castling.W_KS, f1|g1, f1|g1, e1, g1, Move16.King_Castle);
-    handle_castling(Castling.W_QS, c1|d1, b1|c1|d1, e1, c1, Move16.Queen_Castle);
+    handle_castling(Castling.W_KS, f1|g1, f1|g1, serialized_bb.e1, serialized_bb.g1, Move16.King_Castle);
+    handle_castling(Castling.W_QS, c1|d1, b1|c1|d1, serialized_bb.e1, serialized_bb.c1, Move16.Queen_Castle);
   } else {
-    handle_castling(Castling.B_KS, f8|g8, f8|g8, e8, g8, Move16.King_Castle);
-    handle_castling(Castling.B_QS, c8|d8, b8|c8|d8, e8, c8, Move16.Queen_Castle);
+    handle_castling(Castling.B_KS, f8|g8, f8|g8, serialized_bb.e8, serialized_bb.g8, Move16.King_Castle);
+    handle_castling(Castling.B_QS, c8|d8, b8|c8|d8, serialized_bb.e8, serialized_bb.c8, Move16.Queen_Castle);
   }
 
-  handle_castling :: ($F: Castling, $castle_sqs: Bitboard, $check_occ: Bitboard, $from: Bitboard, $to: Bitboard, $flags: Move16) #expand {
+  handle_castling :: (F: Castling, castle_sqs: Bitboard, check_occ: Bitboard, from: serialized_bb, to: serialized_bb, flags: Move16) #expand {
     if chess.castling & F {
       if (safe_sqs & castle_sqs) == castle_sqs && (not_occu & check_occ) == check_occ {
-        sq    := bit_scan_forward(xx from);
-        to_sq := bit_scan_forward(xx to);
-        add_move(chess, move_gen, sq, to_sq, flags, in_check=false);
+        add_move(chess, move_gen, xx from, xx to, flags, in_check=false);
       }
     }
   }
@@ -1792,9 +1790,11 @@ set_occ :: (index: int, bits_in_mask: u64, attack_mask: u64) -> u64 {
   return occ;
 }
 
-bit_scan_forward :: (input: u64)->int #expand {
+bit_scan_forward :: (value: u64)->int #expand {
+  #assert(!is_constant(value));
+
   result := -1;
-  #asm { bsf.q result, input; }
+  #asm { bsf.q result, value; }
   return result;
 }
 

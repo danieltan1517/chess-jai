@@ -21,6 +21,7 @@ main :: () {
     quit := false;
     for e: events_this_frame {
       if e.type == .QUIT then quit = true;
+      print("%\n", e);
     }
 
     if quit == true then
