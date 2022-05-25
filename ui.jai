@@ -8,11 +8,19 @@ options_on: bool = false;
 display_coordinates: bool = true;
 board_orientation: bool = true; // white=true, black=false
 chess: Chess;
+chess_mouse: ChessMouse = ChessMouse.Idle;
+chess_square_select := -1;
+
+
+sound_player : *Sound_Player;
+sound_quiet_move: *Mixer_Sound_Data; // load_audio_file(name);
+
+white_sq_color := Vector4.{238.0/255.0, 238.0/255.0, 210.0/255.0, 1.0};
+black_sq_color := Vector4.{118.0/255.0, 150.0/255.0,  86.0/255.0, 1.0};
 
 main :: () {
   path := path_strip_filename(get_path_of_running_executable());
   set_working_directory(path);
-
 
   // create a window. 
   // initialize fonts.
@@ -20,10 +28,9 @@ main :: () {
   win = create_window(600, 800, "Chess");
   width, height := simp.get_render_dimensions(win);
   simp.set_render_target(win);
-  success := simp.texture_load_from_file(*chess_piece_bitmap, "resources/chess_pieces.png");
-  assert(success);
-  success = simp.texture_load_from_file(*setting_bitmap, "resources/settings_icon.png");
-  assert(success);
+
+  init_sound();
+  init_textures();
 
   init_fonts(height);
   ui_init();
@@ -47,16 +54,31 @@ main :: () {
     }
 
     quit := false;
+
+    mouse_event := false;
+    key_pressed := 0;
     for e: events_this_frame {
       if e.type == .QUIT then quit = true;
+      if e.type == .KEYBOARD then {
+        if e.key_code == .MOUSE_BUTTON_LEFT {
+          key_pressed = e.key_pressed;
+          mouse_event = true;
+        } 
+      }
     }
 
     if quit == true then
       break;
 
+    _, __, width, height := get_dimensions(win, true);
+    x, y := get_mouse_pointer_position(win, true);
     draw_chess_board(xx width, xx height);
-    draw_chess_pieces(xx width, xx height);
-    draw_ui();
+    draw_chess_pieces(xx width, xx height, xx x, xx y, mouse_event, key_pressed);
+    draw_ui(width, height);
+
+    pre_entity_update(sound_player);
+    for sound_player.streams  it.marked = true;
+    post_entity_update(sound_player, 0);
 
 
     simp.swap_buffers(win);
@@ -92,7 +114,7 @@ main :: () {
       numbers : string = ifx board_orientation "12345678" else "87654321";
       num_x: int = xx (corner_x + (square * .05));
       num_y: int = xx (corner_y + (square * .8));
-      let_x: int = xx (corner_x + (square * .875));
+      let_x: int = xx (corner_x + (square * .10));
       let_y: int = xx (corner_y + (square * .05));
       incr: int = cast(int) square;
       TF := true;
@@ -112,18 +134,68 @@ main :: () {
     }
   }
 
-  draw_chess_pieces :: (width: float, height: float) {
+  draw_chess_pieces :: (width: float, height: float, x: float, y: float, mouse_event: bool, key_pressed: int) {
     cen_x := width  / 2;
     cen_y := height / 2;
     square := 0.85 * min(width, height) / 8.0;
     corner_x := cen_x - square * 4.0;
     corner_y := cen_y - square * 4.0;
+    end_x := corner_x + square * 8.0;
+    end_y := corner_y + square * 8.0;
+
+    // TODO: get this to actually work correctly!
+    // TODO: handle the moves correctly.
+    // chess board logic on the mouse event.
+    if mouse_event {
+      if x >= corner_x && x <= end_x then {
+        if y >= corner_y && y <= end_y then {
+          mouse_coor_x := cast(int) ((x - corner_x) / square);
+          mouse_coor_y := cast(int) ((y - corner_y) / square);
+          if board_orientation == false then {
+            mouse_coor_x = 7 - mouse_coor_x;
+            mouse_coor_y = 7 - mouse_coor_y;
+          }
+     
+          if chess_mouse == {
+          case ChessMouse.Idle;
+            if key_pressed == 1 {
+              chess_mouse = ChessMouse.Drag;
+              position := mouse_coor_x + mouse_coor_y * 8;
+              chess_square_select = position;
+            }
+          case ChessMouse.Drag;
+            if key_pressed == 0 {
+              position := mouse_coor_x + mouse_coor_y * 8;
+              if chess_square_select == position {
+                chess_mouse = ChessMouse.Select;
+              } else {
+                chess_mouse = ChessMouse.Idle;
+                from := chess_square_select;
+                to := position;
+                mov := to_move16(from, to, Move16.Quiet);
+                ui_make_move(*chess, mov);
+                chess_square_select = -1;
+              }
+            }
+          case ChessMouse.Select;
+            position := mouse_coor_x + mouse_coor_y * 8;
+            from := chess_square_select;
+            to := position;
+            mov := to_move16(from, to, Move16.Quiet);
+            ui_make_move(*chess, mov);
+            chess_square_select = -1;
+            chess_mouse = ChessMouse.Idle;
+          }
+        }
+      }
+    }
 
     simp.set_shader_for_images(*chess_piece_bitmap);
     simp.immediate_begin();
 
-    //chess.pieces //: [64] Piece;
     for piece, index: chess.pieces {
+      if chess_mouse == ChessMouse.Drag && chess_square_select == index then 
+        continue;
       row := 0; 
       col := 0; 
       if board_orientation then {
@@ -139,7 +211,15 @@ main :: () {
       p3 := make_vector2(p0.x + square, p0.y);
       draw_piece(p0, p1, p2, p3, piece);
     }
-
+    if chess_mouse == ChessMouse.Drag then {
+      p0 := make_vector2(x - square * 0.5, y - square * 0.5);
+      p1 := make_vector2(p0.x, p0.y + square);
+      p2 := make_vector2(p0.x + square, p0.y + square);
+      p3 := make_vector2(p0.x + square, p0.y);
+      assert(chess_square_select >= 0 && chess_square_select <= 63);
+      piece := chess.pieces[chess_square_select];
+      draw_piece(p0, p1, p2, p3, piece);
+    }
     simp.immediate_flush();
   }
 
@@ -173,9 +253,8 @@ main :: () {
     }
   }
 
-  draw_ui :: () {
+  draw_ui :: (width: s32, height: s32) {
     current_time := get_time();
-    x, y, width, height := get_dimensions(win, true);
     ui_per_frame_update(win, width, height, current_time);
 
     button_height := height * .03;
@@ -205,6 +284,13 @@ main :: () {
       r.y -= k*1.1;
       r.w = k*8.0;
       r.h = k;
+
+      pressed = button(r, "New Game", *button_theme);
+      if pressed then {
+        chess_startpos(*chess);
+      }
+
+
       dropdown_theme := *default_overall_theme.dropdown_theme;
       dropdown_theme.theme_for_current_value.alignment = .Left;
       dropdown_theme.theme_for_each_choice.alignment = .Left;
@@ -214,6 +300,7 @@ main :: () {
       dropdown_theme.theme_for_current_choice.font = font;
        
       old_color_theme := current_color_theme;
+      r.y -= k*1.1;
       dropdown(r, COLORS, *current_color_theme, dropdown_theme);
      
       COLORS :: string.["green", "blue", "grey", "brown", "purple", "red"]; 
@@ -221,7 +308,7 @@ main :: () {
       checkbox_theme.font = font;
 
       r.y -= k*1.1;
-      pressed := base_checkbox(r, "Board Orientation", board_orientation, *checkbox_theme);
+      pressed = base_checkbox(r, "Board Orientation", board_orientation, *checkbox_theme);
       if pressed then {
         board_orientation = !board_orientation;
       }
@@ -380,11 +467,96 @@ main :: () {
     assert(font != null, "font not loaded properly");
   }
 
+  init_sound :: () {
+    sound_player = New(Sound_Player);
+    sound_player.update_history = true;
+    file_data, success := read_entire_file("resources/move.wav");
+    assert(success);
+    sound_quiet_move = load_wav_file(file_data, "resources/move.wav");
+    assert(sound_quiet_move != null);
+
+    // initialize sound player
+    success = init(sound_player, win, true, true);
+    assert(success);
+  }
+
+
+  load_wav_file :: (file_data: string, name: string) -> *Mixer_Sound_Data {
+    data := New(Mixer_Sound_Data);
+    data.name = copy_string(name);
+    data.buffer = file_data;
+
+    format, samples, success2, extra := get_wav_header(data.buffer);
+    if !success2 {
+      log("Unable to parse '%' as wav.\n", data.full_path);
+      return data;
+    }
+
+    if format.wFormatTag == WAVE_FORMAT_PCM {
+      data.type = Mixer_Sound_Data.Type.LINEAR_SAMPLE_ARRAY;
+      data.nchannels = cast(u16) format.nChannels;
+      data.nsamples_times_nchannels = samples.count/2;
+    } else if format.wFormatTag == WAVE_FORMAT_DVI_ADPCM {
+      data.type = Mixer_Sound_Data.Type.ADPCM_COMPRESSED;
+      data.wSamplesPerBlock = extra.wSamplesPerBlock;
+      data.nBlockAlign = format.nBlockAlign;
+      data.nchannels = cast(u16) format.nChannels;
+      data.nsamples_times_nchannels = extra.wSamplesAccordingToFactChunk * data.nchannels;
+    } else {
+      assert(false);
+    }
+
+    data.samples = cast(*s16) samples.data;
+    data.sampling_rate = cast(u32) format.nSamplesPerSec;
+    return data;
+  }
+
+
+  init_textures :: () {
+    success := simp.texture_load_from_file(*chess_piece_bitmap, "resources/chess_pieces.png");
+    assert(success);
+    success = simp.texture_load_from_file(*setting_bitmap, "resources/settings_icon.png");
+    assert(success);
+  }
+
   GREY_SHADE_BOARD :: Vector4.{0.2, 0.2, 0.2, 0.35};
 }
 
-white_sq_color := Vector4.{238.0/255.0, 238.0/255.0, 210.0/255.0, 1.0};
-black_sq_color := Vector4.{118.0/255.0, 150.0/255.0,  86.0/255.0, 1.0};
+ChessMouse :: enum {
+  Idle;
+  Drag;
+  Select;
+}
+
+ui_make_move :: (chess: *Chess, mov: Move16) {
+  if is_legal(chess, mov) then {
+    print_move(mov);
+    make_move(chess, mov);
+    stream := play_sound(sound_quiet_move);
+  }
+}
+
+play_sound :: (data: *Mixer_Sound_Data, perturb: bool = true) -> *Sound_Stream {
+  stream := make_stream(sound_player, data);
+
+  if stream {
+      stream.sound_data = data;
+  }
+
+  if perturb && stream {
+      stream.user_volume_scale = random_get_within_range(0.7, 1.0);
+      stream.desired_rate = random_get_within_range(0.7, 1.22);
+  }
+
+  if stream {
+      stream.flags |= .REPEATING;
+      stream.repeat_end_position = cast(int)(data.sampling_rate * 234.475);  // @Temporary @Hack! We do not get the duration by default from an ogg file...
+      stream.category = .MUSIC;
+  }
+  
+  return stream;
+}
+
 
 simp :: #import "Simp";
 #import "System"; // For get_path_of_running_executable.
@@ -396,3 +568,7 @@ simp :: #import "Simp";
 #import "Window_Creation";
 #import "GetRect";
 #load "movegen.jai";
+#import "Sound_Player";
+#import "Wav_File";
+#import "File";
+#import "Random";
