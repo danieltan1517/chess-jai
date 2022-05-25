@@ -7,6 +7,7 @@ current_color_theme : s32 = 0;
 options_on: bool = false;
 display_coordinates: bool = true;
 board_orientation: bool = true; // white=true, black=false
+sound_on: bool = true;
 chess: Chess;
 chess_mouse: ChessMouse = ChessMouse.Idle;
 chess_square_select := -1;
@@ -319,6 +320,13 @@ main :: () {
       if pressed then {
         display_coordinates = !display_coordinates;
       }
+
+      r.y -= k*1.1;
+
+      pressed = base_checkbox(r, "Audio", sound_on, *checkbox_theme);
+      if pressed then {
+        sound_on = !sound_on;
+      }
      
       draw_popups();  // This draws Subwindows as well.
       if old_color_theme != current_color_theme {
@@ -532,7 +540,9 @@ ui_make_move :: (chess: *Chess, mov: Move16) {
   if is_legal(chess, mov) then {
     print_move(mov);
     make_move(chess, mov);
-    stream := play_sound(sound_quiet_move);
+    if sound_on == true {
+      stream := play_sound(sound_quiet_move);
+    }
   }
 }
 
