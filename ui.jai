@@ -126,13 +126,13 @@ main :: () {
 
         letter := slice(letters, i, 1);
         number := slice(numbers, i, 1);
-
         simp.draw_text(font, num_x, num_y, number, col);
         simp.draw_text(font, let_x, let_y, letter, col);
         num_y += incr;
         let_x += incr;
         TF = !TF;
         col = ifx TF white_sq_color else black_sq_color;
+        
       }
     }
   }
