@@ -737,11 +737,11 @@ generate_quiets :: (unsafe: u64, check: u64, chess: *Chess, movegen: *$T) {
   }
 }
 
-generate_moves :: (using chess: *Chess, movegen: *$T) -> ChessFlags {
+generate_moves :: (using chess: *Chess, movegen: *$T) {
   if chess.turn == Turn.WHITE {
-    return generate_moves_for(chess, Turn.WHITE, movegen);
+    generate_moves_for(chess, Turn.WHITE, movegen);
   } else {
-    return generate_moves_for(chess, Turn.BLACK, movegen);
+    generate_moves_for(chess, Turn.BLACK, movegen);
   }
 }
 
@@ -1092,7 +1092,7 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
 // TODO: enpassant does not work on diagonal pins for esoteric
 // reasons, hopefully we will be able to handle this case robustly,
 // but for now, just get something off the ground.
-generate_moves_for :: (chess: *Chess, $turn: Turn, move_gen: *$T) -> ChessFlags {
+generate_moves_for :: (chess: *Chess, $turn: Turn, move_gen: *$T) {
   //assert(chess.turn == turn);
   opp :: turn ^ 1; 
   unsafe, check := generate_attacks(chess, opp);
@@ -1123,7 +1123,6 @@ generate_moves_for :: (chess: *Chess, $turn: Turn, move_gen: *$T) -> ChessFlags 
     generate_tactics_for(unsafe, chess, turn, move_gen);
     generate_quiets_for(unsafe, chess, turn, move_gen);
   }
-  return ChessFlags.Normal;
 }
 
 promotion_rank :: (turn: $Turn) -> u64 #expand {

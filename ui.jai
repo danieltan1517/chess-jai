@@ -8,21 +8,35 @@ options_on: bool = false;
 display_coordinates: bool = true;
 board_orientation: bool = true; // white=true, black=false
 sound_on: bool = true;
+highlight_moves_check: bool = true;
+game_status: string;
+
 chess: Chess;
+move_bitboards: Move_Bitboards;
+highlighted_moves: u64 = 0;
+previous_move: u64 = 0;
+
 chess_mouse: ChessMouse = ChessMouse.Idle;
 chess_square_select := -1;
 
-
+// sound play and sound effects
 sound_player : *Sound_Player;
-sound_quiet_move: *Mixer_Sound_Data; // load_audio_file(name);
-sound_capture_move: *Mixer_Sound_Data; // load_audio_file(name);
+sound_quiet_move: *Mixer_Sound_Data;
+sound_capture_move: *Mixer_Sound_Data;
 
+// board colors.
 white_sq_color := Vector4.{238.0/255.0, 238.0/255.0, 210.0/255.0, 1.0};
 black_sq_color := Vector4.{118.0/255.0, 150.0/255.0,  86.0/255.0, 1.0};
 
 main :: () {
   path := path_strip_filename(get_path_of_running_executable());
   set_working_directory(path);
+
+  // initialize chess w/ the starting position.
+  // generate chess moves.
+  init_global_bitboards();
+  chess_startpos(*chess);
+  generate_moves(*chess, *move_bitboards);
 
   // create a window. 
   // initialize fonts.
@@ -36,10 +50,6 @@ main :: () {
 
   init_fonts(height);
   ui_init();
-
-  // initialize chess w/ the starting position.
-  init_global_bitboards();
-  chess_startpos(*chess);
 
   // main game loop
   while true {
@@ -81,11 +91,11 @@ main :: () {
 
     pre_entity_update(sound_player);
     for sound_player.streams  it.marked = true;
-    post_entity_update(sound_player, 0);
+    post_entity_update(sound_player, 20);
 
 
     simp.swap_buffers(win);
-    sleep_milliseconds(10);
+    sleep_milliseconds(20);
     reset_temporary_storage();
   }
 
@@ -135,6 +145,9 @@ main :: () {
         
       }
     }
+
+    if game_status then
+      simp.draw_text(font, 10, 10, game_status, Vector4.{1,1,1,1});
   }
 
   draw_chess_pieces :: (width: float, height: float, x: float, y: float, mouse_event: bool, key_pressed: int) {
@@ -146,9 +159,7 @@ main :: () {
     end_x := corner_x + square * 8.0;
     end_y := corner_y + square * 8.0;
 
-    // TODO: get this to actually work correctly!
-    // TODO: handle the moves correctly.
-    // chess board logic on the mouse event.
+    // TODO: handle promotions.
     if mouse_event {
       if x >= corner_x && x <= end_x then {
         if y >= corner_y && y <= end_y then {
@@ -161,10 +172,12 @@ main :: () {
      
           if chess_mouse == {
           case ChessMouse.Idle;
+            highlighted_moves = 0;
             if key_pressed == 1 {
               chess_mouse = ChessMouse.Drag;
               position := mouse_coor_x + mouse_coor_y * 8;
               chess_square_select = position;
+              highlighted_moves = move_bitboards.bitboard[chess_square_select];
             }
           case ChessMouse.Drag;
             if key_pressed == 0 {
@@ -173,6 +186,7 @@ main :: () {
                 chess_mouse = ChessMouse.Select;
               } else {
                 chess_mouse = ChessMouse.Idle;
+                highlighted_moves = 0;
                 from := chess_square_select;
                 to := position;
                 flag := get_move16_flag(*chess, from, to);
@@ -190,12 +204,12 @@ main :: () {
             ui_make_move(*chess, mov);
             chess_square_select = -1;
             chess_mouse = ChessMouse.Idle;
+            highlighted_moves = 0;
           }
         }
       }
     }
 
-    simp.set_shader_for_images(*chess_piece_bitmap);
     simp.immediate_begin();
 
     for piece, index: chess.pieces {
@@ -203,6 +217,7 @@ main :: () {
         continue;
       row := 0; 
       col := 0; 
+
       if board_orientation then {
         row = index % 8;
         col = index / 8;
@@ -210,12 +225,46 @@ main :: () {
         row = 7 - index % 8;
         col = 7 - index / 8;
       }
+
       p0 := make_vector2(corner_x + square * row, corner_y + square * col);
       p1 := make_vector2(p0.x, p0.y + square);
       p2 := make_vector2(p0.x + square, p0.y + square);
       p3 := make_vector2(p0.x + square, p0.y);
+
+      bitboard := cast(u64) (1 << index);
+
+      if highlight_moves_check == true {
+        // draw previous move.
+        if bitboard & previous_move then {
+          simp.set_shader_for_color(true);
+          prev_color :: Vector4.{.9,.9,0,.55};
+          simp.immediate_quad(p0, p1, p2, p3, prev_color);
+        }
+       
+        // draw highlighted moves.
+        if bitboard & highlighted_moves then {
+       
+          if (bitboard & chess.occupied) == 0 {
+            p0.x += square *.3;
+            p0.y += square *.3;
+            p1.x += square *.3;
+            p1.y -= square *.3;
+            p2.x -= square *.3;
+            p2.y -= square *.3;
+            p3.x -= square *.3;
+            p3.y += square *.3;
+          }
+       
+          draw_move_suggestion(p0,p1,p2,p3);
+       
+        }
+
+      }
+
       draw_piece(p0, p1, p2, p3, piece);
+
     }
+
     if chess_mouse == ChessMouse.Drag then {
       p0 := make_vector2(x - square * 0.5, y - square * 0.5);
       p1 := make_vector2(p0.x, p0.y + square);
@@ -228,9 +277,23 @@ main :: () {
     simp.immediate_flush();
   }
 
+  draw_move_suggestion :: (p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2) {
+    // we reuse the settings icon to draw the circle.
+    // i am too lazy to load another icon, and it is easier just to recycle 
+    // old icons.
+    simp.set_shader_for_images(*setting_bitmap);
+    col :: Vector4.{0,0,0,.1};
+    uv0 :: Vector2.{.3, .3};
+    uv1 :: Vector2.{.7, .3};
+    uv2 :: Vector2.{.7, .7};
+    uv3 :: Vector2.{.3, .7};
+    simp.immediate_quad(p0, p1, p2, p3, col, uv0, uv1, uv2, uv3);
+  }
+
   draw_piece :: (p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2, piece: Piece) {
+    if piece == Piece.NONE return;
+    simp.set_shader_for_images(*chess_piece_bitmap);
     if piece == {
-    case  Piece.NONE;
     case  Piece.W_KING;
       draw_wking(p0, p1, p2, p3);
     case  Piece.W_QUEEN;
@@ -293,8 +356,11 @@ main :: () {
       pressed = button(r, "New Game", *button_theme);
       if pressed then {
         chess_startpos(*chess);
+        clear(*move_bitboards);
+        generate_moves(*chess, *move_bitboards);
+        highlighted_moves = 0;
+        previous_move = 0;
       }
-
 
       dropdown_theme := *default_overall_theme.dropdown_theme;
       dropdown_theme.theme_for_current_value.alignment = .Left;
@@ -330,6 +396,13 @@ main :: () {
       pressed = base_checkbox(r, "Audio", sound_on, *checkbox_theme);
       if pressed then {
         sound_on = !sound_on;
+      }
+
+      r.y -= k*1.1;
+
+      pressed = base_checkbox(r, "Highlight Moves", highlight_moves_check, *checkbox_theme);
+      if pressed then {
+        highlight_moves_check = !highlight_moves_check;
       }
      
       draw_popups();  // This draws Subwindows as well.
@@ -606,10 +679,38 @@ ChessMouse :: enum {
   Select;
 }
 
+Move_Bitboards :: struct {
+  bitboard: [64] u64;
+  count: int;
+}
+
+add_move :: (chess: *Chess, moves: *Move_Bitboards, from: int, to: int, flags: Move16, in_check: bool) {
+  moves.bitboard[from] |= cast(u64) (1 << to);
+  moves.count += 1;
+}
+
+clear :: (moves: *Move_Bitboards) #expand {
+  memset(moves, 0, size_of(Move_Bitboards));
+}
+
 ui_make_move :: (chess: *Chess, mov: Move16) {
   if is_legal(chess, mov) then {
-    print_move(mov);
+    _, from, to := decode_move16(mov);
+    previous_move = (cast(u64) (1 << from)) | (cast(u64) (1 << to));
     make_move(chess, mov);
+    clear(*move_bitboards);
+    generate_moves(chess, *move_bitboards);
+
+    if move_bitboards.count == 0 then {
+      if in_check(chess) {
+        game_status = "Checkmate.";
+      } else {
+        game_status = "Stalemate.";
+      }
+    } else if in_check(chess) {
+      game_status = "Check.";
+    }
+
     // play sound only if the sound_on is true
     if sound_on == true {
 
@@ -637,18 +738,17 @@ play_sound :: (data: *Mixer_Sound_Data, perturb: bool = true) -> *Sound_Stream {
   stream := make_stream(sound_player, data);
 
   if stream {
-      stream.sound_data = data;
+    stream.sound_data = data;
   }
 
   if perturb && stream {
-      stream.user_volume_scale = random_get_within_range(0.7, 1.0);
-      stream.desired_rate = random_get_within_range(0.7, 1.22);
+    stream.user_volume_scale = random_get_within_range(0.7, 1.0);
+    stream.desired_rate = random_get_within_range(0.7, 1.22);
   }
 
   if stream {
-      stream.flags |= .REPEATING;
-      stream.repeat_end_position = cast(int)(data.sampling_rate * 234.475);  // @Temporary @Hack! We do not get the duration by default from an ogg file...
-      stream.category = .MUSIC;
+    // @Temporary @Hack! We do not get the duration by default from an ogg file...
+    stream.repeat_end_position = cast(int)(data.sampling_rate * 234.475);
   }
   
   return stream;

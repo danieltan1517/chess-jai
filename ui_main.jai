@@ -877,7 +877,7 @@ handle_undo_move :: (window: *GLFWwindow, chess: *Chess, moves_arr: *[..] Move16
         }
 
         array_reset(moves_arr); // TODO:
-        status := generate_moves(chess, moves_arr);
+        generate_moves(chess, moves_arr);
 
         highlight_the_square = 0;
         possible_moves_bb = 0;
@@ -889,7 +889,7 @@ handle_undo_move :: (window: *GLFWwindow, chess: *Chess, moves_arr: *[..] Move16
         } else {
           last_move_bb = 0;
         }
-        if status == ChessFlags.Check {
+        if in_check(chess) {
           __game_status_text = "Check.";
         } else {
           __game_status_text = "";
