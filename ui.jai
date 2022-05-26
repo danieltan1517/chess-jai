@@ -160,7 +160,7 @@ main :: () {
     end_y := corner_y + square * 8.0;
 
     // TODO: handle promotions.
-    if mouse_event {
+    if !options_on && mouse_event {
       if x >= corner_x && x <= end_x then {
         if y >= corner_y && y <= end_y then {
           mouse_coor_x := cast(int) ((x - corner_x) / square);
