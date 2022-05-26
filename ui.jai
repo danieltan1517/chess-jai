@@ -165,6 +165,7 @@ main :: () {
         if y >= corner_y && y <= end_y then {
           mouse_coor_x := cast(int) ((x - corner_x) / square);
           mouse_coor_y := cast(int) ((y - corner_y) / square);
+          position := mouse_coor_x + mouse_coor_y * 8;
           if board_orientation == false then {
             mouse_coor_x = 7 - mouse_coor_x;
             mouse_coor_y = 7 - mouse_coor_y;
@@ -175,13 +176,11 @@ main :: () {
             highlighted_moves = 0;
             if key_pressed == 1 {
               chess_mouse = ChessMouse.Drag;
-              position := mouse_coor_x + mouse_coor_y * 8;
               chess_square_select = position;
               highlighted_moves = move_bitboards.bitboard[chess_square_select];
             }
           case ChessMouse.Drag;
             if key_pressed == 0 {
-              position := mouse_coor_x + mouse_coor_y * 8;
               if chess_square_select == position {
                 chess_mouse = ChessMouse.Select;
               } else {
@@ -196,15 +195,22 @@ main :: () {
               }
             }
           case ChessMouse.Select;
-            position := mouse_coor_x + mouse_coor_y * 8;
-            from := chess_square_select;
-            to := position;
-            flag := get_move16_flag(*chess, from, to);
-            mov := to_move16(from, to, flag);
-            ui_make_move(*chess, mov);
-            chess_square_select = -1;
-            chess_mouse = ChessMouse.Idle;
-            highlighted_moves = 0;
+            piece := chess.pieces[position];
+            using Turn; using Piece;
+            if (chess.turn == WHITE && piece >= W_KING && piece <= W_PAWN) || (chess.turn == BLACK && piece >= B_KING && piece <= B_PAWN) {
+              chess_mouse = ChessMouse.Drag;
+              chess_square_select = position;
+              highlighted_moves = move_bitboards.bitboard[chess_square_select];
+            } else {
+              chess_mouse = ChessMouse.Idle;
+              from := chess_square_select;
+              to := position;
+              flag := get_move16_flag(*chess, from, to);
+              mov := to_move16(from, to, flag);
+              ui_make_move(*chess, mov);
+              chess_square_select = -1;
+              highlighted_moves = 0;
+            }
           }
         }
       }
