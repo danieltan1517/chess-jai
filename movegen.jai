@@ -667,10 +667,6 @@ PawnPushRank :: ($turn: Turn) -> u64 #expand {
     return xx rank_6;
 }
 
-init_magic_bitboards :: () {
-  init_magic_bitboard();
-}
-
 generate_attacks :: (chess: *Chess) -> unsafe: u64, check: u64 {
   if chess.turn == Turn.WHITE {
     unsafe, check := generate_attacks(chess, Turn.BLACK);
@@ -760,9 +756,8 @@ ChessFlags :: enum {
 }
 
 init_global_bitboards :: () {
-  init_magic_bitboards();
+  init_magic_bitboard();
   init_between_bitboards();
-  
 }
 
 Chess :: struct {
@@ -1666,7 +1661,7 @@ init_magic_bitboard :: () {
       mask         = bishop_mask(sq);
       relevant_bit = bishop_relevant_bits[i];
       magic        = bishop_magic_array[i]; 
-      // magic = find_magic_number(mask, i, relevant_bit, __bishop_moves);
+      //magic = find_magic_number(mask, i, relevant_bit, __bishop_moves);
     }
 
     {
