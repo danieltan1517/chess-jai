@@ -15,6 +15,7 @@ chess_square_select := -1;
 
 sound_player : *Sound_Player;
 sound_quiet_move: *Mixer_Sound_Data; // load_audio_file(name);
+sound_capture_move: *Mixer_Sound_Data; // load_audio_file(name);
 
 white_sq_color := Vector4.{238.0/255.0, 238.0/255.0, 210.0/255.0, 1.0};
 black_sq_color := Vector4.{118.0/255.0, 150.0/255.0,  86.0/255.0, 1.0};
@@ -37,6 +38,7 @@ main :: () {
   ui_init();
 
   // initialize chess w/ the starting position.
+  init_global_bitboards();
   chess_startpos(*chess);
 
   // main game loop
@@ -173,7 +175,8 @@ main :: () {
                 chess_mouse = ChessMouse.Idle;
                 from := chess_square_select;
                 to := position;
-                mov := to_move16(from, to, Move16.Quiet);
+                flag := get_move16_flag(*chess, from, to);
+                mov := to_move16(from, to, flag);
                 ui_make_move(*chess, mov);
                 chess_square_select = -1;
               }
@@ -182,7 +185,8 @@ main :: () {
             position := mouse_coor_x + mouse_coor_y * 8;
             from := chess_square_select;
             to := position;
-            mov := to_move16(from, to, Move16.Quiet);
+            flag := get_move16_flag(*chess, from, to);
+            mov := to_move16(from, to, flag);
             ui_make_move(*chess, mov);
             chess_square_select = -1;
             chess_mouse = ChessMouse.Idle;
@@ -478,18 +482,21 @@ main :: () {
   init_sound :: () {
     sound_player = New(Sound_Player);
     sound_player.update_history = true;
-    file_data, success := read_entire_file("resources/move.wav");
-    assert(success);
-    sound_quiet_move = load_wav_file(file_data, "resources/move.wav");
+    sound_quiet_move = load_wav_file("resources/move.wav");
     assert(sound_quiet_move != null);
 
+    sound_capture_move = load_wav_file("resources/capture.wav");
+    assert(sound_capture_move != null);
+
     // initialize sound player
-    success = init(sound_player, win, true, true);
+    success := init(sound_player, win, true, true);
     assert(success);
   }
 
 
-  load_wav_file :: (file_data: string, name: string) -> *Mixer_Sound_Data {
+  load_wav_file :: (name: string) -> *Mixer_Sound_Data {
+    file_data, success := read_entire_file(name);
+    assert(success);
     data := New(Mixer_Sound_Data);
     data.name = copy_string(name);
     data.buffer = file_data;
@@ -530,6 +537,69 @@ main :: () {
   GREY_SHADE_BOARD :: Vector4.{0.2, 0.2, 0.2, 0.35};
 }
 
+get_move16_flag :: (chess: *Chess, from: int, to: int) -> Move16 {
+  using Move16;
+  piece := chess.pieces[from];
+  topiece := chess.pieces[to];
+
+  if piece == {
+  case  Piece.NONE;
+    return Quiet;
+  case  Piece.W_KING;
+    if cast(serialized_bb)from == serialized_bb.e1 && cast(serialized_bb)to == serialized_bb.g1 then
+      return King_Castle;
+    if cast(serialized_bb)from == serialized_bb.e1 && cast(serialized_bb)to == serialized_bb.c1 then
+      return Queen_Castle;
+
+  case  Piece.W_QUEEN;
+  case  Piece.W_ROOK;
+  case  Piece.W_BISHOP;
+  case  Piece.W_KNIGHT;
+  case  Piece.W_PAWN;
+    fbb := cast(Bitboard) (1 << from);
+    tbb := cast(Bitboard) (1 << to);
+    if (fbb & rank_2) && (tbb & rank_4) then
+      return Double_Pawn_Push;
+    if cast(u64)tbb == chess.en_passant then
+      return Ep_Capture;
+    if tbb & rank_8 then {
+      if topiece == Piece.NONE
+        return Queen_Promotion;
+      return Queen_Promotion_Capture;
+    }
+    
+  case  Piece.B_KING;
+    if cast(serialized_bb)from == serialized_bb.e8 && cast(serialized_bb)to == serialized_bb.g8 then
+      return King_Castle;
+    if cast(serialized_bb)from == serialized_bb.e8 && cast(serialized_bb)to == serialized_bb.c8 then
+      return Queen_Castle;
+
+  case  Piece.B_QUEEN;
+  case  Piece.B_ROOK;
+  case  Piece.B_BISHOP;
+  case  Piece.B_KNIGHT;
+  case  Piece.B_PAWN;
+    fbb := cast(Bitboard) (1 << from);
+    tbb := cast(Bitboard) (1 << to);
+    if (fbb & rank_7) && (tbb & rank_5) then
+      return Double_Pawn_Push;
+    if cast(u64)tbb == chess.en_passant then
+      return Ep_Capture;
+    if tbb & rank_1 then {
+      if topiece == Piece.NONE
+        return Queen_Promotion;
+      return Queen_Promotion_Capture;
+    }
+
+  }
+
+  if topiece == Piece.NONE then
+    return Quiet;
+  else
+    return Capture;
+}
+
+
 ChessMouse :: enum {
   Idle;
   Drag;
@@ -540,8 +610,25 @@ ui_make_move :: (chess: *Chess, mov: Move16) {
   if is_legal(chess, mov) then {
     print_move(mov);
     make_move(chess, mov);
+    // play sound only if the sound_on is true
     if sound_on == true {
-      stream := play_sound(sound_quiet_move);
+
+      // pick the sound to play based on the type of move
+      using Move16;
+      flag := get_move16_flag(mov);
+      sound: *Mixer_Sound_Data;
+      if flag <= Double_Pawn_Push 
+        sound = sound_quiet_move;
+      else if flag == King_Castle 
+        sound = sound_quiet_move;
+      else if flag == Queen_Castle
+        sound = sound_quiet_move;
+      else if flag >= Knight_Promotion && flag <= Queen_Promotion
+        sound = sound_quiet_move;
+      else
+        sound = sound_capture_move;
+
+      stream := play_sound(sound);
     }
   }
 }
