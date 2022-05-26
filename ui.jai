@@ -359,6 +359,7 @@ main :: () {
         clear(*move_bitboards);
         generate_moves(*chess, *move_bitboards);
         highlighted_moves = 0;
+        game_status = "";
         previous_move = 0;
       }
 
@@ -709,6 +710,8 @@ ui_make_move :: (chess: *Chess, mov: Move16) {
       }
     } else if in_check(chess) {
       game_status = "Check.";
+    } else {
+      game_status = "";
     }
 
     // play sound only if the sound_on is true
