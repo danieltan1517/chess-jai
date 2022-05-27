@@ -9,7 +9,10 @@ display_coordinates: bool = true;
 board_orientation: bool = true; // white=true, black=false
 sound_on: bool = true;
 highlight_moves_check: bool = true;
+blindfold_mode: bool = false;
 game_status: string;
+undo_list: [2048] UndoState;
+ply := 0;
 
 chess: Chess;
 move_bitboards: Move_Bitboards;
@@ -51,6 +54,8 @@ main :: () {
   init_fonts(height);
   ui_init();
 
+  ctrl_pressed := 0;
+
   // main game loop
   while true {
     update_window_events();
@@ -76,8 +81,26 @@ main :: () {
         if e.key_code == .MOUSE_BUTTON_LEFT {
           key_pressed = e.key_pressed;
           mouse_event = true;
-        } 
+        } else if e.key_code == .CTRL {
+          ctrl_pressed = e.key_pressed;
+        } else if e.key_pressed == 1 && e.key_code == Key_Code_Z && ctrl_pressed {
+          ui_undo_move(*chess);
+        } else if e.key_pressed == 1 && e.key_code == Key_Code_N && ctrl_pressed {
+          chess_startpos(*chess);
+          clear(*move_bitboards);
+          generate_moves(*chess, *move_bitboards);
+          highlighted_moves = 0;
+          game_status = "";
+          previous_move = 0;
+          clear_undo();
+        } else if e.key_pressed == 1 && e.key_code == Key_Code_Y && ctrl_pressed {
+          ui_redo_move(*chess);
+        }
       }
+
+      Key_Code_Z : Key_Code : (#char "Z");
+      Key_Code_N : Key_Code : (#char "N");
+      Key_Code_Y : Key_Code : (#char "Y");
     }
 
     if quit == true then
@@ -272,7 +295,7 @@ main :: () {
         }
 
       }
-
+      
       draw_piece(p0, p1, p2, p3, piece);
 
     }
@@ -303,6 +326,8 @@ main :: () {
   }
 
   draw_piece :: (p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2, piece: Piece) {
+    if blindfold_mode == true then return;
+
     if piece == Piece.NONE return;
     simp.set_shader_for_images(*chess_piece_bitmap);
     if piece == {
@@ -351,28 +376,39 @@ main :: () {
     r := get_rect(xx width - 1.1 * k, xx height - 1.1 * k, k, k);
 
     button_theme.label_theme.alignment = .Left;
-    pressed := button(r, "", *button_theme, texture=*setting_bitmap);
-    if pressed then {
+    if button(r, "", *button_theme, texture=*setting_bitmap) then {
       options_on = !options_on;
     }
     
     if options_on then {
       simp.set_shader_for_color();
-      simp.immediate_quad(r.x - k*7.0, r.y, r.x + k*7.0, r.y - k*8.0, color = Vector4.{.22, .22, .22, 1});
+      simp.immediate_quad(r.x - k*7.2, r.y, r.x + k*7.0, r.y - k*11.2, color = Vector4.{.22, .22, .22, 1});
       // Color Dropdown Menu.
       r.x -= k*7.0;
-      r.y -= k*1.1;
+      r.y -= k*1.2;
       r.w = k*8.0;
       r.h = k;
 
-      pressed = button(r, "New Game", *button_theme);
-      if pressed then {
+      if button(r, "New Game (Ctrl+N)", *button_theme) then {
         chess_startpos(*chess);
         clear(*move_bitboards);
         generate_moves(*chess, *move_bitboards);
         highlighted_moves = 0;
         game_status = "";
         previous_move = 0;
+        clear_undo();
+      }
+
+      r.y -= k*1.1;
+
+      if button(r, "Undo (Ctrl+Z)", *button_theme) then {
+        ui_undo_move(*chess);
+      }
+
+      r.y -= k*1.1;
+
+      if button(r, "Redo (Ctrl+Y)", *button_theme) then {
+        ui_redo_move(*chess);
       }
 
       dropdown_theme := *default_overall_theme.dropdown_theme;
@@ -392,30 +428,32 @@ main :: () {
       checkbox_theme.font = font;
 
       r.y -= k*1.1;
-      pressed = base_checkbox(r, "Board Orientation", board_orientation, *checkbox_theme);
-      if pressed then {
+      if base_checkbox(r, "Board Orientation", board_orientation, *checkbox_theme) then {
         board_orientation = !board_orientation;
       }
 
       r.y -= k*1.1;
 
-      pressed = base_checkbox(r, "Display Coordinates", display_coordinates, *checkbox_theme);
-      if pressed then {
+      if base_checkbox(r, "Display Coordinates", display_coordinates, *checkbox_theme) then {
         display_coordinates = !display_coordinates;
       }
 
       r.y -= k*1.1;
 
-      pressed = base_checkbox(r, "Audio", sound_on, *checkbox_theme);
-      if pressed then {
+      if base_checkbox(r, "Audio", sound_on, *checkbox_theme) then {
         sound_on = !sound_on;
       }
 
       r.y -= k*1.1;
 
-      pressed = base_checkbox(r, "Highlight Moves", highlight_moves_check, *checkbox_theme);
-      if pressed then {
+      if base_checkbox(r, "Highlight Moves", highlight_moves_check, *checkbox_theme) then {
         highlight_moves_check = !highlight_moves_check;
+      }
+
+      r.y -= k*1.1;
+
+      if base_checkbox(r, "Blindfold Mode", blindfold_mode, *checkbox_theme) then {
+        blindfold_mode = !blindfold_mode;
       }
      
       draw_popups();  // This draws Subwindows as well.
@@ -686,17 +724,6 @@ get_move16_flag :: (chess: *Chess, from: int, to: int) -> Move16 {
 }
 
 
-ChessMouse :: enum {
-  Idle;
-  Drag;
-  Select;
-}
-
-Move_Bitboards :: struct {
-  bitboard: [64] u64;
-  count: int;
-}
-
 add_move :: (chess: *Chess, moves: *Move_Bitboards, from: int, to: int, flags: Move16, in_check: bool) {
   moves.bitboard[from] |= cast(u64) (1 << to);
   moves.count += 1;
@@ -706,11 +733,34 @@ clear :: (moves: *Move_Bitboards) #expand {
   memset(moves, 0, size_of(Move_Bitboards));
 }
 
+clear_undo :: () #expand {
+  memset(*undo_list, 0, size_of(type_of(undo_list)));
+  ply = 0;
+}
+
 ui_make_move :: (chess: *Chess, mov: Move16) {
+  // in case
+  if ply >= undo_list.count {
+    game_status = "Draw by Fifty Move Rule.";
+    return;
+  }
+
   if is_legal(chess, mov) then {
     _, from, to := decode_move16(mov);
     previous_move = (cast(u64) (1 << from)) | (cast(u64) (1 << to));
-    make_move(chess, mov);
+    cap, flags, hash := make_move(chess, mov);
+
+    // store the undo state so we can restore it if needed.
+    undo_list[ply].move = mov;
+    undo_list[ply].cap = cap;
+    undo_list[ply].flags = flags;
+    undo_list[ply].hash = hash;
+    ply += 1;
+
+    // zero the next move
+    // so we don't accidentally redo an illegal move.
+    undo_list[ply].move = 0;
+
     clear(*move_bitboards);
     generate_moves(chess, *move_bitboards);
 
@@ -749,6 +799,56 @@ ui_make_move :: (chess: *Chess, mov: Move16) {
   }
 }
 
+ui_undo_move :: (chess: *Chess) {
+  if ply <= 0 then return;
+
+  ply -= 1;
+  mov := undo_list[ply].move;
+  cap := undo_list[ply].cap;
+  flags := undo_list[ply].flags;
+  hash := undo_list[ply].hash;
+  unmake_move(chess, mov, cap, flags, hash);
+  clear(*move_bitboards);
+  generate_moves(chess, *move_bitboards);
+
+  // update the display variables with the relevant data.
+  if ply <= 0 then {
+    previous_move = 0;
+  } else {
+    prev_move := undo_list[ply-1].move;
+    _, from, to := decode_move16(prev_move);
+    previous_move = (cast(u64) (1 << from)) | (cast(u64) (1 << to));
+  }
+
+  if in_check(chess) {
+    game_status = "Check.";
+  } else {
+    game_status = "";
+  }
+}
+
+ui_redo_move :: (chess: *Chess) {
+  mov := undo_list[ply].move;
+  if mov == 0 then return;
+  next := undo_list[ply+1].move;
+  ui_make_move(chess, mov);
+  undo_list[ply].move = next;
+}
+
+get_uci_board_string :: () -> string {
+  builder: String_Builder;
+  builder.allocator = temp;
+  append(*builder, "position startpos");
+  if ply > 0
+    append(*builder, " moves");
+  for index: 0..ply-1 {
+    move := undo_list[index].move;
+    append(*builder, " ");
+    append(*builder, move);
+  }
+  return builder_to_string(*builder, allocator=temp);
+}
+
 play_sound :: (data: *Mixer_Sound_Data, perturb: bool = true) -> *Sound_Stream {
   stream := make_stream(sound_player, data);
 
@@ -769,6 +869,23 @@ play_sound :: (data: *Mixer_Sound_Data, perturb: bool = true) -> *Sound_Stream {
   return stream;
 }
 
+ChessMouse :: enum {
+  Idle;
+  Drag;
+  Select;
+}
+
+UndoState :: struct {
+  move: Move16;
+  flags: Castling;
+  cap: Piece;
+  hash: u64;
+}
+
+Move_Bitboards :: struct {
+  bitboard: [64] u64;
+  count: int;
+}
 
 simp :: #import "Simp";
 #import "System"; // For get_path_of_running_executable.

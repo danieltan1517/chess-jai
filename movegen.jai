@@ -2412,6 +2412,51 @@ zugzwang :: inline (using c: *Chess) -> bool {
   return w_pieces == 0 || b_pieces == 0;
 }
 
+to_string :: (move: Move16) -> string {
+  if move == 0
+    return "(none)";
+  type, from, to := decode_move16(move);
+  p := get_promotion(type);
+  if p.count == 0
+    return sprint("%1%2", cast(serialized_bb) from, cast(serialized_bb) to);
+  else 
+    return sprint("%1%2%3", cast(serialized_bb) from, cast(serialized_bb) to, p);
+}
+
+append :: (builder: *String_Builder, move: Move16) {
+  if move == 0 then {
+    print_to_builder(builder, "(none)");
+    return;
+  }
+
+  type, from, to := decode_move16(move);
+  p := get_promotion(type);
+  if p.count == 0 {
+    print_to_builder(builder, "%1%2", cast(serialized_bb) from, cast(serialized_bb) to);
+  } else {
+    print_to_builder(builder, "%1%2%3", cast(serialized_bb) from, cast(serialized_bb) to, p);
+  }
+}
+
+get_promotion :: (using type: Move16) -> string {
+  if type == {
+  case Knight_Promotion_Capture; #through;
+  case Knight_Promotion;
+    return "n";
+  case Bishop_Promotion; #through;
+  case Bishop_Promotion_Capture;
+    return "b";
+  case Rook_Promotion; #through;
+  case Rook_Promotion_Capture;
+    return "r";
+  case Queen_Promotion; #through;
+  case Queen_Promotion_Capture;
+    return "q";
+  case;
+    return "";
+  } 
+}
+
 print_move :: (move: Move16) {
   if move == 0 {
     print("(none)\n");

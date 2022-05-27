@@ -1015,7 +1015,7 @@ Board_States :: struct {
 
 uci_position_command :: () -> string {
   builder: String_Builder;
-  builder.allocator = __temporary_allocator;
+  builder.allocator = temp;
   if equal(fen_string, "startpos") {
     print_to_builder(*builder, "position % moves", fen_string);
   } else {
@@ -1034,7 +1034,7 @@ uci_position_command :: () -> string {
     }
   }
   print_to_builder(*builder, "\n");
-  str := builder_to_string(*builder, allocator=__temporary_allocator);
+  str := builder_to_string(*builder, allocator=temp);
   return str;
 
   get_promotion_character :: (using type: Move16) -> u8 {
