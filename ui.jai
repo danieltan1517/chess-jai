@@ -118,11 +118,11 @@ main :: () {
 
     pre_entity_update(sound_player);
     for sound_player.streams  it.marked = true;
-    post_entity_update(sound_player, 20);
+    post_entity_update(sound_player, 33);
 
 
     simp.swap_buffers(win);
-    sleep_milliseconds(20);
+    sleep_milliseconds(33);
     reset_temporary_storage();
   }
 

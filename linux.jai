@@ -1,2 +1,2 @@
-// contains linux specific code.
+// contains linux OS specific code.
 
