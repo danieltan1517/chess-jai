@@ -283,18 +283,18 @@ main :: () {
         if bitboard & highlighted_moves then {
        
           if (bitboard & chess.occupied) == 0 {
-            p0.x += square *.3;
-            p0.y += square *.3;
-            p1.x += square *.3;
-            p1.y -= square *.3;
-            p2.x -= square *.3;
-            p2.y -= square *.3;
-            p3.x -= square *.3;
-            p3.y += square *.3;
+            p0.x += square *.4;
+            p0.y += square *.4;
+            p1.x += square *.4;
+            p1.y -= square *.4;
+            p2.x -= square *.4;
+            p2.y -= square *.4;
+            p3.x -= square *.4;
+            p3.y += square *.4;
+            draw_quiet_move_suggestion(p0,p1,p2,p3);
+          } else {
+            draw_move_suggestion(p0, p1, p2, p3);
           }
-       
-          draw_move_suggestion(p0,p1,p2,p3);
-       
         }
 
       }
@@ -318,10 +318,13 @@ main :: () {
     simp.immediate_flush();
   }
 
-  draw_move_suggestion :: (p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2) {
-    // we reuse the settings icon to draw the circle.
-    // i am too lazy to load another icon, and it is easier just to recycle 
-    // old icons.
+  draw_quiet_move_suggestion :: (p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2) #expand {
+    simp.set_shader_for_color(true);
+    col :: Vector4.{.0,.0,.0,.1};
+    simp.immediate_quad(p0, p1, p2, p3, col);
+  }
+
+  draw_move_suggestion :: (p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2) #expand {
     simp.set_shader_for_images(*setting_bitmap);
     col :: Vector4.{0,0,0,.1};
     uv0 :: Vector2.{.3, .3};
