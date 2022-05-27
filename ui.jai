@@ -41,7 +41,7 @@ main :: () {
   // create a window. 
   // initialize fonts.
   // init ui.
-  win = create_window(600, 800, "Chess");
+  win = create_window(600, 600, "Chess");
   width, height := simp.get_render_dimensions(win);
   simp.set_render_target(win);
 
@@ -165,11 +165,11 @@ main :: () {
         if y >= corner_y && y <= end_y then {
           mouse_coor_x := cast(int) ((x - corner_x) / square);
           mouse_coor_y := cast(int) ((y - corner_y) / square);
-          position := mouse_coor_x + mouse_coor_y * 8;
           if board_orientation == false then {
             mouse_coor_x = 7 - mouse_coor_x;
             mouse_coor_y = 7 - mouse_coor_y;
           }
+          position := mouse_coor_x + mouse_coor_y * 8;
      
           if chess_mouse == {
           case ChessMouse.Idle;
@@ -197,10 +197,16 @@ main :: () {
           case ChessMouse.Select;
             piece := chess.pieces[position];
             using Turn; using Piece;
-            if (chess.turn == WHITE && piece >= W_KING && piece <= W_PAWN) || (chess.turn == BLACK && piece >= B_KING && piece <= B_PAWN) {
-              chess_mouse = ChessMouse.Drag;
-              chess_square_select = position;
-              highlighted_moves = move_bitboards.bitboard[chess_square_select];
+            if ((chess.turn == WHITE && piece >= W_KING && piece <= W_PAWN) || (chess.turn == BLACK && piece >= B_KING && piece <= B_PAWN)) {
+              if chess_square_select == position {
+                chess_mouse = ChessMouse.Idle;
+                chess_square_select = -1;
+                highlighted_moves = 0;
+              } else {
+                chess_mouse = ChessMouse.Drag;
+                chess_square_select = position;
+                highlighted_moves = move_bitboards.bitboard[chess_square_select];
+              }
             } else {
               chess_mouse = ChessMouse.Idle;
               from := chess_square_select;
@@ -554,7 +560,7 @@ main :: () {
 
   init_fonts :: (height: int) {
     // Resize the font for the new window size.
-    pixel_height := height / 40;
+    pixel_height := height / 32;
     font = simp.get_font_at_size("resources", "AnonymousPro.ttf", pixel_height);
     assert(font != null, "font not loaded properly");
   }
