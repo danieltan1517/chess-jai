@@ -9,6 +9,7 @@ display_coordinates: bool = true;
 board_orientation: bool = true; // white=true, black=false
 sound_on: bool = true;
 highlight_moves_check: bool = true;
+show_moves: bool = true;
 blindfold_mode: bool = false;
 game_status: string;
 undo_list: [2048] UndoState;
@@ -278,7 +279,9 @@ main :: () {
           prev_color :: Vector4.{.9,.9,0,.55};
           simp.immediate_quad(p0, p1, p2, p3, prev_color);
         }
-       
+      }
+      
+      if show_moves == true { 
         // draw highlighted moves.
         if bitboard & highlighted_moves then {
        
@@ -296,7 +299,6 @@ main :: () {
           draw_move_suggestion(p0,p1,p2,p3);
        
         }
-
       }
 
       if chess_mouse == ChessMouse.Drag && chess_square_select == index then 
@@ -454,6 +456,12 @@ main :: () {
 
       if base_checkbox(r, "Highlight Moves", highlight_moves_check, *checkbox_theme) then {
         highlight_moves_check = !highlight_moves_check;
+      }
+
+      r.y -= k*1.1;
+
+      if base_checkbox(r, "Show Legal Moves", show_moves, *checkbox_theme) then {
+        show_moves = !show_moves;
       }
 
       r.y -= k*1.1;
