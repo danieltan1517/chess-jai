@@ -393,6 +393,7 @@ main :: () {
     
     if options_on then {
       simp.set_shader_for_color();
+      r.x -= k*0.2;
       simp.immediate_quad(r.x - k*7.2, r.y, r.x + k*7.0, r.y - k*11.2, color = Vector4.{.22, .22, .22, 1});
       // Color Dropdown Menu.
       r.x -= k*7.0;
@@ -431,7 +432,7 @@ main :: () {
       dropdown_theme.theme_for_current_choice.font = font;
        
       old_color_theme := current_color_theme;
-      r.y -= k*1.1;
+      r.y -= k*1.2;
       dropdown(r, COLORS, *current_color_theme, dropdown_theme);
      
       COLORS :: string.["green", "blue", "grey", "brown", "purple", "red"]; 
