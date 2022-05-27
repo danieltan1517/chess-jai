@@ -394,7 +394,7 @@ main :: () {
     if options_on then {
       simp.set_shader_for_color();
       r.x -= k*0.2;
-      simp.immediate_quad(r.x - k*7.2, r.y, r.x + k*7.0, r.y - k*11.2, color = Vector4.{.22, .22, .22, 1});
+      simp.immediate_quad(r.x - k*7.2, r.y, r.x + k*7.0, r.y - k*13.2, color = Vector4.{.22, .22, .22, 1});
       // Color Dropdown Menu.
       r.x -= k*7.0;
       r.y -= k*1.2;
@@ -423,6 +423,13 @@ main :: () {
         ui_redo_move(*chess);
       }
 
+      r.y -= k*1.1;
+      label_theme: Label_Theme;
+      label_theme.alignment = .Left;
+      label_theme.font = font;
+      label_theme.alignment_pad_ems = .25;
+      label(r, "Board Theme", *label_theme);
+
       dropdown_theme := *default_overall_theme.dropdown_theme;
       dropdown_theme.theme_for_current_value.alignment = .Left;
       dropdown_theme.theme_for_each_choice.alignment = .Left;
@@ -432,7 +439,7 @@ main :: () {
       dropdown_theme.theme_for_current_choice.font = font;
        
       old_color_theme := current_color_theme;
-      r.y -= k*1.2;
+      r.y -= k*0.9;
       dropdown(r, COLORS, *current_color_theme, dropdown_theme);
      
       COLORS :: string.["green", "blue", "grey", "brown", "purple", "red"]; 
