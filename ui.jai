@@ -95,12 +95,15 @@ main :: () {
           clear_undo();
         } else if e.key_pressed == 1 && e.key_code == Key_Code_Y && ctrl_pressed {
           ui_redo_move(*chess);
+        } else if e.key_pressed == 1 && e.key_code == Key_Code_X {
+          board_orientation = !board_orientation;
         }
       }
 
-      Key_Code_Z : Key_Code : (#char "Z");
-      Key_Code_N : Key_Code : (#char "N");
-      Key_Code_Y : Key_Code : (#char "Y");
+      Key_Code_Z : Key_Code : #char "Z";
+      Key_Code_N : Key_Code : #char "N";
+      Key_Code_Y : Key_Code : #char "Y";
+      Key_Code_X : Key_Code : #char "X";
     }
 
     if quit == true then
@@ -184,72 +187,72 @@ main :: () {
 
     // TODO: handle promotions.
     if !options_on && mouse_event {
-      if x >= corner_x && x <= end_x then {
-        if y >= corner_y && y <= end_y then {
-          mouse_coor_x := cast(int) ((x - corner_x) / square);
-          mouse_coor_y := cast(int) ((y - corner_y) / square);
-          if board_orientation == false then {
-            mouse_coor_x = 7 - mouse_coor_x;
-            mouse_coor_y = 7 - mouse_coor_y;
-          }
-          position := mouse_coor_x + mouse_coor_y * 8;
+      if x >= corner_x && x <= end_x && y >= corner_y && y <= end_y then {
+        mouse_coor_x := cast(int) ((x - corner_x) / square);
+        mouse_coor_y := cast(int) ((y - corner_y) / square);
+        if board_orientation == false then {
+          mouse_coor_x = 7 - mouse_coor_x;
+          mouse_coor_y = 7 - mouse_coor_y;
+        }
+        position := mouse_coor_x + mouse_coor_y * 8;
      
-          if chess_mouse == {
-          case ChessMouse.Idle;
-            highlighted_moves = 0;
-            if key_pressed == 1 {
-              chess_mouse = ChessMouse.Drag;
-              chess_square_select = position;
-              highlighted_moves = move_bitboards.bitboard[chess_square_select];
-            }
-          case ChessMouse.Drag;
-            if key_pressed == 0 {
-              if chess_square_select == position {
-                chess_mouse = ChessMouse.Select;
-              } else {
-                chess_mouse = ChessMouse.Idle;
-                highlighted_moves = 0;
-                from := chess_square_select;
-                to := position;
-                flag := get_move16_flag(*chess, from, to);
-                mov := to_move16(from, to, flag);
-                ui_make_move(*chess, mov);
-                chess_square_select = -1;
-              }
-            }
-          case ChessMouse.Select;
-            piece := chess.pieces[position];
-            using Turn; using Piece;
-            if ((chess.turn == WHITE && piece >= W_KING && piece <= W_PAWN) || (chess.turn == BLACK && piece >= B_KING && piece <= B_PAWN)) {
-              if chess_square_select == position {
-                chess_mouse = ChessMouse.Idle;
-                chess_square_select = -1;
-                highlighted_moves = 0;
-              } else {
-                chess_mouse = ChessMouse.Drag;
-                chess_square_select = position;
-                highlighted_moves = move_bitboards.bitboard[chess_square_select];
-              }
+        if chess_mouse == {
+        case ChessMouse.Idle;
+          highlighted_moves = 0;
+          if key_pressed == 1 {
+            chess_mouse = ChessMouse.Drag;
+            chess_square_select = position;
+            highlighted_moves = move_bitboards.bitboard[chess_square_select];
+          }
+        case ChessMouse.Drag;
+          if key_pressed == 0 {
+            if chess_square_select == position {
+              chess_mouse = ChessMouse.Select;
             } else {
               chess_mouse = ChessMouse.Idle;
+              highlighted_moves = 0;
               from := chess_square_select;
               to := position;
               flag := get_move16_flag(*chess, from, to);
               mov := to_move16(from, to, flag);
               ui_make_move(*chess, mov);
               chess_square_select = -1;
-              highlighted_moves = 0;
             }
           }
+        case ChessMouse.Select;
+          piece := chess.pieces[position];
+          using Turn; using Piece;
+          if ((chess.turn == WHITE && piece >= W_KING && piece <= W_PAWN) || (chess.turn == BLACK && piece >= B_KING && piece <= B_PAWN)) {
+            if chess_square_select == position {
+              chess_mouse = ChessMouse.Idle;
+              chess_square_select = -1;
+              highlighted_moves = 0;
+            } else {
+              chess_mouse = ChessMouse.Drag;
+              chess_square_select = position;
+              highlighted_moves = move_bitboards.bitboard[chess_square_select];
+            }
+          } else {
+            chess_mouse = ChessMouse.Idle;
+            from := chess_square_select;
+            to := position;
+            flag := get_move16_flag(*chess, from, to);
+            mov := to_move16(from, to, flag);
+            ui_make_move(*chess, mov);
+            chess_square_select = -1;
+            highlighted_moves = 0;
+          }
         }
+      } else {
+        chess_mouse = ChessMouse.Idle;
+        chess_square_select = -1;
+        highlighted_moves = 0;
       }
     }
 
     simp.immediate_begin();
 
     for piece, index: chess.pieces {
-      if chess_mouse == ChessMouse.Drag && chess_square_select == index then 
-        continue;
       row := 0; 
       col := 0; 
 
@@ -295,6 +298,9 @@ main :: () {
         }
 
       }
+
+      if chess_mouse == ChessMouse.Drag && chess_square_select == index then 
+        continue;
       
       draw_piece(p0, p1, p2, p3, piece);
 
