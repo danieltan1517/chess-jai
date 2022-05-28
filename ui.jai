@@ -32,6 +32,16 @@ sound_capture_move: *Mixer_Sound_Data;
 white_sq_color := Vector4.{238.0/255.0, 238.0/255.0, 210.0/255.0, 1.0};
 black_sq_color := Vector4.{118.0/255.0, 150.0/255.0,  86.0/255.0, 1.0};
 
+// move animation states.
+mov_anim_time: float = 0;
+mov_anim_complete: float = .12;
+mov_anim_state: MovAnim = MovAnim.Idle;
+
+// dt calculation
+dt: float = 0;
+looptime_begin: float = 0;
+looptime_end: float = 0;
+
 main :: () {
   path := path_strip_filename(get_path_of_running_executable());
   set_working_directory(path);
@@ -59,6 +69,9 @@ main :: () {
 
   // main game loop
   while true {
+    dt = looptime_end - looptime_begin;
+    looptime_begin = looptime_end;
+
     update_window_events();
     for e: get_window_resizes() {
       // Simp will do nothing if it doesn't care about this window.
@@ -118,12 +131,13 @@ main :: () {
 
     pre_entity_update(sound_player);
     for sound_player.streams  it.marked = true;
-    post_entity_update(sound_player, 33);
+    post_entity_update(sound_player, dt);
 
 
     simp.swap_buffers(win);
-    sleep_milliseconds(33);
+    sleep_milliseconds(20);
     reset_temporary_storage();
+    looptime_end = cast(float)get_time();
   }
 
 
@@ -173,7 +187,7 @@ main :: () {
       }
     }
 
-    if game_status then
+    if game_status.count > 0 then
       simp.draw_text(font, 10, 10, game_status, Vector4.{1,1,1,1});
   }
 
@@ -303,6 +317,8 @@ main :: () {
 
       if chess_mouse == ChessMouse.Drag && chess_square_select == index then 
         continue;
+      if mov_anim_state == MovAnim.Play && previous_move & bitboard then
+        continue;
       
       draw_piece(p0, p1, p2, p3, piece);
 
@@ -317,6 +333,39 @@ main :: () {
       piece := chess.pieces[chess_square_select];
       draw_piece(p0, p1, p2, p3, piece);
     }
+
+    if mov_anim_state == MovAnim.Play && previous_move then {
+      mov := undo_list[ply-1].move;
+      _, from, to := decode_move16(mov);
+      piece := chess.pieces[to];
+
+      from_x := from % 8;
+      from_y := from / 8;
+
+      to_x := to % 8;
+      to_y := to / 8;
+
+      from_vector: Vector2; 
+      from_vector.x = corner_x + square * from_x;
+      from_vector.y = corner_y + square * from_y;
+
+      to_vector: Vector2;
+      to_vector.x = corner_x + square * to_x;
+      to_vector.y = corner_y + square * to_y;
+
+      ratio := mov_anim_time / mov_anim_complete;
+      mov_anim_time += dt;
+      if mov_anim_time >= mov_anim_complete {
+        mov_anim_time = 0;
+        mov_anim_state = MovAnim.Idle;
+      }
+      p0 := lerp(from_vector, to_vector, ratio);
+      p1 := make_vector2(p0.x, p0.y + square);
+      p2 := make_vector2(p0.x + square, p0.y + square);
+      p3 := make_vector2(p0.x + square, p0.y);
+      draw_piece(p0, p1, p2, p3, piece);
+    }
+
     simp.immediate_flush();
   }
 
@@ -394,7 +443,7 @@ main :: () {
     if options_on then {
       simp.set_shader_for_color();
       r.x -= k*0.2;
-      simp.immediate_quad(r.x - k*7.2, r.y, r.x + k*7.0, r.y - k*13.2, color = Vector4.{.22, .22, .22, 1});
+      simp.immediate_quad(r.x - k*7.2, r.y, r.x + k*7.0, r.y - k*14.75, color = Vector4.{.22, .22, .22, 1});
       // Color Dropdown Menu.
       r.x -= k*7.0;
       r.y -= k*1.2;
@@ -480,6 +529,21 @@ main :: () {
       if base_checkbox(r, "Blindfold Mode", blindfold_mode, *checkbox_theme) then {
         blindfold_mode = !blindfold_mode;
       }
+
+      r.y -= k*1.1;
+
+      if base_checkbox(r, "Animations", mov_anim_state != MovAnim.Off, *checkbox_theme) then {
+        if mov_anim_state == MovAnim.Off
+          mov_anim_state = MovAnim.Idle;
+        else
+          mov_anim_state = MovAnim.Off;
+      }
+
+      r.y -= k*1.1;
+
+      slider_theme: Slider_Theme;
+      slider_theme.foreground.font = font;
+      slider(r, *mov_anim_complete, 0.00, .32, 0.01, *slider_theme, "", " Animation");
      
       draw_popups();  // This draws Subwindows as well.
       if old_color_theme != current_color_theme {
@@ -870,6 +934,10 @@ ui_redo_move :: (chess: *Chess) {
   next := undo_list[ply+1].move;
   ui_make_move(chess, mov);
   undo_list[ply].move = next;
+
+  // enable playing of the move animation.
+  if mov_anim_state == MovAnim.Idle then
+    mov_anim_state = MovAnim.Play;
 }
 
 get_uci_board_string :: () -> string {
@@ -910,6 +978,12 @@ ChessMouse :: enum {
   Idle;
   Drag;
   Select;
+}
+
+MovAnim :: enum {
+  Off;
+  Idle;
+  Play;
 }
 
 UndoState :: struct {
