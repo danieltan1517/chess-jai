@@ -910,11 +910,12 @@ ui_make_move :: (chess: *Chess, mov: Move16, animate: bool) {
       game_status = "";
     }
 
+    cur_hash := chess.hash;
     count := 0;
-    for < index: ply-2..0 {
+    for < index: ply-1..0 {
       if get_move16_flag(undo_list[index].move) >= Move16.Double_Pawn_Push
         break;
-      if undo_list[index].hash == hash {
+      if undo_list[index].hash == cur_hash {
         count += 1;
       }
     }
@@ -922,8 +923,10 @@ ui_make_move :: (chess: *Chess, mov: Move16, animate: bool) {
       game_status = "Draw by Threefold Repetition.";
     }
 
-    if animate && mov_anim_state == MovAnim.Idle then
+    if animate && mov_anim_state == MovAnim.Idle then {
+      mov_anim_time = 0.0;
       mov_anim_state = MovAnim.Play;
+    }
 
     // play sound only if the sound_on is true
     if sound_on == true {
