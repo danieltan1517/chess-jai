@@ -11,6 +11,7 @@ sound_on: bool = true;
 highlight_moves_check: bool = true;
 show_moves: bool = true;
 blindfold_mode: bool = false;
+commandline_on: bool = false;
 game_status: string;
 undo_list: [2048] UndoState;
 ply := 0;
@@ -41,6 +42,9 @@ mov_anim_state: MovAnim = MovAnim.Idle;
 dt: float = 0;
 looptime_begin: float = 0;
 looptime_end: float = 0;
+
+// console.
+console_string: string;
 
 main :: () {
   path := path_strip_filename(get_path_of_running_executable());
@@ -91,6 +95,7 @@ main :: () {
     key_pressed := 0;
     for e: events_this_frame {
       if e.type == .QUIT then quit = true;
+      getrect_handle_event(e);
       if e.type == .KEYBOARD then {
         if e.key_code == .MOUSE_BUTTON_LEFT {
           key_pressed = e.key_pressed;
@@ -109,7 +114,7 @@ main :: () {
           clear_undo();
         } else if e.key_pressed == 1 && e.key_code == Key_Code_Y && ctrl_pressed {
           ui_redo_move(*chess);
-        } else if e.key_pressed == 1 && e.key_code == Key_Code_X {
+        } else if e.key_pressed == 1 && e.key_code == Key_Code_X && ctrl_pressed {
           board_orientation = !board_orientation;
         }
       }
@@ -228,9 +233,9 @@ main :: () {
               highlighted_moves = 0;
               from := chess_square_select;
               to := position;
-              flag := get_move16_flag(*chess, from, to);
+              flag := get_move16_flag(*chess, from, to, #char "q");
               mov := to_move16(from, to, flag);
-              ui_make_move(*chess, mov);
+              ui_make_move(*chess, mov, false);
               chess_square_select = -1;
             }
           }
@@ -251,9 +256,9 @@ main :: () {
             chess_mouse = ChessMouse.Idle;
             from := chess_square_select;
             to := position;
-            flag := get_move16_flag(*chess, from, to);
+            flag := get_move16_flag(*chess, from, to, #char "q");
             mov := to_move16(from, to, flag);
-            ui_make_move(*chess, mov);
+            ui_make_move(*chess, mov, false);
             chess_square_select = -1;
             highlighted_moves = 0;
           }
@@ -419,8 +424,7 @@ main :: () {
   }
 
   draw_ui :: (width: s32, height: s32) {
-    current_time := get_time();
-    ui_per_frame_update(win, width, height, current_time);
+    ui_per_frame_update(win, width, height, looptime_end);
 
     button_height := height * .03;
 
@@ -439,11 +443,27 @@ main :: () {
     if button(r, "", *button_theme, texture=*setting_bitmap) then {
       options_on = !options_on;
     }
+
+    if commandline_on == true {
+      r2 := get_rect(10.0, 10.0, cast(float)width - 20.0, k);
+      text_theme: Text_Input_Theme;
+      text_theme.font = font;
+      action, modified_console_string := text_input(r2, console_string, *text_theme);
+      if action & .ENTERED {
+        free(console_string);
+        console_string = copy_string(modified_console_string);
+        tf, mov := parse_move(console_string);
+        if tf {
+          ui_make_move(*chess, mov, true);
+          console_string = "";
+        }
+      }
+    }
     
     if options_on then {
       simp.set_shader_for_color();
       r.x -= k*0.2;
-      simp.immediate_quad(r.x - k*7.2, r.y, r.x + k*7.0, r.y - k*14.75, color = Vector4.{.22, .22, .22, 1});
+      simp.immediate_quad(r.x - k*7.2, r.y, r.x + k*7.0, r.y - k*15.75, color = Vector4.{.22, .22, .22, 1});
       // Color Dropdown Menu.
       r.x -= k*7.0;
       r.y -= k*1.2;
@@ -545,6 +565,14 @@ main :: () {
       slider_theme.foreground.font = font;
       slider(r, *mov_anim_complete, 0.00, .32, 0.01, *slider_theme, "", " Animation");
      
+
+      r.y -= k*1.1;
+
+      if base_checkbox(r, "Command Line", commandline_on, *checkbox_theme) then {
+        commandline_on = !commandline_on;
+      }
+
+
       draw_popups();  // This draws Subwindows as well.
       if old_color_theme != current_color_theme {
         if current_color_theme == {
@@ -750,7 +778,7 @@ main :: () {
   GREY_SHADE_BOARD :: Vector4.{0.2, 0.2, 0.2, 0.35};
 }
 
-get_move16_flag :: (chess: *Chess, from: int, to: int) -> Move16 {
+get_move16_flag :: (chess: *Chess, from: int, to: int, p: u8) -> Move16 {
   using Move16;
   piece := chess.pieces[from];
   topiece := chess.pieces[to];
@@ -777,8 +805,8 @@ get_move16_flag :: (chess: *Chess, from: int, to: int) -> Move16 {
       return Ep_Capture;
     if tbb & rank_8 then {
       if topiece == Piece.NONE
-        return Queen_Promotion;
-      return Queen_Promotion_Capture;
+        return promote(p);
+      return promote_cap(p);
     }
     
   case  Piece.B_KING;
@@ -800,8 +828,8 @@ get_move16_flag :: (chess: *Chess, from: int, to: int) -> Move16 {
       return Ep_Capture;
     if tbb & rank_1 then {
       if topiece == Piece.NONE
-        return Queen_Promotion;
-      return Queen_Promotion_Capture;
+        return promote(p);
+      return promote_cap(p);
     }
 
   }
@@ -810,6 +838,23 @@ get_move16_flag :: (chess: *Chess, from: int, to: int) -> Move16 {
     return Quiet;
   else
     return Capture;
+
+  promote :: (p: u8) -> Move16 {
+    if p == #char "q" return Queen_Promotion;
+    if p == #char "r" return Rook_Promotion;
+    if p == #char "b" return Bishop_Promotion;
+    if p == #char "n" return Knight_Promotion;
+    return 0;
+  }
+
+  promote_cap :: (p: u8) -> Move16 {
+    if p == #char "q" return Queen_Promotion_Capture;
+    if p == #char "r" return Rook_Promotion_Capture;
+    if p == #char "b" return Bishop_Promotion_Capture;
+    if p == #char "n" return Knight_Promotion;
+    return 0;
+
+  }
 }
 
 
@@ -827,7 +872,7 @@ clear_undo :: () #expand {
   ply = 0;
 }
 
-ui_make_move :: (chess: *Chess, mov: Move16) {
+ui_make_move :: (chess: *Chess, mov: Move16, animate: bool) {
   // in case
   if ply >= undo_list.count {
     game_status = "Draw by Fifty Move Rule.";
@@ -876,6 +921,9 @@ ui_make_move :: (chess: *Chess, mov: Move16) {
     if count >= 2 then {
       game_status = "Draw by Threefold Repetition.";
     }
+
+    if animate && mov_anim_state == MovAnim.Idle then
+      mov_anim_state = MovAnim.Play;
 
     // play sound only if the sound_on is true
     if sound_on == true {
@@ -932,12 +980,8 @@ ui_redo_move :: (chess: *Chess) {
   mov := undo_list[ply].move;
   if mov == 0 then return;
   next := undo_list[ply+1].move;
-  ui_make_move(chess, mov);
+  ui_make_move(chess, mov, true);
   undo_list[ply].move = next;
-
-  // enable playing of the move animation.
-  if mov_anim_state == MovAnim.Idle then
-    mov_anim_state = MovAnim.Play;
 }
 
 get_uci_board_string :: () -> string {
@@ -972,6 +1016,30 @@ play_sound :: (data: *Mixer_Sound_Data, perturb: bool = true) -> *Sound_Stream {
   }
   
   return stream;
+}
+
+parse_move :: (str: string) -> bool, Move16 {
+  if str.count < 4 || str.count > 5 return false, 0;
+  a := cast(int)(str[0] - #char "a");
+  b := cast(int)(str[1] - #char "1");
+  c := cast(int)(str[2] - #char "a");
+  d := cast(int)(str[3] - #char "1");
+
+  if a < 0 || a > 7 then
+    return false, 0;
+  if b < 0 || b > 7 then
+    return false, 0;
+  if c < 0 || c > 7 then
+    return false, 0;
+  if d < 0 || d > 7 then
+    return false, 0;
+
+  from := b*8 + a;
+  to   := d*8 + c;
+  p    := ifx (str.count == 5) str[4] else #char " ";
+  flag := get_move16_flag(*chess, from, to, p);
+  mov := to_move16(from, to, flag);
+  return true, mov;
 }
 
 ChessMouse :: enum {
