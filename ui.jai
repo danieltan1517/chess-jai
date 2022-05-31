@@ -43,9 +43,6 @@ dt: float = 0;
 looptime_begin: float = 0;
 looptime_end: float = 0;
 
-// console.
-console_string: string;
-
 main :: () {
   path := path_strip_filename(get_path_of_running_executable());
   set_working_directory(path);
@@ -116,6 +113,8 @@ main :: () {
           ui_redo_move(*chess);
         } else if e.key_pressed == 1 && e.key_code == Key_Code_X && ctrl_pressed {
           board_orientation = !board_orientation;
+        } else if e.key_pressed == 1 && e.key_code == .ESCAPE {
+          commandline_on = !commandline_on;
         }
       }
 
@@ -448,15 +447,29 @@ main :: () {
       r2 := get_rect(10.0, 10.0, cast(float)width - 20.0, k);
       text_theme: Text_Input_Theme;
       text_theme.font = font;
-      action, modified_console_string := text_input(r2, console_string, *text_theme);
+      action, console_string, state := text_input(r2, "", *text_theme);
       if action & .ENTERED {
-        free(console_string);
-        console_string = copy_string(modified_console_string);
         tf, mov := parse_move(console_string);
         if tf {
           ui_make_move(*chess, mov, true);
-          console_string = "";
+        } else {
+          token, TF := parse_token(*console_string);
+          console_string = eat_spaces(console_string);
+          if TF && equal(token, "fen") {
+            if !chess_fen(*chess, console_string) {
+              chess_startpos(*chess);
+            }
+
+            clear(*move_bitboards);
+            generate_moves(*chess, *move_bitboards);
+            highlighted_moves = 0;
+            game_status = "";
+            previous_move = 0;
+            clear_undo();
+          }
         }
+        reset(state);
+        activate(state);
       }
     }
     
