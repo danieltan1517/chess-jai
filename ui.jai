@@ -1082,7 +1082,7 @@ ui_make_move :: (chess: *Chess, mov: Move16, animate: bool) {
       else
         sound = sound_capture_move;
 
-      stream := play_sound(sound);
+      play_sound(sound);
     }
   }
 }
@@ -1128,6 +1128,12 @@ ui_redo_move :: (chess: *Chess) {
   next := undo_list[ply+1].move;
   ui_make_move(chess, mov, true);
   undo_list[ply].move = next;
+  if chess_mouse == ChessMouse.Promote then {
+    chess_mouse = ChessMouse.Idle;
+    chess_square_select = -1;
+    highlighted_moves = 0;
+    return;
+  }
 }
 
 get_uci_board_string :: () -> string {
