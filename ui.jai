@@ -113,7 +113,7 @@ main :: () {
           ui_new_game();
         } else if e.key_pressed == 1 && e.key_code == Key_Code_Y && ctrl_pressed {
           ui_redo_move(*chess);
-        } else if e.key_pressed == 1 && e.key_code == Key_Code_X && ctrl_pressed {
+        } else if e.key_pressed == 1 && e.key_code == Key_Code_X && commandline_on == false {
           board_orientation = !board_orientation;
         } else if e.key_pressed == 1 && e.key_code == .ESCAPE {
           commandline_on = !commandline_on;
@@ -581,6 +581,12 @@ main :: () {
         tf, mov := parse_move(console_string);
         if tf {
           ui_make_move(*chess, mov, true);
+          if chess_mouse == ChessMouse.Promote then {
+            chess_mouse = ChessMouse.Idle;
+            chess_square_select = -1;
+            highlighted_moves = 0;
+            return;
+          }
         } else {
           token, TF := parse_token(*console_string);
           console_string = eat_spaces(console_string);
