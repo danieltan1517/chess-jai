@@ -51,7 +51,9 @@ promote_b_select := -1;
 promote_n_select := -1;
 
 main :: () {
+
   path := path_strip_filename(get_path_of_running_executable());
+  set_default_theme(default_theme_procs[Default_Themes.Grayscale]());
   set_working_directory(path);
 
   // initialize chess w/ the starting position.
@@ -556,28 +558,24 @@ main :: () {
 
     button_height := height * .03;
 
-    button_theme: Button_Theme;  // This will have the default Button_Theme values.
-    button_theme.font = font;
-    button_theme.frame_color = Vector4.{.40, .40, .50, 0.0};
-    button_theme.frame_color_over = Vector4.{.55, .55, .45, 0.0};
-    button_theme.frame_color_flash = Vector4.{.99, .99, .65, 0.0};
-    button_theme.frame_color_down = Vector4.{.75, .75, .55, 0.0};
+    button_theme := *default_overall_theme.button_theme;
     // 'k' is some resolution-adjusting unit of distance. Right now it is
     // 1/10 of the screen height, so, 108 pixels at 1920x1080.
     k := height * .045;
     r := get_rect(xx width - 1.1 * k, xx height - 1.1 * k, k, k);
 
     button_theme.label_theme.alignment = .Left;
-    if button(r, "", *button_theme, texture=*setting_bitmap) then {
+    if button(r, "", button_theme, texture=*setting_bitmap) then {
       options_on = !options_on;
     }
 
     if commandline_on == true {
       r2 := get_rect(10.0, 10.0, cast(float)width - 20.0, k);
-      text_theme: Text_Input_Theme;
+      text_theme: *Text_Input_Theme = *default_overall_theme.text_input_theme;
       text_theme.font = font;
-      action, console_string, state := text_input(r2, "", *text_theme);
+      action, console_string, state := text_input(r2, "", text_theme);
       if action & .ENTERED {
+        should_reset := true;
         tf, mov := parse_move(console_string);
         if tf {
           ui_make_move(*chess, mov, true);
@@ -587,6 +585,12 @@ main :: () {
             highlighted_moves = 0;
             return;
           }
+        } else if equal(console_string, "undo") {
+          ui_undo_move(*chess);
+          should_reset = false;
+        } else if equal(console_string, "redo") {
+          ui_redo_move(*chess);
+          should_reset = false;
         } else {
           token, TF := parse_token(*console_string);
           console_string = eat_spaces(console_string);
@@ -597,7 +601,8 @@ main :: () {
             ui_new_game();
           }
         }
-        reset(state);
+        if should_reset then
+          reset(state);
         activate(state);
       }
     }
@@ -612,84 +617,81 @@ main :: () {
       r.w = k*8.0;
       r.h = k;
 
-      if button(r, "New Game (Ctrl+N)", *button_theme) then {
+      if button(r, "New Game (Ctrl+N)", button_theme) then {
         chess_startpos(*chess);
         ui_new_game();
       }
 
       r.y -= k*1.1;
 
-      if button(r, "Undo (Ctrl+Z)", *button_theme) then {
+      if button(r, "Undo (Ctrl+Z)", button_theme) then {
         ui_undo_move(*chess);
       }
 
       r.y -= k*1.1;
 
-      if button(r, "Redo (Ctrl+Y)", *button_theme) then {
+      if button(r, "Redo (Ctrl+Y)", button_theme) then {
         ui_redo_move(*chess);
       }
 
       r.y -= k*1.1;
-      label_theme: Label_Theme;
+      label_theme := *default_overall_theme.label_theme;
       label_theme.alignment = .Left;
       label_theme.font = font;
       label_theme.alignment_pad_ems = .25;
-      label(r, "Board Theme", *label_theme);
+      label(r, "Board Theme", label_theme);
 
       dropdown_theme := *default_overall_theme.dropdown_theme;
       dropdown_theme.theme_for_current_value.alignment = .Left;
       dropdown_theme.theme_for_each_choice.alignment = .Left;
       dropdown_theme.theme_for_current_choice.alignment = .Left;
-      dropdown_theme.theme_for_current_value.font = font;
-      dropdown_theme.theme_for_each_choice.font = font;
-      dropdown_theme.theme_for_current_choice.font = font;
        
       old_color_theme := current_color_theme;
       r.y -= k*0.9;
       dropdown(r, COLORS, *current_color_theme, dropdown_theme);
      
       COLORS :: string.["green", "blue", "grey", "brown", "purple", "red"]; 
-      checkbox_theme: Checkbox_Theme;
+      checkbox_theme := *default_overall_theme.checkbox_theme;
       checkbox_theme.font = font;
 
       r.y -= k*1.1;
-      if base_checkbox(r, "Board Orientation", board_orientation, *checkbox_theme) then {
+      if base_checkbox(r, "Board Orientation", board_orientation, checkbox_theme) then {
         board_orientation = !board_orientation;
       }
 
       r.y -= k*1.1;
 
-      if base_checkbox(r, "Display Coordinates", display_coordinates, *checkbox_theme) then {
+      if base_checkbox(r, "Display Coordinates", display_coordinates, checkbox_theme) then {
         display_coordinates = !display_coordinates;
       }
 
       r.y -= k*1.1;
 
-      if base_checkbox(r, "Audio", sound_on, *checkbox_theme) then {
+      if base_checkbox(r, "Audio", sound_on, checkbox_theme) then {
         sound_on = !sound_on;
       }
 
       r.y -= k*1.1;
 
-      if base_checkbox(r, "Highlight Moves", highlight_moves_check, *checkbox_theme) then {
+      if base_checkbox(r, "Highlight Moves", highlight_moves_check, checkbox_theme) then {
         highlight_moves_check = !highlight_moves_check;
       }
 
       r.y -= k*1.1;
 
-      if base_checkbox(r, "Show Legal Moves", show_moves, *checkbox_theme) then {
+      if base_checkbox(r, "Show Legal Moves", show_moves, checkbox_theme) then {
         show_moves = !show_moves;
       }
 
       r.y -= k*1.1;
 
-      if base_checkbox(r, "Blindfold Mode", blindfold_mode, *checkbox_theme) then {
+      if base_checkbox(r, "Blindfold Mode", blindfold_mode, checkbox_theme) then {
         blindfold_mode = !blindfold_mode;
       }
 
       r.y -= k*1.1;
 
-      if base_checkbox(r, "Animations", mov_anim_state != MovAnim.Off, *checkbox_theme) then {
+      if base_checkbox(r, "Animations", mov_anim_state != MovAnim.Off, checkbox_theme) then {
         if mov_anim_state == MovAnim.Off
           mov_anim_state = MovAnim.Idle;
         else
@@ -698,14 +700,13 @@ main :: () {
 
       r.y -= k*1.1;
 
-      slider_theme: Slider_Theme;
-      slider_theme.foreground.font = font;
-      slider(r, *mov_anim_complete, 0.00, .32, 0.01, *slider_theme, "", " Animation");
+      slider_theme := *default_overall_theme.slider_theme;
+      slider(r, *mov_anim_complete, 0.00, .32, 0.01, slider_theme, "", " Animation");
      
 
       r.y -= k*1.1;
 
-      if base_checkbox(r, "Command Line", commandline_on, *checkbox_theme) then {
+      if base_checkbox(r, "Command Line", commandline_on, checkbox_theme) then {
         commandline_on = !commandline_on;
       }
 
@@ -972,16 +973,16 @@ get_move16_flag :: (chess: *Chess, from: int, to: int, p: u8) -> Move16 {
   }
 
   if topiece == Piece.NONE then
-    return Quiet;
+    return promote(p);
   else
-    return Capture;
+    return promote_cap(p);
 
   promote :: (p: u8) -> Move16 {
     if p == #char "q" return Queen_Promotion;
     if p == #char "r" return Rook_Promotion;
     if p == #char "b" return Bishop_Promotion;
     if p == #char "n" return Knight_Promotion;
-    return 0;
+    return Quiet;
   }
 
   promote_cap :: (p: u8) -> Move16 {
@@ -989,7 +990,7 @@ get_move16_flag :: (chess: *Chess, from: int, to: int, p: u8) -> Move16 {
     if p == #char "r" return Rook_Promotion_Capture;
     if p == #char "b" return Bishop_Promotion_Capture;
     if p == #char "n" return Knight_Promotion_Capture;
-    return 0;
+    return Capture;
   }
 }
 
