@@ -701,7 +701,7 @@ main :: () {
       r.y -= k*1.1;
 
       slider_theme := *default_overall_theme.slider_theme;
-      slider(r, *mov_anim_complete, 0.00, .32, 0.01, slider_theme, "", " Animation");
+      slider(r, *mov_anim_complete, 0.00, 1.0, 0.01, slider_theme, "", " Animation");
      
 
       r.y -= k*1.1;
