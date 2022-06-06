@@ -317,24 +317,26 @@ main :: () {
             }
           }
         case .Promote;
-          char: u8 = #char " ";
-          to := promote_to;
-          if position == promote_q_select || position == promote_to {
-            char = #char "q";
-          } else if position == promote_r_select {
-            char = #char "r";
-          } else if position == promote_b_select {
-            char = #char "b";
-          } else if position == promote_n_select {
-            char = #char "n";
+          if key_pressed == 1 {
+            char: u8 = #char " ";
+            to := promote_to;
+            if position == promote_q_select || position == promote_to {
+              char = #char "q";
+            } else if position == promote_r_select {
+              char = #char "r";
+            } else if position == promote_b_select {
+              char = #char "b";
+            } else if position == promote_n_select {
+              char = #char "n";
+            }
+            chess_mouse = ChessMouse.Idle;
+            from := chess_square_select;
+            flag := get_move16_flag(*chess, from, to, char);
+            mov := to_move16(from, to, flag);
+            ui_make_move(*chess, mov, false);
+            chess_square_select = -1;
+            highlighted_moves = 0;
           }
-          chess_mouse = ChessMouse.Idle;
-          from := chess_square_select;
-          flag := get_move16_flag(*chess, from, to, char);
-          mov := to_move16(from, to, flag);
-          ui_make_move(*chess, mov, false);
-          chess_square_select = -1;
-          highlighted_moves = 0;
         }
       } else {
         // outside of the board.

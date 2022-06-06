@@ -512,7 +512,7 @@ negamax :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int) ->
     unsafe: u64 = 0;
     check: u64 = 0;
     turn := chess.turn;
-    while true {
+    while outer_loop := true {
       while moves.count <= 0 {
         if stage == {
         case .PV;
@@ -549,7 +549,7 @@ negamax :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int) ->
           stage = .END;
           generate_quiets(unsafe, check, chess, *moves);
         case .END;
-          return; // terminate loop
+          break outer_loop; // terminate loop
         }
       }
       `it, `it_index := heap_pop(*moves);
@@ -568,7 +568,7 @@ negamax :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int) ->
     unsafe: u64 = 0;
     check: u64 = 0;
     turn := chess.turn;
-    while true {
+    while outer_loop := true {
       while moves.count <= 0 {
         if stage == {
         case .PV;
@@ -586,7 +586,7 @@ negamax :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int) ->
           unsafe, check = generate_attacks(chess);
           generate_tactics(unsafe, check, chess, *moves);
         case .END;
-          return; // terminate loop
+          break outer_loop; // terminate loop
         }
       }
 
@@ -894,7 +894,7 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
     unsafe: u64 = 0;
     check: u64 = 0;
     turn := chess.turn;
-    while true {
+    while outer_loop := true {
       while moves.count <= 0 {
         if stage == {
         case .PV;
@@ -915,7 +915,7 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
           stage = .END;
           generate_quiets(unsafe, check, chess, *moves);
         case .END;
-          return; // terminate loop
+          break outer_loop; // terminate loop
         }
       }
       `it, `it_index := heap_pop(*moves);
