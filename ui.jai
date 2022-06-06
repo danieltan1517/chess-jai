@@ -973,9 +973,9 @@ get_move16_flag :: (chess: *Chess, from: int, to: int, p: u8) -> Move16 {
   }
 
   if topiece == Piece.NONE then
-    return promote(p);
+    return Quiet;
   else
-    return promote_cap(p);
+    return Capture;
 
   promote :: (p: u8) -> Move16 {
     if p == #char "q" return Queen_Promotion;
