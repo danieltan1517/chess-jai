@@ -66,7 +66,6 @@ main :: () {
   // initialize fonts.
   // init ui.
   win = create_window(600, 600, "Chess");
-  print("%\n", win);
   width, height := simp.get_render_dimensions(win);
   simp.set_render_target(win);
 
@@ -96,7 +95,6 @@ main :: () {
       }
     }
 
-    //_, __, width, height := get_dimensions(win, true);
     x, y := get_mouse_pointer_position(win, true);
 
     quit := false;
@@ -108,7 +106,6 @@ main :: () {
       getrect_handle_event(e);
       if e.type == .KEYBOARD then {
         if e.key_code == .MOUSE_BUTTON_LEFT {
-          print("%\n", e);
           key_pressed = e.key_pressed;
           mouse_event = true;
           chess_mouse_event(xx width, xx height, xx x, xx y, mouse_event, key_pressed);
