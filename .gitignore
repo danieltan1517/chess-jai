@@ -1,5 +1,8 @@
 chess
 chess-jai
+*.*~
+*.pdb
+*.exe
 .build
 resources/
 *.txt
