@@ -3,6 +3,7 @@ chess-jai
 *.*~
 *.pdb
 *.exe
+*.*.exe
 .build
 resources/
 *.txt

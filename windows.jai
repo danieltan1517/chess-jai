@@ -1,10 +1,13 @@
 // contains windows OS specific code.
 
-main :: () {
-  path := path_strip_filename(get_path_of_running_executable());
-  set_working_directory(path);
-  exe_name := join(path, "stockfish.exe");
+Proc :: struct {
+  hProcess: HANDLE;
+  write: HANDLE;
+  read: HANDLE;
+}
 
+create_proc :: (command: string) -> Proc, bool {
+  proc: Proc;
   child_stdin_read: HANDLE = null;
   child_stdin_write: HANDLE = null;
   child_stdout_read: HANDLE = null;
@@ -18,20 +21,20 @@ main :: () {
 
   // create pipe for child process's STDOUT.
   if !CreatePipe(*child_stdout_read, *child_stdout_write, *sa, 0) {
-    print("Error. 1\n");
+    return proc, false;
   }
 
   if !SetHandleInformation(child_stdout_read, HANDLE_FLAG_INHERIT, 0) {
-    print("Error. 2\n");
+    return proc, false;
   }
 
   // create pipe for child process's STDIN.
   if !CreatePipe(*child_stdin_read, *child_stdin_write, *sa, 0) {
-    print("Error. 3\n");
+    return proc, false;
   }
 
   if !SetHandleInformation(child_stdin_write, HANDLE_FLAG_INHERIT, 0) {
-    print("Error. 4\n");
+    return proc, false;
   }
 
   // create child process.
@@ -49,45 +52,89 @@ main :: () {
   siStartInfo.hStdInput = child_stdin_read;
   siStartInfo.dwFlags |= STARTF_USESTDHANDLES;
 
-  exe := to_c_string(exe_name);
+  exe := to_c_string(command);
   if !CreateProcessA(exe, "child", null, null, .TRUE, 0, null, null, *siStartInfo, *piProcInfo)
-    print("error.\n");
-  else {
-    CloseHandle(piProcInfo.hProcess);
-    CloseHandle(piProcInfo.hThread);
-    CloseHandle(child_stdout_write);
-    CloseHandle(child_stdin_read);
+    return proc, false;
+
+  CloseHandle(piProcInfo.hProcess);
+  CloseHandle(piProcInfo.hThread);
+  CloseHandle(child_stdout_write);
+  CloseHandle(child_stdin_read);
+  proc.hProcess = piProcInfo.hProcess;
+  proc.write = child_stdin_write;
+  proc.read = child_stdout_read;
+  return proc, true;
+
+}
+
+main :: () {
+  path := path_strip_filename(get_path_of_running_executable());
+  set_working_directory(path);
+  proc, TF := create_proc(join(path, "stockfish.exe"));
+  print("% %\n", proc, TF);
+  write_proc(*proc, "uci\n");
+  for :loop str, index: proc {
+    print("[immortal %] %\n", index, str);
   }
+  print("go depth 20\n");
+  write_proc(*proc, "go depth 20\n");
+  for :loop str, index: proc {
+    print("[immortal] %\n", str);
+  }
+  write_proc(*proc, "quit\n");
+  print("end of program.\n");
+  close_proc(*proc);
 
-  // write proc.
-  write_proc(child_stdin_write, "uci\n");
-  sleep_milliseconds(1000);
-  read_proc(child_stdout_read);
-  write_proc(child_stdin_write, "go depth 20\n");
-  sleep_milliseconds(1000);
-  read_proc(child_stdout_read);
-  write_proc(child_stdin_write, "quit\n");
+
 }
 
-write_proc :: (write_pipe: HANDLE, command: string) {
-  print("%\n", command);
+close_proc :: (using proc: *Proc) -> u32 {
+  code: u32;
+  success := GetExitCodeProcess(hProcess, *code);
+  CloseHandle(write);
+  CloseHandle(read);
+  return code;
+}
+
+write_proc :: (using proc: *Proc, command: string) {
   written: u32;
-  WriteFile(write_pipe, command.data, xx command.count, *written, null);
+  if !WriteFile(write, command.data, xx command.count, *written, null) then
+    print("fail to write %\n", command);
 }
 
-read_proc :: (read_pipe: HANDLE) {
+loop :: (proc: *Proc, loop_body: Code, flags: For_Flags) #expand {
 
   bytes_read: u32;
   buffer := NewArray(16384, u8, allocator=temp);
+  `it_index := 0;
   
   while true {
+    sleep_milliseconds(1000);
 
-    success := ReadFile(read_pipe, buffer.data, 16383, *bytes_read, null);
-    if !success || bytes_read == 0 break;
+    dw: DWORD;
+    if !PeekNamedPipe(proc.read, null, 0, null, *dw, null)
+      break;
+    if dw <= 0 then
+      break;
+
+    if !ReadFile(proc.read, buffer.data, 16383, *bytes_read, null) then
+      break;
+    if bytes_read == 0 then
+      break;
+
+    auto_release_temp();
     messages := to_string(buffer.data, bytes_read);
-    print("%\n", messages);
-    break;
+    if messages[bytes_read - 1] == #char "\n" then {
+      messages.count -= 1;
+    } 
+
+    for message, i: split(messages, "\n") {
+      `it := message;
+      #insert (break=break outer) loop_body;
+      it_index += 1;
+    }
   }
+
 }
 
 #scope_file
