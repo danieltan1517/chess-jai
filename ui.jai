@@ -585,7 +585,6 @@ main :: () {
     if commandline_on == true {
       r2 := get_rect(10.0, 10.0, cast(float)width - 20.0, k);
       text_theme: *Text_Input_Theme = *default_overall_theme.text_input_theme;
-      text_theme.font = font;
       action, console_string, state := text_input(r2, "", text_theme);
       if action & .ENTERED {
         should_reset := true;
@@ -650,7 +649,6 @@ main :: () {
       r.y -= k*1.1;
       label_theme := *default_overall_theme.label_theme;
       label_theme.alignment = .Left;
-      label_theme.font = font;
       label_theme.alignment_pad_ems = .25;
       label(r, "Board Theme", label_theme);
 
@@ -665,7 +663,6 @@ main :: () {
      
       COLORS :: string.["green", "blue", "grey", "brown", "purple", "red"]; 
       checkbox_theme := *default_overall_theme.checkbox_theme;
-      checkbox_theme.font = font;
 
       r.y -= k*1.1;
       if base_checkbox(r, "Board Orientation", board_orientation, checkbox_theme) then {
