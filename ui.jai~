@@ -353,13 +353,8 @@ main :: () {
   }
 
   draw_chess_pieces :: (width: float, height: float, x: float, y: float, mouse_event: bool, key_pressed: int) {
-    cen_x := width  / 2;
-    cen_y := height / 2;
-    square := 0.85 * min(width, height) / 8.0;
     corner_x := cen_x - square * 4.0;
     corner_y := cen_y - square * 4.0;
-    end_x := corner_x + square * 8.0;
-    end_y := corner_y + square * 8.0;
 
     simp.immediate_begin();
 

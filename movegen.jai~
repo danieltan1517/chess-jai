@@ -176,6 +176,7 @@ chess_startpos :: (chess: *Chess) {
 
   chess.occupied = xx (rank_1|rank_2|rank_7|rank_8);
   add_piece(Piece.W_KING, xx e1);
+  print_chess(chess);
   add_piece(Piece.W_QUEEN, xx d1);
   add_piece(Piece.W_ROOK, xx a1|h1);
   add_piece(Piece.W_BISHOP, xx c1|f1);
