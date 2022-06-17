@@ -22,6 +22,7 @@ nnue-probe/
 eval
 my-chess-ai
 lion-tulip
+stockfish
 mockfish
 openings
 movegen

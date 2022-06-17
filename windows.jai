@@ -52,7 +52,7 @@ create_proc :: (command: string) -> Proc, bool {
   siStartInfo.hStdInput = child_stdin_read;
   siStartInfo.dwFlags |= STARTF_USESTDHANDLES;
 
-  exe := to_c_string(command);
+  exe := to_c_string(join(command, ".exe"));
   if !CreateProcessA(exe, "child", null, null, .TRUE, 0, null, null, *siStartInfo, *piProcInfo)
     return proc, false;
 
