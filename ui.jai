@@ -52,7 +52,7 @@ promote_n_select := -1;
 
 // chess engine AIs
 chess_engines: [..] Engine;
-w_engine_index := -1;
+w_engine_index := 0;
 b_engine_index := 0;
 NOT_AI :: -1;
 
@@ -87,6 +87,7 @@ main :: () {
   ctrl_pressed := 0;
 
   engine, etf := load_engine("stockfish");
+  assert(etf);
   array_add(*chess_engines, engine);
 
   defer {
@@ -1140,6 +1141,7 @@ ui_make_move :: (chess: *Chess, mov: Move16, animate: bool) {
 
 ui_undo_move :: (chess: *Chess) {
   if ply <= 0 then return;
+  if w_engine_index != NOT_AI && b_engine_index != NOT_AI then return;
 
   if chess_mouse == ChessMouse.Promote then {
     chess_mouse = ChessMouse.Idle;
@@ -1370,7 +1372,7 @@ update_uci_engine :: (engine: *Engine, id: int, dt: float) {
     // TODO: handle different cases!
     str := get_uci_board_string();
     write_proc(proc, str);
-    write_proc(proc, "go movetime 1\n");
+    write_proc(proc, "go movetime 3000\n");
   case .bestmove;
     // waiting to get the best move.
     // don't do anything.

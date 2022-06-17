@@ -103,11 +103,14 @@ loop :: (proc: *Proc, loop_body: Code, flags: For_Flags) #expand {
     if ends_with(messages, "\r\n") then {
       messages.count -= 2;
     } 
-
-    for message: split(messages, "\r\n") {
-      `it := message;
-      #insert (break=break outer) loop_body;
+    found: bool = true;
+    msg: string;
+    while messages {
+      found, msg, messages = split_from_left(messages, #char "\n");
+      `it := msg;
+      #insert (break=break outer)loop_body;
       it_index += 1;
+      if !found break;
     }
   }
 

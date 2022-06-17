@@ -85,14 +85,16 @@ loop :: (proc: *Proc, loop_body: Code, flags: For_Flags) #expand {
     messages := to_string(buffer.data, bytes_read); // -1 the '\n' char
     if messages[bytes_read - 1] == #char "\n" then {
       messages.count -= 1;
-    } else {
-
     }
 
-    for message, i: split(messages, "\n") {
-      `it := message;
+    found: bool = true;
+    msg: string;
+    while messages {
+      found, msg, messages = split_from_left(messages, #char "\n");
+      `it := msg;
       #insert (break=break outer)loop_body;
       it_index += 1;
+      if !found break;
     }
   }
 }
