@@ -86,7 +86,7 @@ main :: () {
 
   ctrl_pressed := 0;
 
-  engine, etf := load_engine("stockfish");
+  engine, etf := load_engine("stockfish.exe");
   array_add(*chess_engines, engine);
 
   defer {

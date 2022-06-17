@@ -100,11 +100,11 @@ loop :: (proc: *Proc, loop_body: Code, flags: For_Flags) #expand {
 
     auto_release_temp();
     messages := to_string(buffer.data, bytes_read);
-    if messages[bytes_read - 1] == #char "\n" then {
-      messages.count -= 1;
+    if ends_with(messages, "\r\n") then {
+      messages.count -= 2;
     } 
 
-    for message, i: split(messages, "\n") {
+    for message: split(messages, "\r\n") {
       `it := message;
       #insert (break=break outer) loop_body;
       it_index += 1;
