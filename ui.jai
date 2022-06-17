@@ -50,9 +50,17 @@ promote_r_select := -1;
 promote_b_select := -1;
 promote_n_select := -1;
 
+// chess engine AIs
+chess_engines: [..] Engine;
+w_engine_index := -1;
+b_engine_index := 0;
+NOT_AI :: -1;
+
+fen_string: string = "";
+
 main :: () {
 
-  path := path_strip_filename(get_path_of_running_executable());
+  path = path_strip_filename(get_path_of_running_executable());
   set_default_theme(default_theme_procs[Default_Themes.Grayscale]());
   set_working_directory(path);
 
@@ -60,6 +68,7 @@ main :: () {
   // generate chess moves.
   init_global_bitboards();
   chess_startpos(*chess);
+  fen_string = "";
   ui_new_game();
 
   // create a window. 
@@ -76,6 +85,15 @@ main :: () {
   ui_init();
 
   ctrl_pressed := 0;
+
+  engine, etf := load_engine("stockfish");
+  array_add(*chess_engines, engine);
+
+  defer {
+    for *engine: chess_engines {
+      close_engine(engine);
+    }
+  }
 
   // main game loop
   while true {
@@ -115,6 +133,7 @@ main :: () {
           ui_undo_move(*chess);
         } else if e.key_pressed == 1 && e.key_code == Key_Code_N && ctrl_pressed {
           chess_startpos(*chess);
+          fen_string = "";
           ui_new_game();
         } else if e.key_pressed == 1 && e.key_code == Key_Code_Y && ctrl_pressed {
           ui_redo_move(*chess);
@@ -141,6 +160,8 @@ main :: () {
     for sound_player.streams  it.marked = true;
     post_entity_update(sound_player, dt);
 
+    for *engine, id: chess_engines
+      update_uci_engine(engine, id, dt);
 
     simp.swap_buffers(win);
     sleep_milliseconds(20);
@@ -243,6 +264,56 @@ main :: () {
               flag := get_move16_flag(*chess, from, to, #char "q");
               mov := to_move16(from, to, flag);
               piece := chess.pieces[from];
+              if is_human_turn() {
+                if flag > Move16.Ep_Capture {
+                  if is_legal(*chess, mov) {
+                    chess_mouse = ChessMouse.Promote;
+                    promote_to = to;
+                    if chess.turn == Turn.WHITE {
+                      promote_q_select = to - 8;
+                      promote_r_select = promote_q_select - 8;
+                      promote_b_select = promote_r_select - 8;
+                      promote_n_select = promote_b_select - 8;
+                    } else {
+                      promote_q_select = to + 8;
+                      promote_r_select = promote_q_select + 8;
+                      promote_b_select = promote_r_select + 8;
+                      promote_n_select = promote_b_select + 8;
+                    }
+                  } else {
+                    chess_mouse = ChessMouse.Idle;
+                    chess_square_select = -1;
+                    highlighted_moves = 0;
+                  }
+                } else {
+                  ui_make_move(*chess, mov, false);
+                  chess_square_select = -1;
+                  highlighted_moves = 0;
+                }
+              }
+            }
+          }
+        case .Select;
+          piece := chess.pieces[position];
+          using Turn; using Piece;
+          if ((chess.turn == WHITE && piece >= W_KING && piece <= W_PAWN) || (chess.turn == BLACK && piece >= B_KING && piece <= B_PAWN)) {
+            if chess_square_select == position {
+              chess_mouse = ChessMouse.Idle;
+              chess_square_select = -1;
+              highlighted_moves = 0;
+            } else {
+              chess_mouse = ChessMouse.Drag;
+              chess_square_select = position;
+              highlighted_moves = move_bitboards.bitboard[chess_square_select];
+            }
+          } else {
+            chess_mouse = ChessMouse.Idle;
+            from := chess_square_select;
+            to := position;
+            flag := get_move16_flag(*chess, from, to, #char "q");
+            mov := to_move16(from, to, flag);
+            piece := chess.pieces[from];
+            if is_human_turn() {
               if flag > Move16.Ep_Capture {
                 if is_legal(*chess, mov) {
                   chess_mouse = ChessMouse.Promote;
@@ -268,52 +339,6 @@ main :: () {
                 chess_square_select = -1;
                 highlighted_moves = 0;
               }
-            }
-          }
-        case .Select;
-          piece := chess.pieces[position];
-          using Turn; using Piece;
-          if ((chess.turn == WHITE && piece >= W_KING && piece <= W_PAWN) || (chess.turn == BLACK && piece >= B_KING && piece <= B_PAWN)) {
-            if chess_square_select == position {
-              chess_mouse = ChessMouse.Idle;
-              chess_square_select = -1;
-              highlighted_moves = 0;
-            } else {
-              chess_mouse = ChessMouse.Drag;
-              chess_square_select = position;
-              highlighted_moves = move_bitboards.bitboard[chess_square_select];
-            }
-          } else {
-            chess_mouse = ChessMouse.Idle;
-            from := chess_square_select;
-            to := position;
-            flag := get_move16_flag(*chess, from, to, #char "q");
-            mov := to_move16(from, to, flag);
-            piece := chess.pieces[from];
-            if flag > Move16.Ep_Capture {
-              if is_legal(*chess, mov) {
-                chess_mouse = ChessMouse.Promote;
-                promote_to = to;
-                if chess.turn == Turn.WHITE {
-                  promote_q_select = to - 8;
-                  promote_r_select = promote_q_select - 8;
-                  promote_b_select = promote_r_select - 8;
-                  promote_n_select = promote_b_select - 8;
-                } else {
-                  promote_q_select = to + 8;
-                  promote_r_select = promote_q_select + 8;
-                  promote_b_select = promote_r_select + 8;
-                  promote_n_select = promote_b_select + 8;
-                }
-              } else {
-                chess_mouse = ChessMouse.Idle;
-                chess_square_select = -1;
-                highlighted_moves = 0;
-              }
-            } else {
-              ui_make_move(*chess, mov, false);
-              chess_square_select = -1;
-              highlighted_moves = 0;
             }
           }
         case .Promote;
@@ -458,11 +483,22 @@ main :: () {
       _, from, to := decode_move16(mov);
       piece := chess.pieces[to];
 
-      from_x := from % 8;
-      from_y := from / 8;
+      from_x: int;
+      from_y: int;
+      to_x: int;
+      to_y: int;
 
-      to_x := to % 8;
-      to_y := to / 8;
+      if board_orientation then {
+        from_x = from % 8;
+        from_y = from / 8;
+        to_x = to % 8;
+        to_y = to / 8;
+      } else {
+        from_x = 7 - from % 8;
+        from_y = 7 - from / 8;
+        to_x = 7 - to % 8;
+        to_y = 7 - to / 8;
+      }
 
       from_vector: Vector2; 
       from_vector.x = corner_x + square * from_x;
@@ -607,8 +643,12 @@ main :: () {
           token, TF := parse_token(*console_string);
           console_string = eat_spaces(console_string);
           if TF && equal(token, "fen") {
-            if !chess_fen(*chess, console_string) {
+            if chess_fen(*chess, console_string) {
+              // TODO: memory leak!
+              fen_string = copy_string(console_string);
+            } else {
               chess_startpos(*chess);
+              fen_string = "";
             }
             ui_new_game();
           }
@@ -1108,12 +1148,21 @@ ui_undo_move :: (chess: *Chess) {
     return;
   }
 
-  ply -= 1;
-  mov := undo_list[ply].move;
-  cap := undo_list[ply].cap;
-  flags := undo_list[ply].flags;
-  hash := undo_list[ply].hash;
-  unmake_move(chess, mov, cap, flags, hash);
+  curply := ply;
+
+  while ply == curply || !is_human_turn() {
+    ply -= 1;
+    if ply < 0 {
+      ply = 0;
+      break;
+    }
+    mov := undo_list[ply].move;
+    cap := undo_list[ply].cap;
+    flags := undo_list[ply].flags;
+    hash := undo_list[ply].hash;
+    unmake_move(chess, mov, cap, flags, hash);
+  }
+
   clear(*move_bitboards);
   generate_moves(chess, *move_bitboards);
 
@@ -1150,7 +1199,10 @@ ui_redo_move :: (chess: *Chess) {
 get_uci_board_string :: () -> string {
   builder: String_Builder;
   builder.allocator = temp;
-  append(*builder, "position startpos");
+  if fen_string then
+    print_to_builder(*builder, "position fen %", fen_string);
+  else
+    append(*builder, "position startpos");
   if ply > 0
     append(*builder, " moves");
   for index: 0..ply-1 {
@@ -1158,6 +1210,7 @@ get_uci_board_string :: () -> string {
     append(*builder, " ");
     append(*builder, move);
   }
+  append(*builder, "\n");
   return builder_to_string(*builder, allocator=temp);
 }
 
@@ -1220,6 +1273,143 @@ ui_new_game :: () {
   }
 }
 
+// TODO: figure out whether we want to load from a different path.
+load_engine :: (name: string) -> Engine, bool {
+  chess_engine: Engine;
+  TF: bool;
+  chess_engine.name = name; // TODO: maybe memory leak.
+
+  command := join(path, name);
+  print("loading % from: %\n", name, command);
+
+  chess_engine.proc, TF = create_proc(command);
+  chess_engine.timer = FLOAT32_INFINITY; // for keeping track of time
+  return chess_engine, TF;
+}
+
+update_uci_engine :: (engine: *Engine, id: int, dt: float) {
+  name := engine.name;
+  state := engine.state;
+  defer engine.state = state;
+
+  proc := *engine.proc;
+
+  // read.
+  if state == {
+  case .uciok;
+    for :loop message: proc {
+      print("[%]: %\n", name, message);
+      if equal(message, "uciok") then {
+        state = .isready;
+        engine.timer = FLOAT32_INFINITY;
+      }
+    }
+  case .isready;
+    for :loop message: proc {
+      print("[%]: %\n", name, message);
+      if equal(message, "readyok") then {
+        state = .ucinewgame;
+        engine.timer = FLOAT32_INFINITY;
+      }
+    }
+  case .ucinewgame;
+    state = .idle;
+  case .idle;
+    if is_engine_turn(id) then {
+      state = .go;
+      engine.timer = FLOAT32_INFINITY;
+    }
+  case .go;
+    state = .bestmove;
+  case .bestmove;
+    if !is_engine_turn(id) then {
+      state = .idle;
+      engine.timer = FLOAT32_INFINITY;
+    } else {
+      for :loop message: proc {
+        print("[%]: %\n", name, message);
+        if starts_with(message, "bestmove ") {
+          parse_token(*message);
+          message = eat_spaces(message);
+          mov_token := parse_token(*message);
+          TF, mov := parse_move(mov_token);
+          if TF {
+            ui_make_move(*chess, mov, true);
+            state = .idle;
+          } else {
+            state = .bug;
+            print("There is a bug.\n");
+          }
+        }
+      }
+    }
+  }
+
+  engine.timer += dt;
+
+  // write.
+  if state == {
+  case .uciok;
+    if engine.timer > 3.0 then {
+      write_proc(proc, "uci\n");
+      engine.timer = 0.0;
+    } 
+  case .isready;
+    if engine.timer > 5.0 then {
+      write_proc(proc, "isready\n");
+      engine.timer = 0.0;
+    } 
+  case .ucinewgame;
+    if engine.timer > 5.0 then {
+      write_proc(proc, "ucinewgame\n");
+      engine.timer = 0.0;
+    }
+  case .idle;
+    engine.timer = FLOAT32_INFINITY;
+  case .go;
+    // TODO: handle different cases!
+    str := get_uci_board_string();
+    write_proc(proc, str);
+    write_proc(proc, "go movetime 1\n");
+  case .bestmove;
+    // waiting to get the best move.
+    // don't do anything.
+  case .bug;
+
+  }
+
+}
+
+close_engine :: (engine: *Engine) {
+  // send a "quit" command before closing the chess engine.
+  proc := *engine.proc;
+  write_proc(proc, "quit\n");
+  code := close_proc(proc);
+  print("[%] has exited with a value of %\n", engine.name, code);
+}
+
+is_human_turn :: () -> bool {
+  if chess.turn == .WHITE && w_engine_index == NOT_AI
+    return true;
+  if chess.turn == .BLACK && b_engine_index == NOT_AI
+    return true;
+  return false;
+}
+
+is_engine_turn :: (id: int) -> bool {
+  if chess.turn == .WHITE {
+    if id == w_engine_index
+      return true;
+  } else if chess.turn == .BLACK {
+    if id == b_engine_index
+      return true;
+  }
+
+  return false;
+}
+
+path: string;
+
 ChessMouse :: enum {
   Idle;
   Drag;
@@ -1245,6 +1435,23 @@ Move_Bitboards :: struct {
   count: int;
 }
 
+Engine :: struct {
+  name: string;
+  proc: Proc;
+  state: EngineState = .uciok;
+  timer: float = FLOAT32_INFINITY; // for keeping track of time
+}
+
+EngineState :: enum {
+  uciok;
+  isready;
+  ucinewgame;
+  idle;
+  go;
+  bestmove;
+  bug;
+}
+
 simp :: #import "Simp";
 #import "System"; // For get_path_of_running_executable.
 #import "String"; // For path_strip_filename. 
@@ -1254,7 +1461,6 @@ simp :: #import "Simp";
 #import "Input";
 #import "Window_Creation";
 #import "GetRect";
-#load "movegen.jai";
 #import "Sound_Player";
 #import "Wav_File";
 #import "File";

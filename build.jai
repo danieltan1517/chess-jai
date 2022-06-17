@@ -1,16 +1,15 @@
 #import "Basic";
 #import "Compiler";
 
-ui_exe :: "jai-chess";
-ui_file_names :: string.["ui_main.jai", "movegen.jai"];
+
+
+ui_exe :: "chess";
+ui_file_names :: string.["ui.jai", "movegen.jai"];
 
 ai_exe :: "ceij";
 ai_file_names :: string.["ai_main.jai", "search.jai", "eval.jai", "movegen.jai"];
-//ai_file_names :: string.["nnue.jai"];
 
 #run {
-  args_option : enum { debug; release;} = .debug;
-  choice : enum { ai_compile; ui_compile;} = .ai_compile;
   w := compiler_create_workspace("workspace");
   if !w {
     print("Workspace creation failed.\n");
@@ -18,53 +17,15 @@ ai_file_names :: string.["ai_main.jai", "search.jai", "eval.jai", "movegen.jai"]
   }
   target_options := get_build_options(w);
   args := target_options.compile_time_command_line;
-  for arg: args {
-    if arg == {
-    case "debug";
-      args_option = .debug;
-    case "release";
-      args_option = .release;
-    case "ui";
-      choice = .ui_compile;
-    case "ai";
-      choice = .ai_compile;
-    case;
-      print("Error: Invalid commandline argument: %\n", arg);
-      return;
-    }
-  }
+  exe := ui_exe;
+  file_names := ui_file_names;
 
-  exe : string;
-  file_names : [] string; 
-  if choice == {
-  case .ui_compile;
-    exe = ui_exe;
-    file_names = ui_file_names;
-  case .ai_compile;
-    exe = ai_exe;
-    file_names = ai_file_names;
-  }
+  build_debug(w, exe, file_names);
 
-  if args_option == {
-  case .debug;
-    build_debug(w, exe, file_names);
-  case .release;
-    build_release(w, exe, file_names);
-  }
-}
-
-build_debug :: (w: Workspace, executable_name: string, file_names: [] string) {
-  target_options := get_build_options(w);
-  target_options.output_executable_name = executable_name;
-  target_options.optimization_level = .DEBUG;
-  target_options.backend = .X64;
-  target_options.temporary_storage_size = 262144;
-  set_build_options(target_options, w);
-
-  compiler_begin_intercept(w);
-  // add all the files
-  for file_names {
-    add_build_file(tprint("%/%", #filepath, it), w);  
+  #if OS == .LINUX {
+    add_build_file(tprint("%/%", #filepath, "linux.jai"), w);  
+  } else #if OS == .WINDOWS {
+    add_build_file(tprint("%/%", #filepath, "windows.jai"), w);  
   }
 
   while true {
@@ -76,6 +37,24 @@ build_debug :: (w: Workspace, executable_name: string, file_names: [] string) {
     }
   }
   set_build_options_dc(.{do_output=false});
+
+}
+
+build_debug :: (w: Workspace, executable_name: string, file_names: [] string) {
+  target_options := get_build_options(w);
+  target_options.output_executable_name = executable_name;
+  target_options.optimization_level = .DEBUG;
+  target_options.backend = .X64;
+  target_options.temporary_storage_size = 262144;
+  target_options.stack_trace = true;
+
+  set_build_options(target_options, w);
+
+  compiler_begin_intercept(w);
+  // add all the files
+  for file_names {
+    add_build_file(tprint("%/%", #filepath, it), w);  
+  }
 }
 
 build_release :: (w: Workspace, executable_name: string, file_names: [] string) {
@@ -93,15 +72,6 @@ build_release :: (w: Workspace, executable_name: string, file_names: [] string) 
   for file_names {
     add_build_file(tprint("%/%", #filepath, it), w);  
   }
-  while true {
-    message := compiler_wait_for_message();
-    if !message break;
-    if message.kind == {
-    case .COMPLETE;
-      break;
-    }
-  }
-  set_build_options_dc(.{do_output=false});
 }
 
 

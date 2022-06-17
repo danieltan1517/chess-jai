@@ -67,28 +67,7 @@ create_proc :: (command: string) -> Proc, bool {
 
 }
 
-main :: () {
-  path := path_strip_filename(get_path_of_running_executable());
-  set_working_directory(path);
-  proc, TF := create_proc(join(path, "stockfish.exe"));
-  print("% %\n", proc, TF);
-  write_proc(*proc, "uci\n");
-  for :loop str, index: proc {
-    print("[immortal %] %\n", index, str);
-  }
-  print("go depth 20\n");
-  write_proc(*proc, "go depth 20\n");
-  for :loop str, index: proc {
-    print("[immortal] %\n", str);
-  }
-  write_proc(*proc, "quit\n");
-  print("end of program.\n");
-  close_proc(*proc);
-
-
-}
-
-close_proc :: (using proc: *Proc) -> u32 {
+close_proc :: (using proc: *Proc) -> int {
   code: u32;
   success := GetExitCodeProcess(hProcess, *code);
   CloseHandle(write);
@@ -98,8 +77,7 @@ close_proc :: (using proc: *Proc) -> u32 {
 
 write_proc :: (using proc: *Proc, command: string) {
   written: u32;
-  if !WriteFile(write, command.data, xx command.count, *written, null) then
-    print("fail to write %\n", command);
+  WriteFile(write, command.data, xx command.count, *written, null);
 }
 
 loop :: (proc: *Proc, loop_body: Code, flags: For_Flags) #expand {
@@ -109,8 +87,6 @@ loop :: (proc: *Proc, loop_body: Code, flags: For_Flags) #expand {
   `it_index := 0;
   
   while true {
-    sleep_milliseconds(1000);
-
     dw: DWORD;
     if !PeekNamedPipe(proc.read, null, 0, null, *dw, null)
       break;

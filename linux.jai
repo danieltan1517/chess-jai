@@ -68,7 +68,6 @@ create_proc :: (command: string) -> Proc, bool {
 }
 
 write_proc :: (using proc: *Proc, command: string) {
-  print("%\n", command);
   write(write_pipe, command.data, xx command.count);
 }
 
@@ -77,7 +76,6 @@ loop :: (proc: *Proc, loop_body: Code, flags: For_Flags) #expand {
   buffer := NewArray(16384, u8, allocator=temp);
   `it_index := 0;
   while outer := true {
-    sleep_milliseconds(1000);
     bytes_read := read(read_pipe, buffer.data, xx (buffer.count-1));
     if bytes_read <= 0 then {
       break;
@@ -99,35 +97,14 @@ loop :: (proc: *Proc, loop_body: Code, flags: For_Flags) #expand {
   }
 }
 
-close_proc :: (using proc: *Proc) {
+close_proc :: (using proc: *Proc) -> int {
   // NOTE: this function does NOT call "uci_write_command(engine, "quit")",
   // that needs to be called explicitly
   status: s32;
   waitpid(pid, *status, 0);
-  print("[%] quits with return code: %\n" , pid, status);
   close(write_pipe);
   close(read_pipe);
-}
-
-main :: () {
-  path := path_strip_filename(get_path_of_running_executable());
-  set_working_directory(path);
-  proc, TF := create_proc(join(path, "resources/", "ceij"));
-  print("% %\n", proc, TF);
-  write_proc(*proc, "uci\n");
-  for :loop str, index: proc {
-    print("[immortal %] %\n", index, str);
-    //if index == 4 break;
-  }
-  print("go depth 20\n");
-  write_proc(*proc, "go depth 20\n");
-  for :loop str, index: proc {
-    print("[immortal] %\n", str);
-    //if index == 20 break;
-  }
-  write_proc(*proc, "quit\n");
-  print("end of program.\n");
-  close_proc(*proc);
+  return status;
 }
 
 #scope_file
