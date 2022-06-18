@@ -52,9 +52,19 @@ promote_n_select := -1;
 
 // chess engine AIs
 chess_engines: [..] Engine;
-w_engine_index := 0;
-b_engine_index := 0;
+w_engine_index : s32 = -1;
+b_engine_index : s32= 0;
 NOT_AI :: -1;
+
+// clock.
+wtime: float = (60.0 * 1000.0);
+btime: float = (60.0 * 1000.0);
+winc: float = 0.1;
+binc: float = 0.1;
+clockon: bool = true;
+
+// new game window.
+subwindow_newgame: Subwindow_Info;
 
 fen_string: string = "";
 
@@ -84,6 +94,10 @@ main :: () {
   init_fonts(height);
   ui_init();
 
+  subwindow_newgame.rect = get_rect(100,100,400,400);
+  subwindow_newgame.draw = draw_subwindow_newgame;
+  subwindow_newgame.title_text = "New Game";
+
   ctrl_pressed := 0;
 
   engine, etf := load_engine("stockfish");
@@ -99,6 +113,7 @@ main :: () {
   // main game loop
   while true {
     dt = looptime_end - looptime_begin;
+    update_clock(dt);
     looptime_begin = looptime_end;
 
     update_window_events();
@@ -170,7 +185,6 @@ main :: () {
     looptime_end = cast(float)get_time();
   }
 
-
   draw_chess_board :: (width: float, height: float) {
     simp.clear_render_target(0.15555, 0.15555, 0.15555, 1.0);
     simp.set_shader_for_color();
@@ -219,6 +233,25 @@ main :: () {
 
     if game_status.count > 0 then
       simp.draw_text(font, 10, 10, game_status, Vector4.{1,1,1,1});
+  }
+
+  update_clock :: (dt: float) {
+    if clockon == false then return;
+    if chess.turn == Turn.WHITE then {
+      wtime -= dt;
+      if wtime < 0 {
+        wtime = 0;
+        clockon = false;
+        game_status = "White Timeout";
+      }
+    } else {
+      btime -= dt;
+      if btime < 0 {
+        btime = 0;
+        clockon = false;
+        game_status = "Black Timeout";
+      }
+    }
   }
 
   chess_mouse_event :: (width: float, height: float, x: float, y: float, mouse_event: bool, key_pressed: int) {
@@ -608,12 +641,73 @@ main :: () {
 
     button_height := height * .03;
 
+    // use the GetRect default theme.
     button_theme := *default_overall_theme.button_theme;
-    // 'k' is some resolution-adjusting unit of distance. Right now it is
-    // 1/10 of the screen height, so, 108 pixels at 1920x1080.
-    k := height * .045;
-    r := get_rect(xx width - 1.1 * k, xx height - 1.1 * k, k, k);
+    dropdown_theme := *default_overall_theme.dropdown_theme;
+    dropdown_theme.theme_for_current_value.alignment = .Left;
+    dropdown_theme.theme_for_each_choice.alignment = .Left;
+    dropdown_theme.theme_for_current_choice.alignment = .Left;
+    checkbox_theme := *default_overall_theme.checkbox_theme;
+    slider_theme := *default_overall_theme.slider_theme;
+    text_theme: *Text_Input_Theme = *default_overall_theme.text_input_theme;
+    label_theme := *default_overall_theme.label_theme;
+    label_theme.alignment = .Left;
+    label_theme.alignment_pad_ems = .25;
+    subwindow_theme := *default_overall_theme.subwindow_theme;
 
+    // 'k' is some resolution-adjusting unit of distance. Right now it is
+    k := height * .045;
+
+    // draw the clock.
+    draw_clock();
+
+    draw_clock :: () #expand {
+      cen_x := width  / 2;
+      cen_y := height / 2;
+      square := 0.85 * min(width, height) / 8.0;
+      corner_x := cen_x - square * 4.0;
+      corner_y := cen_y - square * 4.0;
+      end_x := corner_x + square * 8.0;
+      end_y := corner_y + square * 8.0;
+      center := xx width / 2.0;
+
+      digit :: #bake_arguments formatInt(minimum_digits=2);
+      name := "";
+      if w_engine_index != -1 {
+        name = chess_engines[w_engine_index].name;
+      }
+
+      wmins := cast(int) (wtime / 60.0);
+      wsecs := cast(int) fmod(wtime, 60.0);
+      wstring := tprint("% %:%", name, digit(wmins), digit(wsecs));
+
+      name = "";
+      if b_engine_index != -1 {
+        name = chess_engines[b_engine_index].name;
+      }
+
+      bmins := cast(int) (btime / 60.0);
+      bsecs := cast(int) fmod(btime, 60.0);
+      bstring := tprint("% %:%", name, digit(bmins), digit(bsecs));
+
+      bottom_string := "";
+      top_string := "";
+      if board_orientation == true {
+        bottom_string = wstring;
+        top_string = bstring;
+      } else {
+        bottom_string = bstring;
+        top_string = wstring;
+      }
+
+      clk_box := get_rect(corner_x, corner_y, center, k);
+      clk_box.y -= k;
+      label(clk_box, bottom_string, label_theme);
+      clk_box = get_rect(corner_x, corner_y + square * 8.0, center, k);
+      label(clk_box, top_string, label_theme);
+    }
+
+    r := get_rect(xx width - 1.1 * k, xx height - 1.1 * k, k, k);
     button_theme.label_theme.alignment = .Left;
     if button(r, "", button_theme, texture=*setting_bitmap) then {
       options_on = !options_on;
@@ -621,7 +715,6 @@ main :: () {
 
     if commandline_on == true {
       r2 := get_rect(10.0, 10.0, cast(float)width - 20.0, k);
-      text_theme: *Text_Input_Theme = *default_overall_theme.text_input_theme;
       action, console_string, state := text_input(r2, "", text_theme);
       if action & .ENTERED {
         should_reset := true;
@@ -659,7 +752,9 @@ main :: () {
         activate(state);
       }
     }
+       
     
+    old_color_theme := current_color_theme;
     if options_on then {
       simp.set_shader_for_color();
       r.x -= k*0.2;
@@ -688,22 +783,11 @@ main :: () {
       }
 
       r.y -= k*1.1;
-      label_theme := *default_overall_theme.label_theme;
-      label_theme.alignment = .Left;
-      label_theme.alignment_pad_ems = .25;
       label(r, "Board Theme", label_theme);
 
-      dropdown_theme := *default_overall_theme.dropdown_theme;
-      dropdown_theme.theme_for_current_value.alignment = .Left;
-      dropdown_theme.theme_for_each_choice.alignment = .Left;
-      dropdown_theme.theme_for_current_choice.alignment = .Left;
-       
-      old_color_theme := current_color_theme;
       r.y -= k*0.9;
       dropdown(r, COLORS, *current_color_theme, dropdown_theme);
-     
       COLORS :: string.["green", "blue", "grey", "brown", "purple", "red"]; 
-      checkbox_theme := *default_overall_theme.checkbox_theme;
 
       r.y -= k*1.1;
       if base_checkbox(r, "Board Orientation", board_orientation, checkbox_theme) then {
@@ -751,7 +835,6 @@ main :: () {
 
       r.y -= k*1.1;
 
-      slider_theme := *default_overall_theme.slider_theme;
       slider(r, *mov_anim_complete, 0.00, 1.0, 0.01, slider_theme, "", " Animation");
      
 
@@ -760,36 +843,39 @@ main :: () {
       if base_checkbox(r, "Command Line", commandline_on, checkbox_theme) then {
         commandline_on = !commandline_on;
       }
+    }
 
+    if subwindow_newgame.open {  // The Subwindow starts open, but pressing the Close button can close it.
+      add_subwindow(*subwindow_newgame, subwindow_theme);
+    }
 
-      draw_popups();  // This draws Subwindows as well.
-      if old_color_theme != current_color_theme {
-        if current_color_theme == {
-        case 0; 
-          //green
-          white_sq_color = Vector4.{238.0/255.0, 238.0/255.0, 210.0/255.0, 1.0};
-          black_sq_color = Vector4.{118.0/255.0, 150.0/255.0,  86.0/255.0, 1.0};
-        case 1; 
-          //blue
-          white_sq_color = Vector4.{0.871, 0.890, 0.902, 1.0}; 
-          black_sq_color = Vector4.{0.549, 0.635, 0.678, 1.0};
-        case 2; 
-          //grey
-          white_sq_color = Vector4.{0.655, 0.655, 0.655, 1.0};
-          black_sq_color = Vector4.{0.525, 0.525, 0.525, 1.0};
-        case 3; 
-          //brown
-          white_sq_color = Vector4.{0.941, 0.851, 0.710, 1.0};
-          black_sq_color = Vector4.{0.710, 0.533, 0.388, 1.0};
-        case 4; 
-          //purple
-          white_sq_color = Vector4.{0.902, 0.859, 0.945, 1.0};
-          black_sq_color = Vector4.{0.600, 0.490, 0.710, 1.0};
-        case 5; 
-          //red 
-          white_sq_color = Vector4.{0.941, 0.847, 0.749, 1.0};
-          black_sq_color = Vector4.{0.729, 0.333, 0.275, 1.0};
-        }
+    draw_popups();  // This draws Subwindows as well.
+    if old_color_theme != current_color_theme {
+      if current_color_theme == {
+      case 0; 
+        //green
+        white_sq_color = Vector4.{238.0/255.0, 238.0/255.0, 210.0/255.0, 1.0};
+        black_sq_color = Vector4.{118.0/255.0, 150.0/255.0,  86.0/255.0, 1.0};
+      case 1; 
+        //blue
+        white_sq_color = Vector4.{0.871, 0.890, 0.902, 1.0}; 
+        black_sq_color = Vector4.{0.549, 0.635, 0.678, 1.0};
+      case 2; 
+        //grey
+        white_sq_color = Vector4.{0.655, 0.655, 0.655, 1.0};
+        black_sq_color = Vector4.{0.525, 0.525, 0.525, 1.0};
+      case 3; 
+        //brown
+        white_sq_color = Vector4.{0.941, 0.851, 0.710, 1.0};
+        black_sq_color = Vector4.{0.710, 0.533, 0.388, 1.0};
+      case 4; 
+        //purple
+        white_sq_color = Vector4.{0.902, 0.859, 0.945, 1.0};
+        black_sq_color = Vector4.{0.600, 0.490, 0.710, 1.0};
+      case 5; 
+        //red 
+        white_sq_color = Vector4.{0.941, 0.847, 0.749, 1.0};
+        black_sq_color = Vector4.{0.729, 0.333, 0.275, 1.0};
       }
     }
   }
@@ -967,6 +1053,46 @@ main :: () {
   GREY_SHADE_BOARD :: Vector4.{0.2, 0.2, 0.2, 0.35};
 }
 
+newgame_w_choice: s32 = 0;
+newgame_b_choice: s32 = 0;
+
+draw_subwindow_newgame :: (r: Rect, data: *void) {
+  width, height := simp.get_render_dimensions(win);
+  button_theme := *default_overall_theme.button_theme;
+  dropdown_theme := *default_overall_theme.dropdown_theme;
+  dropdown_theme.theme_for_current_value.alignment = .Left;
+  dropdown_theme.theme_for_each_choice.alignment = .Left;
+  dropdown_theme.theme_for_current_choice.alignment = .Left;
+  label_theme := *default_overall_theme.label_theme;
+  label_theme.alignment = .Left;
+  label_theme.alignment_pad_ems = .25;
+
+  k := height * .045;
+
+  arr := get_engine_names();
+
+  rect := get_rect(r.x + 3, r.y + r.h - k - 3, k * 7, k);
+  label(rect, "White", label_theme);
+  rect.x += k * 2.1;
+  dropdown(rect, arr, *newgame_w_choice, dropdown_theme);
+  rect.x -= k * 2.1;
+  rect.y -= k * 1.1;
+  label(rect, "Black", label_theme);
+  rect.x += k * 2.1;
+  dropdown(rect, arr, *newgame_b_choice, dropdown_theme);
+  rect.x -= k * 2.1;
+
+  get_engine_names :: () -> [..] string {
+    arr: [..] string;
+    arr.allocator = temp;
+    array_add(*arr, "(none)");
+    for engine: chess_engines {
+      array_add(*arr, engine.name);
+    }
+    return arr;
+  }
+}
+
 get_move16_flag :: (chess: *Chess, from: int, to: int, p: u8) -> Move16 {
   using Move16;
   piece := chess.pieces[from];
@@ -1062,12 +1188,18 @@ clear_undo :: () #expand {
 
 ui_make_move :: (chess: *Chess, mov: Move16, animate: bool) {
   // in case
+  if clockon == false return;
   if ply >= undo_list.count {
     game_status = "Draw by Fifty Move Rule.";
     return;
   }
 
   if is_legal(chess, mov) then {
+    if chess.turn == .WHITE
+      wtime += winc;
+    else
+      btime += binc;
+
     _, from, to := decode_move16(mov);
     previous_move = (cast(u64) (1 << from)) | (cast(u64) (1 << to));
     cap, flags, hash := make_move(chess, mov);
@@ -1087,6 +1219,7 @@ ui_make_move :: (chess: *Chess, mov: Move16, animate: bool) {
     generate_moves(chess, *move_bitboards);
 
     if move_bitboards.count == 0 then {
+      clockon = false;
       if in_check(chess) {
         game_status = "Checkmate.";
       } else {
@@ -1094,8 +1227,10 @@ ui_make_move :: (chess: *Chess, mov: Move16, animate: bool) {
       }
     } else if in_check(chess) {
       game_status = "Check.";
+      clockon = true;
     } else {
       game_status = "";
+      clockon = true;
     }
 
     cur_hash := chess.hash;
@@ -1108,6 +1243,7 @@ ui_make_move :: (chess: *Chess, mov: Move16, animate: bool) {
       }
     }
     if count >= 2 then {
+      clockon = false;
       game_status = "Draw by Threefold Repetition.";
     }
 
@@ -1152,10 +1288,12 @@ ui_undo_move :: (chess: *Chess) {
 
   curply := ply;
 
+  clockon = true;
   while ply == curply || !is_human_turn() {
     ply -= 1;
     if ply < 0 {
       ply = 0;
+      clockon = false;
       break;
     }
     mov := undo_list[ply].move;
@@ -1261,6 +1399,9 @@ parse_move :: (str: string) -> bool, Move16 {
 }
 
 ui_new_game :: () {
+  wtime = (60.0 * 1000.0);
+  btime = (60.0 * 1000.0);
+  clockon = true;
   clear(*move_bitboards);
   generate_moves(*chess, *move_bitboards);
   highlighted_moves = 0;
@@ -1271,7 +1412,6 @@ ui_new_game :: () {
     chess_mouse = ChessMouse.Idle;
     chess_square_select = -1;
     highlighted_moves = 0;
-    return;
   }
 }
 
@@ -1317,7 +1457,7 @@ update_uci_engine :: (engine: *Engine, id: int, dt: float) {
   case .ucinewgame;
     state = .idle;
   case .idle;
-    if is_engine_turn(id) then {
+    if is_engine_turn(id) && clockon == true then {
       state = .go;
       engine.timer = FLOAT32_INFINITY;
     }
@@ -1372,7 +1512,10 @@ update_uci_engine :: (engine: *Engine, id: int, dt: float) {
     // TODO: handle different cases!
     str := get_uci_board_string();
     write_proc(proc, str);
-    write_proc(proc, "go movetime 3000\n");
+    //write_proc(proc, "go movetime 3000\n");
+
+    gostr := tprint("go wtime % btime % winc % binc %\n", cast(int)(wtime*1000), cast(int)(btime*1000), cast(int)(winc*1000), cast(int)(binc*1000));
+    write_proc(proc, gostr);
   case .bestmove;
     // waiting to get the best move.
     // don't do anything.
