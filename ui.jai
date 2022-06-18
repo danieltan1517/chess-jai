@@ -53,19 +53,22 @@ promote_n_select := -1;
 // chess engine AIs
 chess_engines: [..] Engine;
 w_engine_index : s32 = -1;
-b_engine_index : s32= 0;
+b_engine_index : s32 = -1;
 NOT_AI :: -1;
 
 // clock.
-wtime: float = (60.0 * 1000.0);
-btime: float = (60.0 * 1000.0);
+wtime: float;
+btime: float;
 winc: float = 0.1;
 binc: float = 0.1;
 clockon: bool = true;
 
 // new game window.
 subwindow_newgame: Subwindow_Info;
+pos_str: string;
+subwindow_ok: bool = false;
 
+// fen string
 fen_string: string = "";
 
 main :: () {
@@ -97,6 +100,7 @@ main :: () {
   subwindow_newgame.rect = get_rect(100,100,400,400);
   subwindow_newgame.draw = draw_subwindow_newgame;
   subwindow_newgame.title_text = "New Game";
+  subwindow_newgame.open = false;
 
   ctrl_pressed := 0;
 
@@ -148,9 +152,9 @@ main :: () {
         } else if e.key_pressed == 1 && e.key_code == Key_Code_Z && ctrl_pressed {
           ui_undo_move(*chess);
         } else if e.key_pressed == 1 && e.key_code == Key_Code_N && ctrl_pressed {
-          chess_startpos(*chess);
-          fen_string = "";
-          ui_new_game();
+          subwindow_newgame.open = true;
+          newgame_w_choice = w_engine_index + 1;
+          newgame_b_choice = b_engine_index + 1;
         } else if e.key_pressed == 1 && e.key_code == Key_Code_Y && ctrl_pressed {
           ui_redo_move(*chess);
         } else if e.key_pressed == 1 && e.key_code == Key_Code_X && commandline_on == false {
@@ -263,7 +267,9 @@ main :: () {
     end_x := corner_x + square * 8.0;
     end_y := corner_y + square * 8.0;
 
-    if !options_on && mouse_event {
+    not_open := !subwindow_newgame.open;
+
+    if not_open && !options_on && mouse_event {
       if x >= corner_x && x <= end_x && y >= corner_y && y <= end_y then {
         mouse_coor_x := cast(int) ((x - corner_x) / square);
         mouse_coor_y := cast(int) ((y - corner_y) / square);
@@ -766,8 +772,10 @@ main :: () {
       r.h = k;
 
       if button(r, "New Game (Ctrl+N)", button_theme) then {
-        chess_startpos(*chess);
-        ui_new_game();
+        options_on = false;
+        subwindow_newgame.open = true;
+        newgame_w_choice = w_engine_index + 1;
+        newgame_b_choice = b_engine_index + 1;
       }
 
       r.y -= k*1.1;
@@ -850,6 +858,18 @@ main :: () {
     }
 
     draw_popups();  // This draws Subwindows as well.
+    if subwindow_ok == true {
+      w_engine_index = newgame_w_choice-1;
+      b_engine_index = newgame_b_choice-1;
+      board_orientation = true;
+      if w_engine_index == NOT_AI {
+        board_orientation = true;
+      } else if b_engine_index == NOT_AI {
+        board_orientation = false;
+      }
+      subwindow_newgame.open = false;
+    }
+
     if old_color_theme != current_color_theme {
       if current_color_theme == {
       case 0; 
@@ -1009,7 +1029,6 @@ main :: () {
     assert(success);
   }
 
-
   load_wav_file :: (name: string) -> *Mixer_Sound_Data {
     file_data, success := read_entire_file(name);
     assert(success);
@@ -1064,8 +1083,10 @@ draw_subwindow_newgame :: (r: Rect, data: *void) {
   dropdown_theme.theme_for_each_choice.alignment = .Left;
   dropdown_theme.theme_for_current_choice.alignment = .Left;
   label_theme := *default_overall_theme.label_theme;
+  text_theme: *Text_Input_Theme = *default_overall_theme.text_input_theme;
   label_theme.alignment = .Left;
   label_theme.alignment_pad_ems = .25;
+  subwindow_ok = false;
 
   k := height * .045;
 
@@ -1080,7 +1101,26 @@ draw_subwindow_newgame :: (r: Rect, data: *void) {
   label(rect, "Black", label_theme);
   rect.x += k * 2.1;
   dropdown(rect, arr, *newgame_b_choice, dropdown_theme);
-  rect.x -= k * 2.1;
+  rect.y -= k * 1.1;
+
+  if button(rect, "Play", button_theme) {
+    /*if equal(input_string, "startpos") || !input_string then {
+      chess_startpos(*chess);
+      fen_string = "";
+    } else {
+      if chess_fen(*chess, input_string) {
+        // TODO: memory leak!
+        fen_string = copy_string(input_string);
+      } else {
+        chess_startpos(*chess);
+        fen_string = "";
+      }
+    }*/
+    chess_startpos(*chess);
+    fen_string = "";
+    ui_new_game();
+    subwindow_ok = true;
+  }
 
   get_engine_names :: () -> [..] string {
     arr: [..] string;
@@ -1399,8 +1439,8 @@ parse_move :: (str: string) -> bool, Move16 {
 }
 
 ui_new_game :: () {
-  wtime = (60.0 * 1000.0);
-  btime = (60.0 * 1000.0);
+  wtime = (60.0 * 1.0);
+  btime = (60.0 * 1.0);
   clockon = true;
   clear(*move_bitboards);
   generate_moves(*chess, *move_bitboards);
