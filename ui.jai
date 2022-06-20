@@ -56,17 +56,25 @@ w_engine_index : s32 = -1;
 b_engine_index : s32 = -1;
 NOT_AI :: -1;
 
-// clock.
+// clock / move variables.
+time_control_option := TimeControl.none;
 wtime: float;
 btime: float;
 winc: float = 0.1;
 binc: float = 0.1;
 clockon: bool = true;
+search_depth: int = 20;
+time_per_move: int = 2000;
 
 // new game window.
 subwindow_newgame: Subwindow_Info;
-pos_str: string;
 subwindow_ok: bool = false;
+subwindow_fenstring: string;
+subwindow_time := TimeControl.none;
+subtime: int = 15;
+subincr: int = 1;
+submove: float = 2.0;
+subdepth: int = 10;
 
 // fen string
 fen_string: string = "";
@@ -101,6 +109,7 @@ main :: () {
   subwindow_newgame.draw = draw_subwindow_newgame;
   subwindow_newgame.title_text = "New Game";
   subwindow_newgame.open = false;
+  subwindow_fenstring = copy_string("startpos");
 
   ctrl_pressed := 0;
 
@@ -153,8 +162,14 @@ main :: () {
           ui_undo_move(*chess);
         } else if e.key_pressed == 1 && e.key_code == Key_Code_N && ctrl_pressed {
           subwindow_newgame.open = true;
+          subwindow_time = TimeControl.none;
           newgame_w_choice = w_engine_index + 1;
           newgame_b_choice = b_engine_index + 1;
+          subwindow_time = TimeControl.none;
+          subtime = 15;
+          subincr = 1;
+          submove = 2.0;
+          subdepth = 10;
         } else if e.key_pressed == 1 && e.key_code == Key_Code_Y && ctrl_pressed {
           ui_redo_move(*chess);
         } else if e.key_pressed == 1 && e.key_code == Key_Code_X && commandline_on == false {
@@ -240,7 +255,7 @@ main :: () {
   }
 
   update_clock :: (dt: float) {
-    if clockon == false then return;
+    if time_control_option != .clock || clockon == false then return;
     if chess.turn == Turn.WHITE then {
       wtime -= dt;
       if wtime < 0 {
@@ -685,7 +700,9 @@ main :: () {
 
       wmins := cast(int) (wtime / 60.0);
       wsecs := cast(int) fmod(wtime, 60.0);
-      wstring := tprint("% %:%", name, digit(wmins), digit(wsecs));
+      wstring := name;
+      if time_control_option == .clock then
+        wstring = tprint("% %:%", name, digit(wmins), digit(wsecs));
 
       name = "";
       if b_engine_index != -1 {
@@ -694,7 +711,10 @@ main :: () {
 
       bmins := cast(int) (btime / 60.0);
       bsecs := cast(int) fmod(btime, 60.0);
-      bstring := tprint("% %:%", name, digit(bmins), digit(bsecs));
+      bstring := name;
+      if time_control_option == .clock then
+        bstring = tprint("% %:%", name, digit(bmins), digit(bsecs));
+
 
       bottom_string := "";
       top_string := "";
@@ -744,7 +764,7 @@ main :: () {
           console_string = eat_spaces(console_string);
           if TF && equal(token, "fen") {
             if chess_fen(*chess, console_string) {
-              // TODO: memory leak!
+              if fen_string free(fen_string);
               fen_string = copy_string(console_string);
             } else {
               chess_startpos(*chess);
@@ -774,8 +794,14 @@ main :: () {
       if button(r, "New Game (Ctrl+N)", button_theme) then {
         options_on = false;
         subwindow_newgame.open = true;
+        subwindow_time = TimeControl.none;
         newgame_w_choice = w_engine_index + 1;
         newgame_b_choice = b_engine_index + 1;
+        subwindow_time = TimeControl.none;
+        subtime = 15;
+        subincr = 1;
+        submove = 2.0;
+        subdepth = 10;
       }
 
       r.y -= k*1.1;
@@ -861,6 +887,7 @@ main :: () {
     if subwindow_ok == true {
       w_engine_index = newgame_w_choice-1;
       b_engine_index = newgame_b_choice-1;
+      time_control_option = subwindow_time;
       board_orientation = true;
       if w_engine_index == NOT_AI {
         board_orientation = true;
@@ -1075,9 +1102,11 @@ main :: () {
 newgame_w_choice: s32 = 0;
 newgame_b_choice: s32 = 0;
 
+
 draw_subwindow_newgame :: (r: Rect, data: *void) {
   width, height := simp.get_render_dimensions(win);
   button_theme := *default_overall_theme.button_theme;
+  slider_theme := *default_overall_theme.slider_theme;
   dropdown_theme := *default_overall_theme.dropdown_theme;
   dropdown_theme.theme_for_current_value.alignment = .Left;
   dropdown_theme.theme_for_each_choice.alignment = .Left;
@@ -1092,7 +1121,17 @@ draw_subwindow_newgame :: (r: Rect, data: *void) {
 
   arr := get_engine_names();
 
-  rect := get_rect(r.x + 3, r.y + r.h - k - 3, k * 7, k);
+  rect := get_rect(r.x + 3, r.y + r.h - k - 3, k*9, k);
+  label(rect, "Fen", label_theme);
+  rect.x += k * 2.1;
+  action_c, input_text, fen_state := text_input(rect, subwindow_fenstring, text_theme);
+  if action_c & .TEXT_MODIFIED {
+    subwindow_fenstring = get_result(fen_state);
+  }
+
+  rect.x -= k * 2.1;
+  rect.y -= k * 1.1;
+
   label(rect, "White", label_theme);
   rect.x += k * 2.1;
   dropdown(rect, arr, *newgame_w_choice, dropdown_theme);
@@ -1101,25 +1140,60 @@ draw_subwindow_newgame :: (r: Rect, data: *void) {
   label(rect, "Black", label_theme);
   rect.x += k * 2.1;
   dropdown(rect, arr, *newgame_b_choice, dropdown_theme);
+  rect.y -= k * 1.7;
+  rect.x -= k * 2.1;
+  label(rect, "Time", label_theme);
+  rect.x += k * 2.1;
+  dropdown(rect, TimeCtrl, cast(*s32)*subwindow_time, dropdown_theme);
   rect.y -= k * 1.1;
 
+  if subwindow_time == {
+  case .none;
+  case .clock;
+    slider(rect, *subtime, 1, 40, 1, slider_theme, "", " minutes");
+    rect.y -= k * 1.1;
+    slider(rect, *subincr, 0, 30, 1, slider_theme, "", " seconds increment");
+    rect.y -= k * 1.1;
+  case .time_per_move;
+    slider(rect, *submove, 0.1, 10.0, 0.01, slider_theme, "", " seconds per move");
+    rect.y -= k * 1.1;
+  case .depth;
+    slider(rect, *subdepth, 1, 50, 1, slider_theme, "Depth ", "");
+    rect.y -= k * 1.1;
+  }
+
+
   if button(rect, "Play", button_theme) {
-    /*if equal(input_string, "startpos") || !input_string then {
+    str := get_result(fen_state);
+    if !str || equal(str, "startpos") then {
       chess_startpos(*chess);
       fen_string = "";
     } else {
-      if chess_fen(*chess, input_string) {
-        // TODO: memory leak!
-        fen_string = copy_string(input_string);
+      if chess_fen(*chess, str) {
+        fen_string = copy_string(str);
       } else {
         chess_startpos(*chess);
         fen_string = "";
       }
-    }*/
-    chess_startpos(*chess);
-    fen_string = "";
+    }
+    set_input(fen_state, "startpos");
+    subwindow_fenstring = "startpos";
     ui_new_game();
     subwindow_ok = true;
+
+    if #complete subwindow_time == {
+    case .none;
+    case .clock;
+      wtime = cast(float)(subtime * 60);
+      btime = cast(float)(subtime * 60);
+      winc = xx subincr;
+      binc = xx subincr;
+    case .time_per_move;
+      time_per_move = xx (submove * 1000);
+    case .depth;
+      search_depth = subdepth;
+    }
+
   }
 
   get_engine_names :: () -> [..] string {
@@ -1131,6 +1205,12 @@ draw_subwindow_newgame :: (r: Rect, data: *void) {
     }
     return arr;
   }
+
+  TimeCtrl :: string.["None", 
+                      "Clock",
+                      "Time Per Move",
+                      "Depth"
+                     ];
 }
 
 get_move16_flag :: (chess: *Chess, from: int, to: int, p: u8) -> Move16 {
@@ -1235,10 +1315,12 @@ ui_make_move :: (chess: *Chess, mov: Move16, animate: bool) {
   }
 
   if is_legal(chess, mov) then {
-    if chess.turn == .WHITE
-      wtime += winc;
-    else
-      btime += binc;
+    if time_control_option == .clock {
+      if chess.turn == .WHITE
+        wtime += winc;
+      else
+        btime += binc;
+    }
 
     _, from, to := decode_move16(mov);
     previous_move = (cast(u64) (1 << from)) | (cast(u64) (1 << to));
@@ -1439,8 +1521,6 @@ parse_move :: (str: string) -> bool, Move16 {
 }
 
 ui_new_game :: () {
-  wtime = (60.0 * 1.0);
-  btime = (60.0 * 1.0);
   clockon = true;
   clear(*move_bitboards);
   generate_moves(*chess, *move_bitboards);
@@ -1455,10 +1535,10 @@ ui_new_game :: () {
   }
 }
 
-// TODO: figure out whether we want to load from a different path.
 load_engine :: (name: string) -> Engine, bool {
   chess_engine: Engine;
   TF: bool;
+  // TODO: figure out whether we want to load from a different path.
   chess_engine.name = name; // TODO: maybe memory leak.
 
   command := join(path, name);
@@ -1549,12 +1629,9 @@ update_uci_engine :: (engine: *Engine, id: int, dt: float) {
   case .idle;
     engine.timer = FLOAT32_INFINITY;
   case .go;
-    // TODO: handle different cases!
     str := get_uci_board_string();
     write_proc(proc, str);
-    //write_proc(proc, "go movetime 3000\n");
-
-    gostr := tprint("go wtime % btime % winc % binc %\n", cast(int)(wtime*1000), cast(int)(btime*1000), cast(int)(winc*1000), cast(int)(binc*1000));
+    gostr := get_search_string();
     write_proc(proc, gostr);
   case .bestmove;
     // waiting to get the best move.
@@ -1562,6 +1639,24 @@ update_uci_engine :: (engine: *Engine, id: int, dt: float) {
   case .bug;
 
   }
+
+  get_search_string :: () -> string {
+    if #complete time_control_option == {
+    case .none;
+      return "go movetime 1500\n";
+    case .clock;
+      wtimeint := cast(int) (wtime*1000);
+      btimeint := cast(int) (btime*1000);
+      wincint  := cast(int) (winc*1000);
+      bincint  := cast(int) (binc*1000);
+      return tprint("go wtime % btime % winc % binc %\n", wtimeint, btimeint, wincint, bincint);
+    case .time_per_move;
+      return tprint("go movetime %\n", time_per_move);
+    case .depth;
+      return tprint("go depth %\n", search_depth);
+    }
+  }
+
 
 }
 
@@ -1635,6 +1730,13 @@ EngineState :: enum {
   go;
   bestmove;
   bug;
+}
+
+TimeControl :: enum s32 {
+  none;
+  clock;
+  time_per_move;
+  depth;
 }
 
 simp :: #import "Simp";
