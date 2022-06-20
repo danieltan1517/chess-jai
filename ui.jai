@@ -15,6 +15,9 @@ commandline_on: bool = false;
 game_status: string;
 undo_list: [2048] UndoState;
 ply := 0;
+engine_debug: bool = false;
+
+reset_switch: bool = false;
 
 chess: Chess;
 move_bitboards: Move_Bitboards;
@@ -60,8 +63,8 @@ NOT_AI :: -1;
 time_control_option := TimeControl.none;
 wtime: float;
 btime: float;
-winc: float = 0.1;
-binc: float = 0.1;
+winc: float;
+binc: float;
 clockon: bool = true;
 search_depth: int = 20;
 time_per_move: int = 2000;
@@ -75,6 +78,12 @@ subtime: int = 15;
 subincr: int = 1;
 submove: float = 2.0;
 subdepth: int = 10;
+
+// load engine window.
+subwindow_load_engine: Subwindow_Info;
+
+// engine options.
+subwindow_engine_options: Subwindow_Info;
 
 // fen string
 fen_string: string = "";
@@ -111,6 +120,15 @@ main :: () {
   subwindow_newgame.open = false;
   subwindow_fenstring = copy_string("startpos");
 
+  subwindow_load_engine.rect = get_rect(100,100,400,400);
+  subwindow_load_engine.draw = draw_subwindow_load_engine;
+  subwindow_load_engine.title_text = "Load Engine";
+  subwindow_load_engine.open = false;
+
+  subwindow_engine_options.rect = get_rect(100,100,400,400);
+  subwindow_engine_options.draw = draw_subwindow_engine_options;
+  subwindow_engine_options.title_text = "Engine Options";
+  subwindow_engine_options.open = false;
   ctrl_pressed := 0;
 
   engine, etf := load_engine("stockfish");
@@ -125,6 +143,7 @@ main :: () {
 
   // main game loop
   while true {
+    reset_switch = false;
     dt = looptime_end - looptime_begin;
     update_clock(dt);
     looptime_begin = looptime_end;
@@ -161,6 +180,7 @@ main :: () {
         } else if e.key_pressed == 1 && e.key_code == Key_Code_Z && ctrl_pressed {
           ui_undo_move(*chess);
         } else if e.key_pressed == 1 && e.key_code == Key_Code_N && ctrl_pressed {
+          reset_switch = true;
           subwindow_newgame.open = true;
           subwindow_time = TimeControl.none;
           newgame_w_choice = w_engine_index + 1;
@@ -196,7 +216,7 @@ main :: () {
     post_entity_update(sound_player, dt);
 
     for *engine, id: chess_engines
-      update_uci_engine(engine, id, dt);
+      update_uci_engine(engine, id, dt, reset_switch);
 
     simp.swap_buffers(win);
     sleep_milliseconds(20);
@@ -282,7 +302,7 @@ main :: () {
     end_x := corner_x + square * 8.0;
     end_y := corner_y + square * 8.0;
 
-    not_open := !subwindow_newgame.open;
+    not_open := !subwindow_newgame.open && !subwindow_load_engine.open && !subwindow_engine_options.open;
 
     if not_open && !options_on && mouse_event {
       if x >= corner_x && x <= end_x && y >= corner_y && y <= end_y then {
@@ -778,13 +798,12 @@ main :: () {
         activate(state);
       }
     }
-       
     
     old_color_theme := current_color_theme;
     if options_on then {
       simp.set_shader_for_color();
       r.x -= k*0.2;
-      simp.immediate_quad(r.x - k*7.2, r.y, r.x + k*7.0, r.y - k*15.75, color = Vector4.{.22, .22, .22, 1});
+      simp.immediate_quad(r.x - k*7.2, r.y, r.x + k*7.0, r.y - k*20.75, color = Vector4.{.22, .22, .22, 1});
       // Color Dropdown Menu.
       r.x -= k*7.0;
       r.y -= k*1.2;
@@ -802,6 +821,20 @@ main :: () {
         subincr = 1;
         submove = 2.0;
         subdepth = 10;
+      }
+
+      r.y -= k*1.1;
+
+      if button(r, "Load Engine", button_theme) then {
+        options_on = false;
+        subwindow_load_engine.open = true;
+      }
+
+      r.y -= k*1.1;
+
+      if button(r, "Engine Options", button_theme) then {
+        options_on = false;
+        subwindow_engine_options.open = true;
       }
 
       r.y -= k*1.1;
@@ -877,10 +910,23 @@ main :: () {
       if base_checkbox(r, "Command Line", commandline_on, checkbox_theme) then {
         commandline_on = !commandline_on;
       }
+
+      r.y -= k*1.1;
+      if base_checkbox(r, "Engine Debug", engine_debug, checkbox_theme) then {
+        engine_debug = !engine_debug;
+      }
     }
 
     if subwindow_newgame.open {  // The Subwindow starts open, but pressing the Close button can close it.
       add_subwindow(*subwindow_newgame, subwindow_theme);
+    }
+
+    if subwindow_load_engine.open {  // The Subwindow starts open, but pressing the Close button can close it.
+      add_subwindow(*subwindow_load_engine, subwindow_theme);
+    }
+
+    if subwindow_engine_options.open {
+      add_subwindow(*subwindow_engine_options, subwindow_theme);
     }
 
     draw_popups();  // This draws Subwindows as well.
@@ -1102,7 +1148,6 @@ main :: () {
 newgame_w_choice: s32 = 0;
 newgame_b_choice: s32 = 0;
 
-
 draw_subwindow_newgame :: (r: Rect, data: *void) {
   width, height := simp.get_render_dimensions(win);
   button_theme := *default_overall_theme.button_theme;
@@ -1211,6 +1256,42 @@ draw_subwindow_newgame :: (r: Rect, data: *void) {
                       "Time Per Move",
                       "Depth"
                      ];
+}
+
+draw_subwindow_load_engine :: (r: Rect, data: *void) {
+  width, height := simp.get_render_dimensions(win);
+  button_theme := *default_overall_theme.button_theme;
+  slider_theme := *default_overall_theme.slider_theme;
+  dropdown_theme := *default_overall_theme.dropdown_theme;
+  dropdown_theme.theme_for_current_value.alignment = .Left;
+  dropdown_theme.theme_for_each_choice.alignment = .Left;
+  dropdown_theme.theme_for_current_choice.alignment = .Left;
+  label_theme := *default_overall_theme.label_theme;
+  text_theme: *Text_Input_Theme = *default_overall_theme.text_input_theme;
+  label_theme.alignment = .Left;
+  label_theme.alignment_pad_ems = .25;
+  subwindow_ok = false;
+
+  k := height * .045;
+
+}
+
+draw_subwindow_engine_options :: (r: Rect, data: *void) {
+  width, height := simp.get_render_dimensions(win);
+  button_theme := *default_overall_theme.button_theme;
+  slider_theme := *default_overall_theme.slider_theme;
+  dropdown_theme := *default_overall_theme.dropdown_theme;
+  dropdown_theme.theme_for_current_value.alignment = .Left;
+  dropdown_theme.theme_for_each_choice.alignment = .Left;
+  dropdown_theme.theme_for_current_choice.alignment = .Left;
+  label_theme := *default_overall_theme.label_theme;
+  text_theme: *Text_Input_Theme = *default_overall_theme.text_input_theme;
+  label_theme.alignment = .Left;
+  label_theme.alignment_pad_ems = .25;
+  subwindow_ok = false;
+
+  k := height * .045;
+
 }
 
 get_move16_flag :: (chess: *Chess, from: int, to: int, p: u8) -> Move16 {
@@ -1521,6 +1602,7 @@ parse_move :: (str: string) -> bool, Move16 {
 }
 
 ui_new_game :: () {
+  reset_switch = true;
   clockon = true;
   clear(*move_bitboards);
   generate_moves(*chess, *move_bitboards);
@@ -1542,14 +1624,12 @@ load_engine :: (name: string) -> Engine, bool {
   chess_engine.name = name; // TODO: maybe memory leak.
 
   command := join(path, name);
-  print("loading % from: %\n", name, command);
-
   chess_engine.proc, TF = create_proc(command);
   chess_engine.timer = FLOAT32_INFINITY; // for keeping track of time
   return chess_engine, TF;
 }
 
-update_uci_engine :: (engine: *Engine, id: int, dt: float) {
+update_uci_engine :: (engine: *Engine, id: int, dt: float, reset: bool) {
   name := engine.name;
   state := engine.state;
   defer engine.state = state;
@@ -1560,7 +1640,7 @@ update_uci_engine :: (engine: *Engine, id: int, dt: float) {
   if state == {
   case .uciok;
     for :loop message: proc {
-      print("[%]: %\n", name, message);
+      engine_log(name, message);
       if equal(message, "uciok") then {
         state = .isready;
         engine.timer = FLOAT32_INFINITY;
@@ -1568,7 +1648,7 @@ update_uci_engine :: (engine: *Engine, id: int, dt: float) {
     }
   case .isready;
     for :loop message: proc {
-      print("[%]: %\n", name, message);
+      engine_log(name, message);
       if equal(message, "readyok") then {
         state = .ucinewgame;
         engine.timer = FLOAT32_INFINITY;
@@ -1581,26 +1661,38 @@ update_uci_engine :: (engine: *Engine, id: int, dt: float) {
       state = .go;
       engine.timer = FLOAT32_INFINITY;
     }
+    if reset then
+      state = .ucinewgame;
   case .go;
     state = .bestmove;
+    if reset then {
+      write_proc(proc, "stop\n");
+      state = .ucinewgame;
+    }
   case .bestmove;
     if !is_engine_turn(id) then {
       state = .idle;
       engine.timer = FLOAT32_INFINITY;
     } else {
-      for :loop message: proc {
-        print("[%]: %\n", name, message);
-        if starts_with(message, "bestmove ") {
-          parse_token(*message);
-          message = eat_spaces(message);
-          mov_token := parse_token(*message);
-          TF, mov := parse_move(mov_token);
-          if TF {
-            ui_make_move(*chess, mov, true);
-            state = .idle;
-          } else {
-            state = .bug;
-            print("There is a bug.\n");
+      if reset then {
+        write_proc(proc, "stop\n");
+        state = .ucinewgame;
+        for :loop message: proc { break; }
+      } else {
+        for :loop message: proc {
+          engine_log(name, message);
+          if starts_with(message, "bestmove ") {
+            parse_token(*message);
+            message = eat_spaces(message);
+            mov_token := parse_token(*message);
+            TF, mov := parse_move(mov_token);
+            if TF {
+              ui_make_move(*chess, mov, true);
+              state = .idle;
+            } else {
+              state = .bug;
+              print("There is a bug.\n");
+            }
           }
         }
       }
@@ -1656,8 +1748,12 @@ update_uci_engine :: (engine: *Engine, id: int, dt: float) {
       return tprint("go depth %\n", search_depth);
     }
   }
+}
 
-
+engine_log :: (name: string, message: string) {
+  if engine_debug == true then {
+    print("[%]: %\n", name, message);
+  }
 }
 
 close_engine :: (engine: *Engine) {
@@ -1665,7 +1761,7 @@ close_engine :: (engine: *Engine) {
   proc := *engine.proc;
   write_proc(proc, "quit\n");
   code := close_proc(proc);
-  print("[%] has exited with a value of %\n", engine.name, code);
+  engine_log(engine.name, tprint("closing with exit code: %", code));
 }
 
 is_human_turn :: () -> bool {
