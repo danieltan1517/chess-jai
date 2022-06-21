@@ -941,6 +941,7 @@ main :: () {
         board_orientation = false;
       }
       subwindow_newgame.open = false;
+      subwindow_ok = false;
     }
 
     if old_color_theme != current_color_theme {
