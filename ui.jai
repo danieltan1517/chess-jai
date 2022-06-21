@@ -1,4 +1,5 @@
 // global variables.
+path: string;
 win: Window_Type;
 chess_piece_bitmap: simp.Texture;
 setting_bitmap: simp.Texture;
@@ -81,16 +82,20 @@ subdepth: int = 10;
 
 // load engine window.
 subwindow_load_engine: Subwindow_Info;
+subwindow_engine_name: string;
+subwindow_engine_icon: string;
+subwindow_engine_file: string;
 
 // engine options.
 subwindow_engine_options: Subwindow_Info;
+subwindow_engine_select: s32 = 0;
 
 // fen string
 fen_string: string = "";
 
 main :: () {
 
-  path = path_strip_filename(get_path_of_running_executable());
+  path = copy_string(path_strip_filename(get_path_of_running_executable()));
   set_default_theme(default_theme_procs[Default_Themes.Grayscale]());
   set_working_directory(path);
 
@@ -131,9 +136,9 @@ main :: () {
   subwindow_engine_options.open = false;
   ctrl_pressed := 0;
 
-  engine, etf := load_engine("stockfish");
-  assert(etf);
-  array_add(*chess_engines, engine);
+  //engine, etf := load_engine("stockfish");
+  //assert(etf);
+  //array_add(*chess_engines, engine);
 
   defer {
     for *engine: chess_engines {
@@ -214,7 +219,6 @@ main :: () {
     pre_entity_update(sound_player);
     for sound_player.streams  it.marked = true;
     post_entity_update(sound_player, dt);
-
     for *engine, id: chess_engines
       update_uci_engine(engine, id, dt, reset_switch);
 
@@ -809,7 +813,6 @@ main :: () {
       r.y -= k*1.2;
       r.w = k*8.0;
       r.h = k;
-
       if button(r, "New Game (Ctrl+N)", button_theme) then {
         options_on = false;
         subwindow_newgame.open = true;
@@ -824,27 +827,23 @@ main :: () {
       }
 
       r.y -= k*1.1;
-
       if button(r, "Load Engine", button_theme) then {
         options_on = false;
         subwindow_load_engine.open = true;
       }
 
       r.y -= k*1.1;
-
       if button(r, "Engine Options", button_theme) then {
         options_on = false;
         subwindow_engine_options.open = true;
       }
 
       r.y -= k*1.1;
-
       if button(r, "Undo (Ctrl+Z)", button_theme) then {
         ui_undo_move(*chess);
       }
 
       r.y -= k*1.1;
-
       if button(r, "Redo (Ctrl+Y)", button_theme) then {
         ui_redo_move(*chess);
       }
@@ -862,37 +861,31 @@ main :: () {
       }
 
       r.y -= k*1.1;
-
       if base_checkbox(r, "Display Coordinates", display_coordinates, checkbox_theme) then {
         display_coordinates = !display_coordinates;
       }
 
       r.y -= k*1.1;
-
       if base_checkbox(r, "Audio", sound_on, checkbox_theme) then {
         sound_on = !sound_on;
       }
 
       r.y -= k*1.1;
-
       if base_checkbox(r, "Highlight Moves", highlight_moves_check, checkbox_theme) then {
         highlight_moves_check = !highlight_moves_check;
       }
 
       r.y -= k*1.1;
-
       if base_checkbox(r, "Show Legal Moves", show_moves, checkbox_theme) then {
         show_moves = !show_moves;
       }
 
       r.y -= k*1.1;
-
       if base_checkbox(r, "Blindfold Mode", blindfold_mode, checkbox_theme) then {
         blindfold_mode = !blindfold_mode;
       }
 
       r.y -= k*1.1;
-
       if base_checkbox(r, "Animations", mov_anim_state != MovAnim.Off, checkbox_theme) then {
         if mov_anim_state == MovAnim.Off
           mov_anim_state = MovAnim.Idle;
@@ -901,12 +894,9 @@ main :: () {
       }
 
       r.y -= k*1.1;
-
       slider(r, *mov_anim_complete, 0.00, 1.0, 0.01, slider_theme, "", " Animation");
      
-
       r.y -= k*1.1;
-
       if base_checkbox(r, "Command Line", commandline_on, checkbox_theme) then {
         commandline_on = !commandline_on;
       }
@@ -1170,7 +1160,7 @@ draw_subwindow_newgame :: (r: Rect, data: *void) {
   rect := get_rect(r.x + 3, r.y + r.h - k - 3, k*9, k);
   label(rect, "Fen", label_theme);
   rect.x += k * 2.1;
-  action_c, input_text, fen_state := text_input(rect, subwindow_fenstring, text_theme);
+  action_c, _, fen_state := text_input(rect, subwindow_fenstring, text_theme);
   if action_c & .TEXT_MODIFIED {
     subwindow_fenstring = get_result(fen_state);
   }
@@ -1274,7 +1264,50 @@ draw_subwindow_load_engine :: (r: Rect, data: *void) {
   subwindow_ok = false;
 
   k := height * .045;
+  rect := get_rect(r.x + 3, r.y + r.h - k - 3, k*9, k);
+  label(rect, "Name", label_theme);
+  rect.x += k * 2.1;
+  action_c1, _, fen_state1 := text_input(rect, subwindow_engine_name, text_theme);
+  if action_c1 & .TEXT_MODIFIED {
+    subwindow_engine_name = get_result(fen_state1);
+  }
+  rect.x -= k * 2.1;
+  rect.y -= k * 1.1;
+  label(rect, "Icon", label_theme);
+  rect.x += k * 2.1;
+  action_c2, __, fen_state2 := text_input(rect, subwindow_engine_icon, text_theme);
+  if action_c2 & .TEXT_MODIFIED {
+    subwindow_engine_icon = get_result(fen_state2);
+  }
 
+  rect.x -= k * 2.1;
+
+  rect.y -= k * 1.1;
+  label(rect, "File", label_theme);
+  rect.x += k * 2.1;
+  action_c3, ___, fen_state3 := text_input(rect, subwindow_engine_file, text_theme);
+  if action_c3 & .TEXT_MODIFIED {
+    subwindow_engine_file = get_result(fen_state3);
+  }
+
+  rect.y -= k * 3.1;
+  if button(rect, "Load", button_theme) {
+    //subwindow_engine_name;
+    //subwindow_engine_icon;
+    //subwindow_engine_file;
+    engine, TF := load_engine(subwindow_engine_name, subwindow_engine_file);
+    if TF {
+      array_add(*chess_engines, engine);
+      reset(fen_state1);
+      reset(fen_state2);
+      reset(fen_state3);
+      subwindow_engine_name = "";
+      subwindow_engine_icon = "";
+      subwindow_engine_file = "";
+    } 
+
+    subwindow_load_engine.open = false;
+  }
 }
 
 draw_subwindow_engine_options :: (r: Rect, data: *void) {
@@ -1290,8 +1323,22 @@ draw_subwindow_engine_options :: (r: Rect, data: *void) {
   label_theme.alignment = .Left;
   label_theme.alignment_pad_ems = .25;
   subwindow_ok = false;
+  arr := get_engine_names();
+  if !arr return;
 
   k := height * .045;
+  rect := get_rect(r.x + 3, r.y + r.h - k - 3, k*9, k);
+  dropdown(rect, arr, *subwindow_engine_select, dropdown_theme);
+  engine := *chess_engines[subwindow_engine_select];
+
+  get_engine_names :: () -> [..] string {
+    arr: [..] string;
+    arr.allocator = temp;
+    for engine: chess_engines {
+      array_add(*arr, engine.name);
+    }
+    return arr;
+  }
 
 }
 
@@ -1618,13 +1665,12 @@ ui_new_game :: () {
   }
 }
 
-load_engine :: (name: string) -> Engine, bool {
+load_engine :: (name: string, exe_name: string) -> Engine, bool {
   chess_engine: Engine;
   TF: bool;
   // TODO: figure out whether we want to load from a different path.
-  chess_engine.name = name; // TODO: maybe memory leak.
-
-  command := join(path, name);
+  chess_engine.name = copy_string(name);
+  command := join(path, exe_name);
   chess_engine.proc, TF = create_proc(command);
   chess_engine.timer = FLOAT32_INFINITY; // for keeping track of time
   return chess_engine, TF;
@@ -1762,7 +1808,7 @@ close_engine :: (engine: *Engine) {
   proc := *engine.proc;
   write_proc(proc, "quit\n");
   code := close_proc(proc);
-  engine_log(engine.name, tprint("closing with exit code: %", code));
+  engine_log(engine.name, tprint("closing with exit code %", code));
 }
 
 is_human_turn :: () -> bool {
@@ -1784,8 +1830,6 @@ is_engine_turn :: (id: int) -> bool {
 
   return false;
 }
-
-path: string;
 
 ChessMouse :: enum {
   Idle;
