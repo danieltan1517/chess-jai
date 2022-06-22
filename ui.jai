@@ -79,16 +79,16 @@ subtime: int = 15;
 subincr: int = 1;
 submove: float = 2.0;
 subdepth: int = 10;
+newgame_w_choice: s32 = 0;
+newgame_b_choice: s32 = 0;
 
 // load engine window.
 subwindow_load_engine: Subwindow_Info;
 subwindow_engine_name: string;
 subwindow_engine_icon: string;
 subwindow_engine_file: string;
-
-// engine options.
-subwindow_engine_options: Subwindow_Info;
-subwindow_engine_select: s32 = 0;
+scroll_value: float;
+subwindow_engine_select: s32; 
 
 // fen string
 fen_string: string = "";
@@ -125,15 +125,11 @@ main :: () {
   subwindow_newgame.open = false;
   subwindow_fenstring = copy_string("startpos");
 
-  subwindow_load_engine.rect = get_rect(100,100,400,400);
+  subwindow_load_engine.rect = get_rect(100,25,400,500);
   subwindow_load_engine.draw = draw_subwindow_load_engine;
-  subwindow_load_engine.title_text = "Load Engine";
+  subwindow_load_engine.title_text = "Engines";
   subwindow_load_engine.open = false;
 
-  subwindow_engine_options.rect = get_rect(100,100,400,400);
-  subwindow_engine_options.draw = draw_subwindow_engine_options;
-  subwindow_engine_options.title_text = "Engine Options";
-  subwindow_engine_options.open = false;
   ctrl_pressed := 0;
 
   //engine, etf := load_engine("stockfish");
@@ -306,7 +302,7 @@ main :: () {
     end_x := corner_x + square * 8.0;
     end_y := corner_y + square * 8.0;
 
-    not_open := !subwindow_newgame.open && !subwindow_load_engine.open && !subwindow_engine_options.open;
+    not_open := !subwindow_newgame.open && !subwindow_load_engine.open ;
 
     if not_open && !options_on && mouse_event {
       if x >= corner_x && x <= end_x && y >= corner_y && y <= end_y then {
@@ -827,15 +823,9 @@ main :: () {
       }
 
       r.y -= k*1.1;
-      if button(r, "Load Engine", button_theme) then {
+      if button(r, "Engines", button_theme) then {
         options_on = false;
         subwindow_load_engine.open = true;
-      }
-
-      r.y -= k*1.1;
-      if button(r, "Engine Options", button_theme) then {
-        options_on = false;
-        subwindow_engine_options.open = true;
       }
 
       r.y -= k*1.1;
@@ -913,10 +903,6 @@ main :: () {
 
     if subwindow_load_engine.open {  // The Subwindow starts open, but pressing the Close button can close it.
       add_subwindow(*subwindow_load_engine, subwindow_theme);
-    }
-
-    if subwindow_engine_options.open {
-      add_subwindow(*subwindow_engine_options, subwindow_theme);
     }
 
     draw_popups();  // This draws Subwindows as well.
@@ -1136,9 +1122,6 @@ main :: () {
   GREY_SHADE_BOARD :: Vector4.{0.2, 0.2, 0.2, 0.35};
 }
 
-newgame_w_choice: s32 = 0;
-newgame_b_choice: s32 = 0;
-
 draw_subwindow_newgame :: (r: Rect, data: *void) {
   width, height := simp.get_render_dimensions(win);
   button_theme := *default_overall_theme.button_theme;
@@ -1252,6 +1235,7 @@ draw_subwindow_newgame :: (r: Rect, data: *void) {
 draw_subwindow_load_engine :: (r: Rect, data: *void) {
   width, height := simp.get_render_dimensions(win);
   button_theme := *default_overall_theme.button_theme;
+  checkbox_theme := *default_overall_theme.checkbox_theme;
   slider_theme := *default_overall_theme.slider_theme;
   dropdown_theme := *default_overall_theme.dropdown_theme;
   dropdown_theme.theme_for_current_value.alignment = .Left;
@@ -1259,42 +1243,46 @@ draw_subwindow_load_engine :: (r: Rect, data: *void) {
   dropdown_theme.theme_for_current_choice.alignment = .Left;
   label_theme := *default_overall_theme.label_theme;
   text_theme: *Text_Input_Theme = *default_overall_theme.text_input_theme;
+  slidable_region_theme := *default_overall_theme.scrollable_region_theme;
   label_theme.alignment = .Left;
   label_theme.alignment_pad_ems = .25;
   subwindow_ok = false;
+  XVAL :: 2.4;
 
   k := height * .045;
-  rect := get_rect(r.x + 3, r.y + r.h - k - 3, k*9, k);
+  rect := get_rect(r.x + 3, r.y + r.h - k - 3, r.w-9, k);
   label(rect, "Name", label_theme);
-  rect.x += k * 2.1;
+  rect.x += k * XVAL;
+  rect.w -= k * XVAL;
   action_c1, _, fen_state1 := text_input(rect, subwindow_engine_name, text_theme);
   if action_c1 & .TEXT_MODIFIED {
     subwindow_engine_name = get_result(fen_state1);
   }
-  rect.x -= k * 2.1;
+  rect.w += k * XVAL;
+  rect.x -= k * XVAL;
   rect.y -= k * 1.1;
   label(rect, "Icon", label_theme);
-  rect.x += k * 2.1;
+  rect.x += k * XVAL;
+  rect.w -= k * XVAL;
   action_c2, __, fen_state2 := text_input(rect, subwindow_engine_icon, text_theme);
   if action_c2 & .TEXT_MODIFIED {
     subwindow_engine_icon = get_result(fen_state2);
   }
 
-  rect.x -= k * 2.1;
+  rect.w += k * XVAL;
+  rect.x -= k * XVAL;
 
   rect.y -= k * 1.1;
   label(rect, "File", label_theme);
-  rect.x += k * 2.1;
+  rect.x += k * XVAL;
+  rect.w -= k * XVAL;
   action_c3, ___, fen_state3 := text_input(rect, subwindow_engine_file, text_theme);
   if action_c3 & .TEXT_MODIFIED {
     subwindow_engine_file = get_result(fen_state3);
   }
 
-  rect.y -= k * 3.1;
+  rect.y -= k * 1.1;
   if button(rect, "Load", button_theme) {
-    //subwindow_engine_name;
-    //subwindow_engine_icon;
-    //subwindow_engine_file;
     engine, TF := load_engine(subwindow_engine_name, subwindow_engine_file);
     if TF {
       array_add(*chess_engines, engine);
@@ -1305,8 +1293,121 @@ draw_subwindow_load_engine :: (r: Rect, data: *void) {
       subwindow_engine_icon = "";
       subwindow_engine_file = "";
     } 
+  }
 
-    subwindow_load_engine.open = false;
+  rect.y -= k * 2.1;
+  arr := get_engine_names();
+  if !arr return;
+  rect.x -= k * XVAL;
+  label(rect, "Engine", label_theme);
+  rect.x += k * XVAL;
+  dropdown(rect, arr, *subwindow_engine_select, dropdown_theme);
+  rect.x -= k * XVAL;
+
+  // Engine Options for Engine. Scrollable Region.
+  engine := *chess_engines[subwindow_engine_select];
+  rect_cover := rect.y;
+
+  rect.y =  r.y + 9;
+  rect.w =  r.w-9;
+
+  compute := (w_engine_index != NOT_AI || b_engine_index != NOT_AI) && w_engine_index == b_engine_index;
+  disable_change := engine.state != .idle || compute;
+  rect1 := rect;
+  rect1.w /= 2;
+  if button(rect1, "Apply Changes", button_theme, disable_over=disable_change, disable_press=disable_change) {
+    proc := *engine.proc;
+    for *option: engine.options {
+      using option;
+      if type == {
+      case .check;
+        if check_value != check_value_old {
+          check_value_old = check_value;
+          opt := tprint("setoption name % value %\n", name, check_value);
+          write_proc(proc, opt);
+        }
+      case .spin;
+        if spin_value != spin_value_old {
+          spin_value_old = spin_value;
+          opt := tprint("setoption name % value %\n", name, spin_value);
+          write_proc(proc, opt);
+        }
+      case .combo;
+        if combo_value != combo_value_old {
+          combo_value_old = combo_value;
+          opt := tprint("setoption name % value %\n", name, combo_value);
+          write_proc(proc, opt);
+        }
+      case .button;
+        opt := tprint("setoption name %\n", name);
+        write_proc(proc, opt);
+      case .string;
+        if !equal(string_value, string_value_old) {
+          string_value = string_value_old;
+          opt := tprint("setoption name % value %\n", name, string_value);
+          write_proc(proc, opt);
+        }
+      }
+    }
+  }
+
+  rect1.x += rect1.w;
+  if button(rect1, "Cancel", button_theme, disable_over=disable_change, disable_press=disable_change) {
+    for *option: engine.options {
+        using option;
+        check_value = check_value_old;
+        spin_value = spin_value_old;
+        combo_value = combo_value_old;
+        string_value = string_value_old;
+    }
+  }
+  rect1.x += rect1.w;
+
+
+  rect.y += k * 1.1;
+
+  rect.h =  rect_cover-rect.y-6;
+
+  slidable_region_theme.region_background.shape.rounding_flags = 0;
+  region, inside := begin_scrollable_region(rect, slidable_region_theme);
+  s := inside;
+  s.y = s.y + s.h - k;
+  s.h = k;
+  s.y += scroll_value;
+  for *option, index: engine.options {
+    name := option.name;
+    if option.type == {
+    case .check;
+      if base_checkbox(s, name, option.check_value, checkbox_theme, index) {
+        option.check_value = !option.check_value;
+      }
+    case .spin;
+      slider(s, *option.spin_value, option.spin_min, option.spin_max, 1, slider_theme, tprint("% ", name), "", index);
+    case .combo;
+      dropdown(s, option.combo_values, *option.combo_value, dropdown_theme, index);
+    case .button;
+      if button(s, name, button_theme, index) {
+
+      }
+    case .string;
+      label(s, name, label_theme);
+      s.x += k * XVAL * 2;
+      s.w -= k * XVAL * 2;
+      action, console_string, state := text_input(s, option.string_value, text_theme, index);
+      s.w += k * XVAL * 2;
+      s.x -= k * XVAL * 2;
+    }
+    s.y -= floor(k * 1.1 + 0.5);
+  }
+  end_scrollable_region(region, s.x + s.w, s.y, *scroll_value);
+
+  get_engine_names :: () -> [..] string {
+    arr: [..] string;
+    arr.allocator = temp;
+    for engine: chess_engines {
+      array_add(*arr, engine.name);
+    }
+    return arr;
   }
 }
 
@@ -1691,6 +1792,13 @@ update_uci_engine :: (engine: *Engine, id: int, dt: float, reset: bool) {
       if equal(message, "uciok") then {
         state = .isready;
         engine.timer = FLOAT32_INFINITY;
+      } else if begins_with(message, "option name") {
+        message = advance(message, 11);
+        message = eat_spaces(message);
+        TF, option := parse_uci_option(message);
+        if TF {
+          array_add(*engine.options, option);
+        }
       }
     }
   case .isready;
@@ -1811,6 +1919,137 @@ close_engine :: (engine: *Engine) {
   engine_log(engine.name, tprint("closing with exit code %", code));
 }
 
+parse_uci_option :: (message: string) -> bool, Engine_Option #must {
+  // TODO: this may leak memory on bad input.
+  option: Engine_Option;
+  TF: bool;
+  option_name: string;
+  uci_type: string;
+  rest: string;
+
+  TF, option_name, rest = split_from_right(message, " type");
+  if TF == false return false, option;
+
+  option.name = copy_string(option_name);
+
+  rest = eat_spaces(rest);
+  uci_type, TF = parse_token(*rest);
+  if TF == false return false, option;
+
+  uci_option_type: UCI_Types;
+  uci_option_type, TF = string_to_uci_type(uci_type);
+  if TF == false return false, option;
+
+  option.type = uci_option_type;
+  
+  rest = eat_spaces(rest);
+
+  combo_default: string;
+
+  token: string;
+  while rest {
+    token, TF = parse_token(*rest);
+    if TF == false return false, option;
+    rest = eat_spaces(rest);
+    if token == {
+    case "default";
+      value,TF := parse_token(*rest);
+      rest = eat_spaces(rest);
+      if uci_option_type == {
+      case .check;
+        option.check_value,TF = parse_bool(*value);
+        option.check_value_old = option.check_value;
+        if TF == false return false, option;
+      case .spin;
+        option.spin_value,TF = parse_int(*value);
+        option.spin_value_old = option.spin_value;
+        if TF == false return false, option;
+      case .combo;
+        combo_default = value;
+      case .button;
+        return false, option;
+      case .string;
+      }
+
+    case "max";
+      value,TF := parse_token(*rest);
+      if TF == false return false, option;
+      rest = eat_spaces(rest);
+      if uci_option_type == {
+      case .check;
+        return false, option;
+      case .spin;
+        option.spin_max,TF = parse_int(*value);
+        if TF == false return false, option;
+      case .combo;
+      case .button;
+        return false, option;
+      case .string;
+        return false, option;
+      }
+
+    case "min";
+      value,TF := parse_token(*rest);
+      if TF == false return false, option;
+      rest = eat_spaces(rest);
+      if uci_option_type == {
+      case .check;
+        return false, option;
+      case .spin;
+        option.spin_min,TF = parse_int(*value);
+        if TF == false return false, option;
+      case .combo;
+      case .button;
+        return false, option;
+      case .string;
+        return false, option;
+      }
+    case "var";
+      value,TF := parse_token(*rest);
+      if TF == false return false, option;
+      rest = eat_spaces(rest);
+
+      combo_option := copy_string(value);
+      array_add(*option.combo_values, combo_option);
+
+    case;
+      return false, option;
+    }
+  }
+
+  if uci_option_type == .combo then {
+    found : s32 = -1;
+    for combos, index: option.combo_values {
+      if equal(combo_default, combos) then {
+        found = xx index;
+        break;
+      }
+    }
+    if found == -1 return false, option;
+    option.combo_value = found;
+    option.combo_value_old = found;
+  }
+
+  return true, option;
+
+  string_to_uci_type :: (token: string) -> UCI_Types, TF: bool = true {
+    if token == {
+    case "check";
+      return .check;
+    case "spin";
+      return .spin;
+    case "combo";
+      return .combo;
+    case "button";
+      return .button;
+    case "string";
+      return .string;
+    }
+    return .check, false;
+  }
+}
+
+
 is_human_turn :: () -> bool {
   if chess.turn == .WHITE && w_engine_index == NOT_AI
     return true;
@@ -1861,6 +2100,25 @@ Engine :: struct {
   proc: Proc;
   state: EngineState = .uciok;
   timer: float = FLOAT32_INFINITY; // for keeping track of time
+  options: [..] Engine_Option;
+}
+
+Engine_Option :: struct {
+  name: string;
+  type: UCI_Types;
+  check_value: bool;
+  spin_value: int;
+  spin_max: int;
+  spin_min: int;
+  combo_value: s32;
+  combo_values: [..] string;
+  string_value: string;
+
+  check_value_old: bool;
+  spin_value_old: int;
+  combo_value_old: s32;
+  string_value_old: string;
+
 }
 
 EngineState :: enum {
@@ -1878,6 +2136,14 @@ TimeControl :: enum s32 {
   clock;
   time_per_move;
   depth;
+}
+
+UCI_Types :: enum {
+  check;
+  spin;
+  combo;
+  button;
+  string;
 }
 
 simp :: #import "Simp";
