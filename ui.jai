@@ -119,7 +119,7 @@ main :: () {
   init_fonts(height);
   ui_init();
 
-  subwindow_newgame.rect = get_rect(100,100,400,400);
+  subwindow_newgame.rect = get_rect(100,100,400,300);
   subwindow_newgame.draw = draw_subwindow_newgame;
   subwindow_newgame.title_text = "New Game";
   subwindow_newgame.open = false;
@@ -1140,7 +1140,7 @@ draw_subwindow_newgame :: (r: Rect, data: *void) {
 
   arr := get_engine_names();
 
-  rect := get_rect(r.x + 3, r.y + r.h - k - 3, k*9, k);
+  rect := get_rect(r.x + 3, r.y + r.h - k - 3, r.w - k*2.1 - 9, k);
   label(rect, "Fen", label_theme);
   rect.x += k * 2.1;
   action_c, _, fen_state := text_input(rect, subwindow_fenstring, text_theme);
@@ -1159,7 +1159,7 @@ draw_subwindow_newgame :: (r: Rect, data: *void) {
   label(rect, "Black", label_theme);
   rect.x += k * 2.1;
   dropdown(rect, arr, *newgame_b_choice, dropdown_theme);
-  rect.y -= k * 1.7;
+  rect.y -= k * 1.1;
   rect.x -= k * 2.1;
   label(rect, "Time", label_theme);
   rect.x += k * 2.1;
@@ -1181,7 +1181,7 @@ draw_subwindow_newgame :: (r: Rect, data: *void) {
     rect.y -= k * 1.1;
   }
 
-
+  rect.y = r.y + 9;
   if button(rect, "Play", button_theme) {
     str := get_result(fen_state);
     if !str || equal(str, "startpos") then {
