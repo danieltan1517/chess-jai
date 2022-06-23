@@ -1251,155 +1251,152 @@ draw_subwindow_load_engine :: (r: Rect, data: *void) {
 
   k := height * .045;
   rect := get_rect(r.x + 3, r.y + r.h - k - 3, r.w-9, k);
-  label(rect, "Name", label_theme);
-  rect.x += k * XVAL;
-  rect.w -= k * XVAL;
-  action_c1, _, fen_state1 := text_input(rect, subwindow_engine_name, text_theme);
-  if action_c1 & .TEXT_MODIFIED {
-    subwindow_engine_name = get_result(fen_state1);
-  }
-  rect.w += k * XVAL;
-  rect.x -= k * XVAL;
-  rect.y -= k * 1.1;
-  label(rect, "Icon", label_theme);
-  rect.x += k * XVAL;
-  rect.w -= k * XVAL;
-  action_c2, __, fen_state2 := text_input(rect, subwindow_engine_icon, text_theme);
-  if action_c2 & .TEXT_MODIFIED {
-    subwindow_engine_icon = get_result(fen_state2);
-  }
-
-  rect.w += k * XVAL;
-  rect.x -= k * XVAL;
-
-  rect.y -= k * 1.1;
-  label(rect, "File", label_theme);
-  rect.x += k * XVAL;
-  rect.w -= k * XVAL;
-  action_c3, ___, fen_state3 := text_input(rect, subwindow_engine_file, text_theme);
-  if action_c3 & .TEXT_MODIFIED {
-    subwindow_engine_file = get_result(fen_state3);
-  }
-
-  rect.y -= k * 1.1;
-  if button(rect, "Load", button_theme) {
-    engine, TF := load_engine(subwindow_engine_name, subwindow_engine_file);
-    if TF {
-      array_add(*chess_engines, engine);
-      reset(fen_state1);
-      reset(fen_state2);
-      reset(fen_state3);
-      subwindow_engine_name = "";
-      subwindow_engine_icon = "";
-      subwindow_engine_file = "";
-    } 
-  }
-
-  rect.y -= k * 2.1;
   arr := get_engine_names();
-  if !arr return;
   rect.x -= k * XVAL;
   label(rect, "Engine", label_theme);
   rect.x += k * XVAL;
   dropdown(rect, arr, *subwindow_engine_select, dropdown_theme);
-  rect.x -= k * XVAL;
+  if equal(arr[subwindow_engine_select], "Add Engine...") {
+    rect.y -= k * 1.1;
+    label(rect, "Name", label_theme);
+    rect.x += k * XVAL;
+    rect.w -= k * XVAL;
+    action_c1, _, fen_state1 := text_input(rect, subwindow_engine_name, text_theme);
+    if action_c1 & .TEXT_MODIFIED {
+      subwindow_engine_name = get_result(fen_state1);
+    }
+    rect.w += k * XVAL;
+    rect.x -= k * XVAL;
+    rect.y -= k * 1.1;
+    label(rect, "Icon", label_theme);
+    rect.x += k * XVAL;
+    rect.w -= k * XVAL;
+    action_c2, __, fen_state2 := text_input(rect, subwindow_engine_icon, text_theme);
+    if action_c2 & .TEXT_MODIFIED {
+      subwindow_engine_icon = get_result(fen_state2);
+    }
+ 
+    rect.w += k * XVAL;
+    rect.x -= k * XVAL;
+ 
+    rect.y -= k * 1.1;
+    label(rect, "File", label_theme);
+    rect.x += k * XVAL;
+    rect.w -= k * XVAL;
+    action_c3, ___, fen_state3 := text_input(rect, subwindow_engine_file, text_theme);
+    if action_c3 & .TEXT_MODIFIED {
+      subwindow_engine_file = get_result(fen_state3);
+    }
 
-  // Engine Options for Engine. Scrollable Region.
-  engine := *chess_engines[subwindow_engine_select];
-  rect_cover := rect.y;
+    rect.y -= k * 1.1;
+    if button(rect, "Load", button_theme) {
+      engine, TF := load_engine(subwindow_engine_name, subwindow_engine_file);
+      if TF {
+        array_add(*chess_engines, engine);
+        reset(fen_state1);
+        reset(fen_state2);
+        reset(fen_state3);
+        subwindow_engine_name = "";
+        subwindow_engine_icon = "";
+        subwindow_engine_file = "";
+      } 
+    }
 
-  rect.y =  r.y + 9;
-  rect.w =  r.w-9;
-
-  compute := (w_engine_index != NOT_AI || b_engine_index != NOT_AI) && w_engine_index == b_engine_index;
-  disable_change := engine.state != .idle || compute;
-  rect1 := rect;
-  rect1.w /= 2;
-  if button(rect1, "Apply Changes", button_theme, disable_over=disable_change, disable_press=disable_change) {
-    proc := *engine.proc;
-    for *option: engine.options {
-      using option;
-      if type == {
-      case .check;
-        if check_value != check_value_old {
-          check_value_old = check_value;
-          opt := tprint("setoption name % value %\n", name, check_value);
+  } else {
+    // Engine Options for Engine. Scrollable Region.
+    engine := *chess_engines[subwindow_engine_select];
+    rect_cover := rect.y;
+ 
+    rect.y =  r.y + 9;
+    rect.w =  r.w-9;
+ 
+    compute := (w_engine_index != NOT_AI || b_engine_index != NOT_AI) && w_engine_index == b_engine_index;
+    disable_change := engine.state != .idle || compute;
+    rect1 := rect;
+    rect1.w /= 2;
+    if button(rect1, "Apply Changes", button_theme, disable_over=disable_change, disable_press=disable_change) {
+      proc := *engine.proc;
+      for *option: engine.options {
+        using option;
+        if type == {
+        case .check;
+          if check_value != check_value_old {
+            check_value_old = check_value;
+            opt := tprint("setoption name % value %\n", name, check_value);
+            write_proc(proc, opt);
+          }
+        case .spin;
+          if spin_value != spin_value_old {
+            spin_value_old = spin_value;
+            opt := tprint("setoption name % value %\n", name, spin_value);
+            write_proc(proc, opt);
+          }
+        case .combo;
+          if combo_value != combo_value_old {
+            combo_value_old = combo_value;
+            opt := tprint("setoption name % value %\n", name, combo_value);
+            write_proc(proc, opt);
+          }
+        case .button;
+          opt := tprint("setoption name %\n", name);
           write_proc(proc, opt);
+        case .string;
+          if !equal(string_value, string_value_old) {
+            string_value = string_value_old;
+            opt := tprint("setoption name % value %\n", name, string_value);
+            write_proc(proc, opt);
+          }
+        }
+      }
+    }
+ 
+    rect1.x += rect1.w;
+    if button(rect1, "Cancel", button_theme, disable_over=disable_change, disable_press=disable_change) {
+      for *option: engine.options {
+          using option;
+          check_value = check_value_old;
+          spin_value = spin_value_old;
+          combo_value = combo_value_old;
+          string_value = string_value_old;
+      }
+    }
+ 
+    rect.y += k * 1.1;
+    rect.h =  rect_cover-rect.y-6;
+ 
+    slidable_region_theme.region_background.shape.rounding_flags = 0;
+    region, inside := begin_scrollable_region(rect, slidable_region_theme);
+    s := inside;
+    s.y = s.y + s.h - k;
+    s.h = k;
+    s.y += scroll_value;
+    for *option, index: engine.options {
+      name := option.name;
+      if option.type == {
+      case .check;
+        if base_checkbox(s, name, option.check_value, checkbox_theme, index) {
+          option.check_value = !option.check_value;
         }
       case .spin;
-        if spin_value != spin_value_old {
-          spin_value_old = spin_value;
-          opt := tprint("setoption name % value %\n", name, spin_value);
-          write_proc(proc, opt);
-        }
+        slider(s, *option.spin_value, option.spin_min, option.spin_max, 1, slider_theme, tprint("% ", name), "", index);
       case .combo;
-        if combo_value != combo_value_old {
-          combo_value_old = combo_value;
-          opt := tprint("setoption name % value %\n", name, combo_value);
-          write_proc(proc, opt);
-        }
+        dropdown(s, option.combo_values, *option.combo_value, dropdown_theme, index);
       case .button;
-        opt := tprint("setoption name %\n", name);
-        write_proc(proc, opt);
-      case .string;
-        if !equal(string_value, string_value_old) {
-          string_value = string_value_old;
-          opt := tprint("setoption name % value %\n", name, string_value);
-          write_proc(proc, opt);
+        if button(s, name, button_theme, index) {
+ 
         }
+      case .string;
+        label(s, name, label_theme);
+        s.x += k * XVAL * 2;
+        s.w -= k * XVAL * 2;
+        action, console_string, state := text_input(s, option.string_value, text_theme, index);
+        s.w += k * XVAL * 2;
+        s.x -= k * XVAL * 2;
       }
+      s.y -= floor(k * 1.1 + 0.5);
     }
+    end_scrollable_region(region, s.x + s.w, s.y, *scroll_value);
   }
-
-  rect1.x += rect1.w;
-  if button(rect1, "Cancel", button_theme, disable_over=disable_change, disable_press=disable_change) {
-    for *option: engine.options {
-        using option;
-        check_value = check_value_old;
-        spin_value = spin_value_old;
-        combo_value = combo_value_old;
-        string_value = string_value_old;
-    }
-  }
-  rect1.x += rect1.w;
-
-
-  rect.y += k * 1.1;
-
-  rect.h =  rect_cover-rect.y-6;
-
-  slidable_region_theme.region_background.shape.rounding_flags = 0;
-  region, inside := begin_scrollable_region(rect, slidable_region_theme);
-  s := inside;
-  s.y = s.y + s.h - k;
-  s.h = k;
-  s.y += scroll_value;
-  for *option, index: engine.options {
-    name := option.name;
-    if option.type == {
-    case .check;
-      if base_checkbox(s, name, option.check_value, checkbox_theme, index) {
-        option.check_value = !option.check_value;
-      }
-    case .spin;
-      slider(s, *option.spin_value, option.spin_min, option.spin_max, 1, slider_theme, tprint("% ", name), "", index);
-    case .combo;
-      dropdown(s, option.combo_values, *option.combo_value, dropdown_theme, index);
-    case .button;
-      if button(s, name, button_theme, index) {
-
-      }
-    case .string;
-      label(s, name, label_theme);
-      s.x += k * XVAL * 2;
-      s.w -= k * XVAL * 2;
-      action, console_string, state := text_input(s, option.string_value, text_theme, index);
-      s.w += k * XVAL * 2;
-      s.x -= k * XVAL * 2;
-    }
-    s.y -= floor(k * 1.1 + 0.5);
-  }
-  end_scrollable_region(region, s.x + s.w, s.y, *scroll_value);
 
   get_engine_names :: () -> [..] string {
     arr: [..] string;
@@ -1407,6 +1404,7 @@ draw_subwindow_load_engine :: (r: Rect, data: *void) {
     for engine: chess_engines {
       array_add(*arr, engine.name);
     }
+    array_add(*arr, "Add Engine...");
     return arr;
   }
 }
@@ -1770,7 +1768,10 @@ load_engine :: (name: string, exe_name: string) -> Engine, bool {
   chess_engine: Engine;
   TF: bool;
   // TODO: figure out whether we want to load from a different path.
-  chess_engine.name = copy_string(name);
+  if name then
+    chess_engine.name = copy_string(name);
+  else
+    chess_engine.name = copy_string(exe_name);
   command := join(path, exe_name);
   chess_engine.proc, TF = create_proc(command);
   chess_engine.timer = FLOAT32_INFINITY; // for keeping track of time
