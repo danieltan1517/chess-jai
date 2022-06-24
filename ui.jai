@@ -1076,7 +1076,7 @@ main :: () {
 
     // initialize sound player
     success := init(sound_player, win, true, true);
-    assert(success);
+    // assert(success);
   }
 
   load_wav_file :: (name: string) -> *Mixer_Sound_Data {

@@ -86,7 +86,7 @@ loop :: (proc: *Proc, loop_body: Code, flags: For_Flags) #expand {
   buffer := NewArray(16384, u8, allocator=temp);
   `it_index := 0;
   
-  while true {
+  while outer := true {
     dw: DWORD;
     if !PeekNamedPipe(proc.read, null, 0, null, *dw, null)
       break;
