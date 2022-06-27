@@ -1,8 +1,6 @@
 #import "Basic";
 #import "Compiler";
 
-
-
 ui_exe :: "chess";
 ui_file_names :: string.["ui.jai", "movegen.jai"];
 
@@ -20,7 +18,8 @@ ai_file_names :: string.["ai_main.jai", "search.jai", "eval.jai", "movegen.jai"]
   exe := ui_exe;
   file_names := ui_file_names;
 
-  build_debug(w, exe, file_names);
+  //build_debug(w, exe, file_names);
+  build_release(w, exe, file_names);
 
   #if OS == .LINUX {
     add_build_file(tprint("%/%", #filepath, "linux.jai"), w);  

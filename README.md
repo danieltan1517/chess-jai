@@ -26,7 +26,9 @@ The chess GUI uses the glfw3 and gl libraries.
 * Parse and Loads FEN strings
 * Engine vs. Engine Implemented (e.g. Stockfish vs Komodo)
 * Multi-engine support
+* UCI Engine Options
 * Console command-line
+* Windows and Linux support
 
 ## Chess Engine in Jai
 * Estimated elo: 3000 
