@@ -57,7 +57,6 @@ create_proc :: (command: string) -> Proc, bool {
     proc.write_pipe = pipe_2[1];
     proc.read_pipe  = pipe_1[0];
     setup_pipe_nonblock(proc.read_pipe);
-
     return proc, true; 
   }
 
@@ -75,27 +74,24 @@ loop :: (proc: *Proc, loop_body: Code, flags: For_Flags) #expand {
   using proc;
   buffer := NewArray(16384, u8, allocator=temp);
   `it_index := 0;
-  while outer := true {
-    bytes_read := read(read_pipe, buffer.data, xx (buffer.count-1));
-    if bytes_read <= 0 then {
-      break;
-    }
+  bytes_read := read(read_pipe, buffer.data, xx (buffer.count-1));
+  if bytes_read <= 0 then {
+    return;
+  }
 
-    auto_release_temp();
-    messages := to_string(buffer.data, bytes_read); // -1 the '\n' char
-    if messages[bytes_read - 1] == #char "\n" then {
-      messages.count -= 1;
-    }
-
-    found: bool = true;
-    msg: string;
-    while messages {
-      found, msg, messages = split_from_left(messages, #char "\n");
-      `it := msg;
-      #insert (break=break outer)loop_body;
-      it_index += 1;
-      if !found break;
-    }
+  auto_release_temp();
+  messages := to_string(buffer.data, bytes_read); // -1 the '\n' char
+  if messages[bytes_read - 1] == #char "\n" then {
+    messages.count -= 1;
+  }
+  found: bool = true;
+  msg: string;
+  while messages {
+    found, msg, messages = split_from_left(messages, #char "\n");
+    `it := msg;
+    #insert loop_body;
+    it_index += 1;
+    if !found break;
   }
 }
 
