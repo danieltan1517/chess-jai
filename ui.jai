@@ -995,7 +995,7 @@ main :: () {
 
       r.y -= k*1.1;
       dropdown(r, PIECE_SET, *piece_set, dropdown_theme);
-      PIECE_SET :: string.["Classic", "Modern", "Magnetic", "Medival", "Letters"];
+      PIECE_SET :: string.["Classic", "Modern", "Magnetic", "Medieval", "Letters"];
       COMBO = 0.2 * (4-piece_set);
 
       r.y -= k*1.1;
