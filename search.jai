@@ -951,7 +951,6 @@ negamax_zw :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
   }
 
   ep := chess.en_passant;
-  hash_flag := TFLAGS.ALPHA;
   cap_moves: [32] Move16;
   quiet_moves: [64] Move16;
   num_captures := 0;
@@ -1092,7 +1091,6 @@ negamax_zw :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
     chess.en_passant = ep;
     if eval >= beta then {
       using chess.history;
-      hash_flag = TFLAGS.EXACT;
       bmove = move;
       pv_table[ply][0] = move;
       move_count := pv_table[ply+1].move_count;
@@ -1111,8 +1109,7 @@ negamax_zw :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
 
   if move_count == 0 then
     return ifx in_check(chess) then -INF+ply else 0+ply;
-
-  tt_store(chess.hash, alpha, hash_flag, depth, bmove);
+  tt_store(chess.hash, alpha, .ALPHA, depth, bmove);
   return alpha;
 }
 
