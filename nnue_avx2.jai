@@ -390,7 +390,7 @@ append_changed_indices :: (pos: *Position, removed: *IndexList, added: *IndexLis
 
 half_kp_append_active_indices :: (pos: *Position, c: s32, active: *IndexList) {
   ksq := pos.squares[c];
-  ksq = orient(c, ksq);
+  ksq = orient(c, ksq) * PS_END;
   i := 2;
   while pos.pieces[i] {
     sq := pos.squares[i];
@@ -403,7 +403,7 @@ half_kp_append_active_indices :: (pos: *Position, c: s32, active: *IndexList) {
 
 half_kp_append_changed_indices :: (pos: *Position, c: s32, dp: *DirtyPiece, removed: *IndexList, added: *IndexList) {
   ksq := pos.squares[c];
-  ksq = orient(c, ksq);
+  ksq = orient(c, ksq) * PS_END;
   for i: 0..dp.dirtyNum-1 {
     pc := dp.pc[i];
     if pc == 1 || pc == 7 continue;
@@ -422,7 +422,7 @@ half_kp_append_changed_indices :: (pos: *Position, c: s32, dp: *DirtyPiece, remo
 }
 
 make_index :: (c: s32, s: s32, pc: s32, ksq: s32) -> s32 #expand {
-  return orient(c, s) + PieceToIndex[c][pc] + PS_END * ksq;
+  return orient(c, s) + PieceToIndex[c][pc] + ksq;
 }
 
 orient :: (c: s32, s: s32) -> s32 #expand {
