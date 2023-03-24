@@ -1,7 +1,9 @@
 main :: () {
   init_global_bitboards();
   initialize_move_randomness();
-  defer free_threads();
+  defer {
+    free_threads();
+  }
   init_ttable();
   initialize_chess_game_memory(*chess);
   chess.main_thread = true;
@@ -11,7 +13,8 @@ main :: () {
   for :getline input: os {
     reset_temporary_storage();
     if equal(input, "quit") {
-      break;
+      print("%\n", input);
+      return;
     }
 
     if equal(input, "uci") {

@@ -41,7 +41,7 @@ add_chess_engine_files :: (w: Workspace, cpu_info: *Cpu_X86, type: NNUE_Type) {
     add_build_file(tprint("%/%", #filepath, "nnue_cpu.jai"), w);  
   case .sse;
     print("Building Chess Engine with NNUE SSE\n");
-    add_build_file(tprint("%/%", #filepath, "nnue_sse.jai"), w);  
+    add_build_file(tprint("%/%", #filepath, "nnue_sse_experiment.jai"), w);  
   case .avx2; 
     print("Building Chess Engine with NNUE AVX2\n");
     add_build_file(tprint("%/%", #filepath, "nnue_avx2.jai"), w);

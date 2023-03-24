@@ -22,9 +22,9 @@ getline :: (os: *OS, loop_body: Code, flags: For_Flags) #expand {
     messages := to_string(buffera.data, bytes_read);
     while messages {
       found, `it, rest := split_from_left(messages, #char "\n");
+      if !found break;
       #insert (break=break outer) loop_body;
       messages = rest;
-      if !found break;
     }
   }
 
