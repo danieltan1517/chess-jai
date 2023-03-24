@@ -359,8 +359,11 @@ make_index :: (c: s32, s: s32, pc: s32, ksq: s32) -> s32 #expand {
 }
 
 orient :: (c: s32, s: s32) -> s32 #expand {
-  x : s32 = cast(s32) ifx c == 0 0x00 else 0x3f;
-  return s ^ x;
+  if c == 0 then {
+    return s;
+  } else {
+    return s ^ 0x3F;
+  }
 }
 
 PS_W_PAWN   ::  1;
