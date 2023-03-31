@@ -454,13 +454,28 @@ affine_txfm :: (input: *s8, output: *void, inDims: u32, $outDims: u32, biases: *
       }
     }
   }
-
-  outVec := cast(*s8)output;
-  for i: 0..outDims-1 {
-    outVec[i] = cast(s8) clamp(tmp[i] >> SHIFT, 0, 127);
+  #asm SSE2 {
+    mov.d    reg: gpr, 0x00_7f_00_7f;
+    movd     xmm_127: vec, reg;
+    pshufd.x xmm_127, xmm_127, 0;
+    pxor.x   xmm_000:   vec, xmm_000;
   }
 
-  SHIFT :: 6;
+  outVec := output;
+  tmp_data := tmp.data;
+  for < 7..0 {
+    #asm SSE {
+      movups.x   xmm_relu: vec, [tmp_data];
+      packssdw.x xmm_relu, xmm_000;
+      psraw.x    xmm_relu, 6;
+      pmaxsw.x   xmm_relu, xmm_000;
+      pminsw.x   xmm_relu, xmm_127;
+      packsswb.x xmm_relu, xmm_000;
+      movups.x   [outVec], xmm_relu;
+      add        tmp_data, 0x10;
+      add        outVec,   0x04;
+    }
+  }
 }
 
 affine_propagate :: (input: *s8, biases: *s32, weights: *s8) -> s32 #expand {
