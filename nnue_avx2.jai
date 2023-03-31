@@ -263,13 +263,13 @@ update_accumulator :: (pos: *Position) -> bool {
   append_changed_indices(pos, removed_indices.data, added_indices.data, reset.data);
   for i: 0..kHalfDimensions / TILE_HEIGHT - 1 {
     for c: 0..1 {
-      accTile := cast(*m256) (*accumulator.accumulation[c][i*TILE_HEIGHT]);
+      accTile := (*accumulator.accumulation[c][i*TILE_HEIGHT]);
       if reset[c] then {
-        ft_b_tile := cast(*m256) (*ft_biases[i*TILE_HEIGHT]);
-        memcpy(accTile, ft_b_tile, size_of(m256) * NUM_REGS);
+        ft_b_tile := (*ft_biases[i*TILE_HEIGHT]);
+        memcpy(accTile, ft_b_tile, size_of(s16) * kHalfDimensions);
       } else {
         prevAccTile := cast(*m256) *prevAcc.accumulation[c][i*TILE_HEIGHT];
-        memcpy(accTile, prevAccTile, size_of(m256) * NUM_REGS);
+        memcpy(accTile, prevAccTile, size_of(s16) * kHalfDimensions);
         // Difference calculation for the deactivated features
         for k: 0..removed_indices[c].size-1 {
           index := removed_indices[c].values[k];
@@ -293,7 +293,7 @@ update_accumulator :: (pos: *Position) -> bool {
       for k: 0..added_indices[c].size-1 {
         index := added_indices[c].values[k];
         offset := kHalfDimensions*index + i*TILE_HEIGHT;
-        column := cast(*m256) *ft_weights[offset];
+        column := *ft_weights[offset];
         acc_data := accTile;
         for j: 0..NUM_REGS-1 {
           #asm AVX, AVX2 {
@@ -327,10 +327,10 @@ refresh_accumulator :: (pos: *Position) {
   activeIndices[1].size = 0;
   append_active_indices(pos, activeIndices.data);
   numChunks :: (kHalfDimensions/TILE_HEIGHT) - 1;
-  memcpy(*accumulator.accumulation[0], *ft_biases[0], size_of(m256) * NUM_REGS);
-  memcpy(*accumulator.accumulation[1], *ft_biases[0], size_of(m256) * NUM_REGS);
+  memcpy(*accumulator.accumulation[0], *ft_biases[0], size_of(s16) * kHalfDimensions);
+  memcpy(*accumulator.accumulation[1], *ft_biases[0], size_of(s16) * kHalfDimensions);
   for c: 0..1 {
-    accTile := cast(*u8) *accumulator.accumulation[c][0];
+    accTile := *accumulator.accumulation[c][0];
     for k: 0..activeIndices[c].size-1 {
       index  := activeIndices[c].values[k];
       offset := kHalfDimensions * index;
@@ -488,11 +488,6 @@ transform :: (pos: *Position, output: *s8, out_mask: *u32) {
 affine_txfm :: (input: *s8, output: *s8, inDims: u32, outDims: u32, biases: *s32, weights: *s8, in_mask: *u32, out_mask: *u32, pack8_and_calc_mask: bool) #expand {
   //assert(outDims == 32);
   #asm AVX, AVX2 {
-    //__m256i out_0 = ((__m256i *)biases)[0];
-    //__m256i out_1 = ((__m256i *)biases)[1];
-    //__m256i out_2 = ((__m256i *)biases)[2];
-    //__m256i out_3 = ((__m256i *)biases)[3];
-
     movdqu.y out_0: vec, [biases + 0];
     movdqu.y out_1: vec, [biases + 32];
     movdqu.y out_2: vec, [biases + 64];
@@ -528,36 +523,29 @@ affine_txfm :: (input: *s8, output: *s8, inDims: u32, outDims: u32, biases: *s32
 
     #asm AVX, AVX2 {
       // __m256i mul = _mm256_set1_epi16(factor), prod, signs;
+      // __m256i prod = _mm256_maddubs_epi16(mul, _mm256_unpacklo_epi8(first, second));
+      // __m256i signs = _mm256_cmpgt_epi16(kZero, prod);
+      // out_0 = _mm256_add_epi32(out_0, _mm256_unpacklo_epi16(prod, signs));
+      // out_1 = _mm256_add_epi32(out_1, _mm256_unpackhi_epi16(prod, signs));
+      // prod = _mm256_maddubs_epi16(mul, _mm256_unpackhi_epi8(first, second));
+      // signs = _mm256_cmpgt_epi16(kZero, prod);
+      // out_2 = _mm256_add_epi32(out_2, _mm256_unpacklo_epi16(prod, signs));
+      // out_3 = _mm256_add_epi32(out_3, _mm256_unpackhi_epi16(prod, signs));
+
       movd mul: vec, factor;
       pbroadcastw.y mul, mul; 
-
-      // __m256i prod = _mm256_maddubs_epi16(mul, _mm256_unpacklo_epi8(first, second));
       punpcklbw.y prod: vec, first, second;
       pmaddubsw.y prod, mul, prod;
-
-      // __m256i signs = _mm256_cmpgt_epi16(kZero, prod);
       pcmpgtw.y signs: vec, kZero, prod;
-
-      // out_0 = _mm256_add_epi32(out_0, _mm256_unpacklo_epi16(prod, signs));
       punpcklwd.y xmm1: vec, prod, signs;
       paddd.y out_0, out_0, xmm1;
-    
-      // out_1 = _mm256_add_epi32(out_1, _mm256_unpackhi_epi16(prod, signs));
       punpckhwd.y xmm1, prod, signs;
       paddd.y out_1, out_1, xmm1;
-
-      // prod = _mm256_maddubs_epi16(mul, _mm256_unpackhi_epi8(first, second));
       punpckhbw.y xmm1, first, second;
       pmaddubsw.y prod, mul, xmm1;
-    
-      // signs = _mm256_cmpgt_epi16(kZero, prod);
       pcmpgtw.y signs, kZero, prod;
-    
-      // out_2 = _mm256_add_epi32(out_2, _mm256_unpacklo_epi16(prod, signs));
       punpcklwd.y xmm1, prod, signs;
       paddd.y out_2, out_2, xmm1;
-
-      // out_3 = _mm256_add_epi32(out_3, _mm256_unpackhi_epi16(prod, signs));
       punpckhwd.y xmm1, prod, signs;
       paddd.y out_3, out_3, xmm1;
     }
