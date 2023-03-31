@@ -232,26 +232,18 @@ update_accumulator :: (pos: *Position) -> bool {
 
   COUNT :: 31;
 
+  // revert changes.
   for c: 0..1 {
-    accTile := *accumulator.accumulation[c][0];
     if reset[c] then {
-      memcpy(accTile, ft_biases.data, kHalfDimensions * size_of(s16));
+      memcpy(accumulator.accumulation[c].data, ft_biases.data, kHalfDimensions * size_of(s16));
     } else {
-      memcpy(accTile, prevAcc.accumulation[c].data, kHalfDimensions * size_of(s16));
+      memcpy(accumulator.accumulation[c].data, prevAcc.accumulation[c].data, kHalfDimensions * size_of(s16));
       // Difference calculation for the deactivated features
       for k: 0..removed_indices[c].size-1 {
         index  := removed_indices[c].values[k];
         offset := kHalfDimensions * index;
-        acc_data := accTile;
-        features := *ft_weights[offset];
-        for 0..COUNT {
-          #asm SSE2 {
-            movdqu.x xmm0: vec, [acc_data];
-            psubw.x  xmm0, [features];
-            movdqu.x [acc_data], xmm0;
-            add acc_data, 16;
-            add features, 16;
-          }
+        for j: 0..kHalfDimensions-1 {
+          accumulator.accumulation[c][j] -= ft_weights[offset + j];
         }
       }
     }
@@ -260,16 +252,8 @@ update_accumulator :: (pos: *Position) -> bool {
     for k: 0..added_indices[c].size-1 {
       index := added_indices[c].values[k];
       offset := kHalfDimensions * index;
-      acc_data := accTile;
-      features := *ft_weights[offset];
-      for 0..COUNT {
-        #asm SSE2 {
-          movdqu.x xmm0: vec, [acc_data];
-          paddw.x  xmm0, [features];
-          movdqu.x [acc_data], xmm0;
-          add acc_data, 16;
-          add features, 16;
-        }
+      for j: 0..kHalfDimensions-1 {
+        accumulator.accumulation[c][j] += ft_weights[offset + j];
       }
     }
   }
@@ -420,13 +404,38 @@ transform :: (pos: *Position, output: [] s8, out_mask: *u32) {
   accumulation := *pos.nnue[0].accumulator.accumulation;
   pers := pos.player; 
   offset := 0;
+
+  #asm SSE {
+    mov.d  reg: gpr, 0x00_7f_00_7f;
+    movd   xmm_127: vec, reg;
+    pshufd xmm_127, xmm_127, 0;
+    pxor.x xmm_000: vec, xmm_000;
+  }
+
+  // 128 bit xmm register
+  // 8 bit data
+  // 128 / 8 => 16 numbers at a time.
+  // 256 numbers total / 16 numbers per SIMD = 16 times.
+  COUNT :: 15;
+  data := output.data;
   for p: 0..1 {
-    for i: 0..kHalfDimensions-1 {
-      sum: s16 = (<<accumulation) [pers][i];
-      output[offset + i] = cast(s8) clamp(sum, 0, 127);
+    accum := *(<<accumulation)[pers][0];
+    for < COUNT..0 {
+      #asm SSE, SSE4_1 {
+        movups.x   xmm0: vec, [accum];
+        pmaxsw.x   xmm0, xmm_000;
+        pminsw.x   xmm0, xmm_127;
+        movups.x   xmm1: vec, [accum + 0x10];
+        pmaxsw.x   xmm1, xmm_000;
+        pminsw.x   xmm1, xmm_127;
+        
+        packsswb.x xmm0, xmm1;
+        movups.x   [data], xmm0;
+        add      accum, 0x20;
+        add      data,  0x10;
+      }
     }
 
-    offset += kHalfDimensions;
     pers ^= 1;
   }
 }
