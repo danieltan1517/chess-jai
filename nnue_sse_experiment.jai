@@ -207,7 +207,7 @@ nnue_evaluate_pos :: (pos: *Position) -> s32 {
   affine_txfm(buf.input.data, buf.hidden1_out.data, FtOutDims, 32, hidden1_biases.data, hidden1_weights.data, input_mask.data, hidden1_mask.data, true);
   affine_txfm(buf.hidden1_out.data, buf.hidden2_out.data, 32, 32, hidden2_biases.data, hidden2_weights.data, hidden1_mask.data, null, false);
 
-  out_value := affine_propagate(buf.hidden2_out.data, output_biases.data, output_weights.data);
+  out_value := affine_propagate(buf.hidden2_out.data, output_biases[0], output_weights.data);
 
   return out_value / FV_SCALE;
   FV_SCALE :: 16;
@@ -458,17 +458,17 @@ transform :: (pos: *Position, output: [] s8, out_mask: *u32) {
 affine_txfm :: (input: *s8, output: *void, inDims: u32, $outDims: u32, biases: *s32, weights: *s8, in_mask: *u32, out_mask: *u32, pack8_and_calc_mask: bool) {
   // TODO: optimize affine txfm for sse.
   tmp: [outDims] s32;
-  for i: 0..outDims-1 {
-    tmp[i] = biases[i];
-  }
+  memcpy(*tmp[0], *biases[0], size_of(s32) * outDims);
 
   for idx: 0..inDims-1 {
-    if input[idx] {
+    factor: s32 = input[idx];
+    if factor {
       for i: 0..outDims-1 {
-        tmp[i] += cast(s16)input[idx] * weights[outDims * idx + i];
+        tmp[i] += factor * weights[outDims * idx + i];
       }
     }
   }
+
   #asm SSE2 {
     mov.d    reg: gpr, 0x00_7f_00_7f;
     movd     xmm_127: vec, reg;
@@ -493,57 +493,38 @@ affine_txfm :: (input: *s8, output: *void, inDims: u32, $outDims: u32, biases: *
   }
 }
 
-affine_propagate :: (input: *s8, biases: *s32, weights: *s8) -> s32 #expand {
+affine_propagate :: (input: *s8, biases: s32, weights: *s8) -> s32 #expand {
   // translated from Godbolt's gcc -O3 output
   // TODO: This is very ugly...
-  eax: s32 = biases[0];
-  for 0..1 {
+  eax: s32 = ---;
+  #asm {
+    pxor.x   sum_xmm: vec, sum_xmm;
+    pxor.x   zero_xmm: vec, zero_xmm;
+    mov      eax, 1;
+    movd     ones_xmm: vec, eax;
+    pshufd.x ones_xmm, ones_xmm, 0x0;
+  }
+
+  for < 3..0 {
     #asm SSE {
-      xmm0: vec;
-      xmm1: vec;
-      xmm2: vec;
-      xmm3: vec;
-      xmm4: vec;
-      xmm5: vec;
-      reg:  gpr;
-      movdqu.x  xmm1, [input];
-      movdqa.x  xmm2, [weights];
-      pxor.x    xmm3, xmm3;
-      movdqa.x  xmm4, xmm3;
-      pcmpgtb.x xmm4, xmm2;
-      pcmpgtb.x xmm3, xmm1;
-      movdqa.x  xmm5, xmm2;
-      movdqa.x  xmm0, xmm1;
-      punpcklbw.x xmm5, xmm4;
-      punpcklbw.x xmm0, xmm3;
-      punpckhbw.x xmm2, xmm4;
-      pmullw.x    xmm0, xmm5;
-      punpckhbw.x xmm1, xmm3;
-      pmullw.x    xmm1, xmm2;
-      pxor.x      xmm2, xmm2;
-      movdqa.x    xmm3, xmm2;
-      pcmpgtw.x   xmm3, xmm0;
-      movdqa.x    xmm4, xmm0;
-      pcmpgtw.x   xmm2, xmm1;
-      punpcklwd.x xmm4, xmm3;
-      punpckhwd.x xmm0, xmm3;
-      movdqa.x    xmm3, xmm1;
-      paddd.x     xmm0, xmm4;
-      punpcklwd.x xmm3, xmm2;
-      punpckhwd.x xmm1, xmm2;
-      paddd.x     xmm0, xmm3;
-      paddd.x     xmm0, xmm1;
-      movdqa.x    xmm1, xmm0;
-      psrldq.x    xmm1, 8;
-      paddd.x     xmm0, xmm1;
-      movdqa.x    xmm1, xmm0;
-      psrldq.x    xmm1, 4;
-      paddd.x     xmm0, xmm1;
-      movd        reg, xmm0;
-      add.d       eax, reg;
-      add.b       input, 16;
-      add.b       weights, 16;
+       movq        input_xmm: vec, [input];
+       movq        weights_xmm: vec, [weights];
+       pmaddubsw.x input_xmm, weights_xmm;
+       punpcklwd.x input_xmm, zero_xmm;
+       pmaddwd.x   input_xmm, ones_xmm;
+       paddd.x     sum_xmm, input_xmm;
+       add         input,   0x08;
+       add         weights, 0x08;
     }
+  }
+
+  #asm {
+    pshufd      xmm1: vec, sum_xmm, 0x1b;
+    paddd.x     sum_xmm, xmm1;
+    movd        eax, sum_xmm;
+    pextrd      val: gpr, sum_xmm, 1;
+    add         eax, val;
+    add         eax, biases;
   }
 
   return eax;
@@ -551,3 +532,4 @@ affine_propagate :: (input: *s8, biases: *s32, weights: *s8) -> s32 #expand {
 
 #import "Basic";
 #import "File";
+
