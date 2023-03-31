@@ -231,19 +231,26 @@ update_accumulator :: (pos: *Position) -> bool {
   append_changed_indices(pos, removed_indices.data, added_indices.data, reset.data);
 
   COUNT :: 31;
-
-  // revert changes.
   for c: 0..1 {
+    acc := accumulator.accumulation[c].data;
     if reset[c] then {
-      memcpy(accumulator.accumulation[c].data, ft_biases.data, kHalfDimensions * size_of(s16));
+      memcpy(acc, ft_biases.data, kHalfDimensions * size_of(s16));
     } else {
-      memcpy(accumulator.accumulation[c].data, prevAcc.accumulation[c].data, kHalfDimensions * size_of(s16));
+      memcpy(acc, prevAcc.accumulation[c].data, kHalfDimensions * size_of(s16));
       // Difference calculation for the deactivated features
       for k: 0..removed_indices[c].size-1 {
         index  := removed_indices[c].values[k];
         offset := kHalfDimensions * index;
-        for j: 0..kHalfDimensions-1 {
-          accumulator.accumulation[c][j] -= ft_weights[offset + j];
+        acc_data := acc;
+        features := *ft_weights[offset];
+        for < COUNT..0 {
+          #asm SSE2 {
+            movdqu.x xmm0: vec, [acc_data];
+            psubw.x  xmm0, [features];
+            movdqu.x [acc_data], xmm0;
+            add acc_data, 16;
+            add features, 16;
+          }
         }
       }
     }
@@ -252,8 +259,16 @@ update_accumulator :: (pos: *Position) -> bool {
     for k: 0..added_indices[c].size-1 {
       index := added_indices[c].values[k];
       offset := kHalfDimensions * index;
-      for j: 0..kHalfDimensions-1 {
-        accumulator.accumulation[c][j] += ft_weights[offset + j];
+      acc_data := acc;
+      features := *ft_weights[offset];
+      for < COUNT..0 {
+        #asm SSE2 {
+          movdqu.x xmm0: vec, [acc_data];
+          paddw.x  xmm0, [features];
+          movdqu.x [acc_data], xmm0;
+          add acc_data, 16;
+          add features, 16;
+        }
       }
     }
   }
