@@ -178,14 +178,6 @@ NnueVersion : u32 : 0x7AF32F16;
 TransformerStart :: 3*4 + 177;
 NetworkStart :: TransformerStart+4 + 2*256 + 2*256*64*641;
 
-NetData :: struct {
-  input: [FtOutDims] s8;
-  hidden1_out: [32] s8;
-
-  // if using SSE2|MMX w/o AVX2, then 's16'
-  hidden2_out: [32] s8; 
-}
-
 Position :: struct {
   player: s32;
   pieces: *s32;
@@ -202,12 +194,14 @@ nnue_evaluate_pos :: (pos: *Position) -> s32 {
   input_mask:   [FtOutDims / (8 * size_of(u32)) ] u32 #align 8;
   hidden1_mask: [8 / size_of(u32)] u32 #align 8;
 
-  buf: NetData;
-  transform(pos, buf.input, input_mask.data);
-  affine_txfm(buf.input.data, buf.hidden1_out.data, FtOutDims, 32, hidden1_biases.data, hidden1_weights.data, input_mask.data, hidden1_mask.data, true);
-  affine_txfm(buf.hidden1_out.data, buf.hidden2_out.data, 32, 32, hidden2_biases.data, hidden2_weights.data, hidden1_mask.data, null, false);
+  input: [FtOutDims] s8;
+  hidden1_out: [32] s8;
+  hidden2_out: [32] s8; 
+  transform(pos, input, input_mask.data);
+  affine_txfm(*input[0], *hidden1_out[0], FtOutDims, 32, *hidden1_biases[0], *hidden1_weights[0], *input_mask[0], *hidden1_mask[0], true);
+  affine_txfm(*hidden1_out[0], *hidden2_out[0], 32, 32, *hidden2_biases[0], *hidden2_weights[0], *hidden1_mask[0], null, false);
 
-  out_value := affine_propagate(buf.hidden2_out.data, output_biases[0], output_weights.data);
+  out_value := affine_propagate(hidden2_out.data, output_biases[0], output_weights.data);
 
   return out_value / FV_SCALE;
   FV_SCALE :: 16;
@@ -497,7 +491,7 @@ affine_propagate :: (input: *s8, biases: s32, weights: *s8) -> s32 #expand {
   // translated from Godbolt's gcc -O3 output
   // TODO: This is very ugly...
   eax: s32 = ---;
-  #asm {
+  #asm SSE, SSE2, SSE3 {
     pxor.x   sum_xmm: vec, sum_xmm;
     pxor.x   zero_xmm: vec, zero_xmm;
     mov      eax, 1;
@@ -506,7 +500,7 @@ affine_propagate :: (input: *s8, biases: s32, weights: *s8) -> s32 #expand {
   }
 
   for < 3..0 {
-    #asm SSE {
+    #asm SSE, SSE2, SSE3 {
        movq        input_xmm: vec, [input];
        movq        weights_xmm: vec, [weights];
        pmaddubsw.x input_xmm, weights_xmm;
@@ -518,7 +512,7 @@ affine_propagate :: (input: *s8, biases: s32, weights: *s8) -> s32 #expand {
     }
   }
 
-  #asm {
+  #asm SSE, SSE2, SSE4_1 {
     pshufd      xmm1: vec, sum_xmm, 0x1b;
     paddd.x     sum_xmm, xmm1;
     movd        eax, sum_xmm;
