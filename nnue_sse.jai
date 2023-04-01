@@ -452,17 +452,142 @@ affine_txfm :: (input: *s8, output: *void, inDims: u32, biases: *s32, weights: *
   tmp: [32] s32;
   memcpy(*tmp[0], *biases[0], size_of(s32) * 32);
 
-  // The assembly language SIMD instructions is too complicated...
-  // I left this portion untranslated...
-  // It's better to have an NNUE SSE rather than run w/o SIMD.
   for idx: 0..inDims-1 {
     factor: s32 = input[idx];
     if factor {
       index := idx << 5;  // idx * 32.
-      for i: 0..31 {
-        tmp[i] += factor * weights[index];
-        index += 1;
-      }
+      sse_simd(factor, *tmp[0], *weights[index]);
+    }
+  }
+
+  // GCC -O3 "optimized" output
+  // terrible scrabbled eggs output, but faster than CPU w/o SIMD
+  // the SSE code is a bit difficult to translate.
+  sse_simd :: (factor: s32, tmp: *s32, weights: *s8) #expand {
+    edx := factor;
+    rsi := tmp;
+    rdi := weights;
+    #asm {
+      movdqa.x    xmm1:, [rdi];
+      pxor.x      xmm6:, xmm6;
+      pxor.x      xmm7:, xmm7;
+      movd        xmm5:,  edx;
+      movdqa.x    xmm2:, xmm6;
+      movdqa.x    xmm9:, xmm7;
+      pshufd.x    xmm0:, xmm5, 0;
+      pcmpgtb.x   xmm2, xmm1;
+      movdqa.x    xmm3:, xmm1;
+      movdqa.x    xmm5, xmm0;
+      psrlq.x     xmm5, 32;
+      movdqa.x    xmm10:, xmm7;
+      punpcklbw.x xmm3, xmm2;
+      punpckhbw.x xmm1, xmm2;
+      pcmpgtw.x   xmm9, xmm3;
+      pcmpgtw.x   xmm10, xmm1;
+      movdqa.x    xmm2, xmm3;
+      punpckhwd.x xmm2, xmm9;
+      movdqa.x    xmm4:, xmm2;
+      psrlq.x     xmm2, 32;
+      pmuludq.x   xmm4, xmm0;
+      pmuludq.x   xmm2, xmm5;
+      pshufd.x    xmm4, xmm4, 8;
+      pshufd.x    xmm2, xmm2, 8;
+      punpckldq.x xmm4, xmm2;
+      movdqu.x    xmm2, [rsi+16];
+      paddd.x     xmm4, xmm2;
+      movdqa.x    xmm2, xmm1;
+      punpckhwd.x xmm1, xmm10;
+      punpcklwd.x xmm2, xmm10;
+      movdqa.x    xmm10, xmm1;
+      movups.x    [rsi+16], xmm4;
+      movdqa.x    xmm8:, xmm2;
+      psrlq.x     xmm2, 32;
+      pmuludq.x   xmm8, xmm0;
+      pmuludq.x   xmm2, xmm5;
+      pmuludq.x   xmm10, xmm0;
+      pshufd      xmm2, xmm2, 8;
+      pshufd      xmm8, xmm8, 8;
+      punpckldq.x xmm8, xmm2;
+      movdqu.x    xmm2, [rsi+32];
+      paddd.x     xmm8, xmm2;
+      movdqa.x    xmm2, xmm1;
+      pshufd      xmm1, xmm10, 8;
+      psrlq       xmm2, 32;
+      movups.x    [rsi+32], xmm8;
+      movdqa.x    xmm8, xmm7;
+      pmuludq xmm2, xmm5;
+      pshufd  xmm2, xmm2, 8;
+      punpckldq       xmm1, xmm2;
+      movdqu.x  xmm2, [rsi+48];
+      paddd   xmm2, xmm1;
+      movdqa  xmm1, xmm3;
+      punpcklwd       xmm1, xmm9;
+      movups.x [rsi+48], xmm2;
+      movdqa  xmm3, xmm1;
+      psrlq   xmm1, 32;
+      pmuludq xmm3, xmm0;
+      pmuludq xmm1, xmm5;
+      pshufd  xmm3, xmm3, 8;
+      pshufd  xmm1, xmm1, 8;
+      punpckldq       xmm3, xmm1;
+      movdqu.x  xmm1, [rsi];
+      paddd.x   xmm1, xmm3;
+      movdqu.x  xmm3, [rsi+80];
+      movups.x  [rsi], xmm1;
+      movdqa.x  xmm1, [rdi+16];
+      pcmpgtb xmm6, xmm1;
+      movdqa  xmm2, xmm6;
+      movdqa  xmm6, xmm1;
+      punpcklbw       xmm6, xmm2;
+      punpckhbw       xmm1, xmm2;
+      pcmpgtw xmm8, xmm6;
+      pcmpgtw xmm7, xmm1;
+      movdqa  xmm2, xmm6;
+      punpckhwd       xmm2, xmm8;
+      movdqa  xmm4, xmm2;
+      psrlq   xmm2, 32;
+      pmuludq xmm4, xmm0;
+      pmuludq xmm2, xmm5;
+      pshufd  xmm4, xmm4, 8;
+      pshufd  xmm2, xmm2, 8;
+      punpckldq       xmm4, xmm2;
+      movdqa  xmm2, xmm1;
+      punpckhwd       xmm1, xmm7;
+      punpcklwd       xmm2, xmm7;
+      paddd   xmm4, xmm3;
+      movdqa  xmm7, xmm1;
+      movdqa  xmm3, xmm2;
+      psrlq   xmm2, 32;
+      movups.x  [rsi+80], xmm4;
+      pmuludq xmm3, xmm0;
+      pmuludq xmm2, xmm5;
+      pmuludq xmm7, xmm0;
+      pshufd  xmm2, xmm2, 8;
+      pshufd  xmm3, xmm3, 8;
+      punpckldq       xmm3, xmm2;
+      movdqu.x  xmm2, [rsi+96];
+      paddd   xmm3, xmm2;
+      movdqa  xmm2, xmm1;
+      pshufd  xmm1, xmm7, 8;
+      psrlq   xmm2, 32;
+      movups.x  [rsi+96], xmm3;
+      pmuludq xmm2, xmm5;
+      pshufd  xmm2, xmm2, 8;
+      punpckldq       xmm1, xmm2;
+      movdqu.x  xmm2, [rsi+112];
+      paddd   xmm2, xmm1;
+      movdqa  xmm1, xmm6;
+      movdqu.x  xmm6, [rsi+64];
+      punpcklwd       xmm1, xmm8;
+      movups  [rsi+112], xmm2;
+      pmuludq xmm0, xmm1;
+      psrlq   xmm1, 32;
+      pmuludq xmm1, xmm5;
+      pshufd  xmm0, xmm0, 8;
+      pshufd  xmm1, xmm1, 8;
+      punpckldq       xmm0, xmm1;
+      paddd   xmm0, xmm6;
+      movups  [rsi+64], xmm0;
     }
   }
 
