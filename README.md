@@ -132,8 +132,8 @@ This code is divided up into the following files:
 * NNUE Stockfish 12 HalfKP Architecture
 * Supports the following CPU Architectures:
   * AVX2
+  * SSE 
   * CPU w/o SIMD
-  * SSE (work in progress. lots of bugs.)
 
 ### Credits
 * Thank you to Maksim Korzh, author of the BBC chess engine. His work provided the main inspiration for this project. Here is a link to the [BBC Chess Engine](https://github.com/maksimKorzh/bbc).
