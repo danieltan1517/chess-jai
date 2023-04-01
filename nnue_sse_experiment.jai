@@ -462,6 +462,32 @@ affine_txfm :: (input: *s8, output: *void, inDims: u32, $outDims: u32, biases: *
         tmp[i] += factor * weights[index];
         index += 1;
       }
+
+      /*index := outDims * idx;
+      #asm SSE {
+        movd     factor_xmm: vec, factor;
+        pshufd.x factor_xmm, factor_xmm, 0;
+        pxor.x   zero: vec, zero;
+      }
+
+      // from gary linscott's pytorch NNUE guide.
+      // sum0 = _mm256_add_epi32(sum0, _mm256_madd_epi16(factor, _mm256_unpacklo_epi16(col0, col1)));
+  
+      weights_data := weights + index;
+      tmp_data := tmp.data;
+      for < 7..0 {
+        #asm SSE {
+          movups.x    xmm1: vec, [tmp_data];
+          movd        xmm0: vec, [weights_data];
+          punpcklbw.x xmm0, zero;
+          punpcklwd.x xmm0, zero;
+          pmullw.x    xmm0, factor_xmm;
+          paddd.x     xmm1, xmm0;
+          movups.x    [tmp_data], xmm1;
+          add         weights_data, 0x04;
+          add         tmp_data, 0x10;
+        }
+      }*/
     }
   }
 
