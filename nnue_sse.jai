@@ -595,7 +595,7 @@ affine_txfm :: (input: *s8, output: *void, inDims: u32, biases: *s32, weights: *
     mov.d    reg: gpr, 0x00_7f_00_7f;
     movd     xmm_127: vec, reg;
     pshufd.x xmm_127, xmm_127, 0;
-    pxor.x   xmm_000:   vec, xmm_000;
+    pxor.x   xmm_000: vec, xmm_000;
   }
 
   outVec := output;
