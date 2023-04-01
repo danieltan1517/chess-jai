@@ -178,14 +178,6 @@ NnueVersion : u32 : 0x7AF32F16;
 TransformerStart :: 3*4 + 177;
 NetworkStart :: TransformerStart+4 + 2*256 + 2*256*64*641;
 
-NetData :: struct {
-  input: [FtOutDims] s8;
-  hidden1_out: [32] s8;
-
-  // if using SSE2|MMX w/o AVX2, then 's16'
-  hidden2_out: [32] s8; 
-}
-
 Position :: struct {
   player: s32;
   pieces: *s32;
@@ -201,14 +193,13 @@ IndexList :: struct {
 nnue_evaluate_pos :: (pos: *Position) -> s32 {
   input_mask:   [FtOutDims / (8 * size_of(u32)) ] u32 #align 8;
   hidden1_mask: [8 / size_of(u32)] u32 #align 8;
-
-  buf: NetData;
-  transform(pos, buf.input, input_mask.data);
-  affine_txfm(buf.input.data, buf.hidden1_out.data, FtOutDims, 32, hidden1_biases.data, hidden1_weights.data, input_mask.data, hidden1_mask.data, true);
-  affine_txfm(buf.hidden1_out.data, buf.hidden2_out.data, 32, 32, hidden2_biases.data, hidden2_weights.data, hidden1_mask.data, null, false);
-
-  out_value := affine_propagate(buf.hidden2_out.data, output_biases.data, output_weights.data);
-
+  input: [FtOutDims] s8;
+  hidden1_out: [32] s8;
+  hidden2_out: [32] s8; 
+  transform(pos, input, input_mask.data);
+  affine_txfm(input.data, hidden1_out.data, FtOutDims, 32, hidden1_biases.data, hidden1_weights.data, input_mask.data, hidden1_mask.data, true);
+  affine_txfm(hidden1_out.data, hidden2_out.data, 32, 32, hidden2_biases.data, hidden2_weights.data, hidden1_mask.data, null, false);
+  out_value := affine_propagate(hidden2_out.data, output_biases.data, output_weights.data);
   return out_value / FV_SCALE;
   FV_SCALE :: 16;
 }
@@ -323,7 +314,7 @@ append_changed_indices :: (pos: *Position, removed: *IndexList, added: *IndexLis
 
 half_kp_append_active_indices :: (pos: *Position, c: s32, active: *IndexList) {
   ksq := pos.squares[c];
-  ksq = orient(c, ksq);
+  ksq = orient(c, ksq) * PS_END;
   i := 2;
   while pos.pieces[i] {
     sq := pos.squares[i];
@@ -336,7 +327,7 @@ half_kp_append_active_indices :: (pos: *Position, c: s32, active: *IndexList) {
 
 half_kp_append_changed_indices :: (pos: *Position, c: s32, dp: *DirtyPiece, removed: *IndexList, added: *IndexList) {
   ksq := pos.squares[c];
-  ksq = orient(c, ksq);
+  ksq = orient(c, ksq) * PS_END;
   for i: 0..dp.dirtyNum-1 {
     pc := dp.pc[i];
     if pc == 1 || pc == 7 continue;
@@ -355,7 +346,7 @@ half_kp_append_changed_indices :: (pos: *Position, c: s32, dp: *DirtyPiece, remo
 }
 
 make_index :: (c: s32, s: s32, pc: s32, ksq: s32) -> s32 #expand {
-  return orient(c, s) + PieceToIndex[c][pc] + PS_END * ksq;
+  return orient(c, s) + PieceToIndex[c][pc] + ksq;
 }
 
 orient :: (c: s32, s: s32) -> s32 #expand {
@@ -388,17 +379,16 @@ PieceToIndex: [2][14] s32 = .[
 transform :: (pos: *Position, output: [] s8, out_mask: *u32) {
   if !update_accumulator(pos) then
     refresh_accumulator(pos);
-  accumulation := *pos.nnue[0].accumulator.accumulation;
-  perspectives: [2] int;
-  perspectives[0] = pos.player;
-  perspectives[1] = pos.player ^ 1;
-
-  for p: 0..1 {
-    offset := kHalfDimensions * p;
+  accumulation: [][256] s16 = pos.nnue[0].accumulator.accumulation;
+  offset := 0;
+  p := pos.player;
+  for 0..1 {
     for i: 0..kHalfDimensions-1 {
-      sum: s16 = (<<accumulation) [perspectives[p]][i];
+      sum: s16 = accumulation[p][i];
       output[offset + i] = cast(s8) clamp(sum, 0, 127);
     }
+    offset += kHalfDimensions;
+    p ^= 1;
   }
 }
 
@@ -410,9 +400,10 @@ affine_txfm :: (input: *s8, output: *void, inDims: u32, $outDims: u32, biases: *
   }
 
   for idx: 0..inDims-1 {
-    if input[idx] {
+    factor: s32 = input[idx];
+    if factor {
       for i: 0..outDims-1 {
-        tmp[i] += cast(s16)input[idx] * weights[outDims * idx + i];
+        tmp[i] += factor * weights[outDims * idx + i];
       }
     }
   }

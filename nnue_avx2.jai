@@ -203,9 +203,6 @@ NnueVersion : u32 : 0x7AF32F16;
 TransformerStart :: 3*4 + 177;
 NetworkStart :: TransformerStart+4 + 2*256 + 2*256*64*641;
 
-NetData :: struct {
-}
-
 Position :: struct {
   player: s32;
   pieces: *s32;
@@ -222,11 +219,9 @@ nnue_evaluate_pos :: (pos: *Position) -> s32 {
   input_mask:   [FtOutDims / (8 * size_of(u32)) ] u32 #align 8;
   hidden1_mask: [8 / size_of(u32)] u32 #align 8;
   FV_SCALE :: 16;
-
   input: [FtOutDims] s8 #align 64;
   hidden1_out: [32] s8;
   hidden2_out: [32] s8; 
-
   transform(pos, *input[0], *input_mask[0]);
   affine_txfm(*input[0], *hidden1_out[0], FtOutDims, 32, *hidden1_biases[0], *hidden1_weights[0], *input_mask[0], *hidden1_mask[0], true);
   affine_txfm(*hidden1_out[0], *hidden2_out[0], 32, 32, *hidden2_biases[0], *hidden2_weights[0], *hidden1_mask[0], null, false);
