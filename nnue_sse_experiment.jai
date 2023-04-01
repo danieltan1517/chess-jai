@@ -410,7 +410,7 @@ PieceToIndex: [2][14] s32 = .[
 transform :: (pos: *Position, output: [] s8, out_mask: *u32) {
   if !update_accumulator(pos) then
     refresh_accumulator(pos);
-  accumulation := *pos.nnue[0].accumulator.accumulation;
+  accumulation: [][256] s16 = pos.nnue[0].accumulator.accumulation;
   pers := pos.player; 
   offset := 0;
 
@@ -428,7 +428,7 @@ transform :: (pos: *Position, output: [] s8, out_mask: *u32) {
   COUNT :: 15;
   data := output.data;
   for p: 0..1 {
-    accum := *(<<accumulation)[pers][0];
+    accum := *accumulation[pers][0];
     for < COUNT..0 {
       #asm SSE, SSE4_1 {
         movups.x   xmm0: vec, [accum];

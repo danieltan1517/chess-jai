@@ -455,7 +455,7 @@ PieceToIndex: [2][14] s32 = .[
 transform :: (pos: *Position, output: *s8, out_mask: *u32) {
   if !update_accumulator(pos) then
     refresh_accumulator(pos);
-  accumulation := *pos.nnue[0].accumulator.accumulation;
+  accumulation: [][256] s16 = pos.nnue[0].accumulator.accumulation;
   pers := pos.player;
   numChunks :: (((16*kHalfDimensions) / SIMD_WIDTH) / 2) - 1;
 
@@ -466,7 +466,7 @@ transform :: (pos: *Position, output: *s8, out_mask: *u32) {
 
   for p: 0..1 {
     for i: 0..numChunks {
-      s0 := *(cast(*m256) *(<<accumulation)[pers])[i * 2];
+      s0 := *(cast(*m256) *accumulation[pers])[i * 2];
       #asm AVX, AVX2 {
         // out[i] = vec_packs(s0, s1); => out[i] = _mm256_packs_epi16(s0, s1);
         // *outMask++ = _mm256_movemask_epi8(_mm256_cmpgt_epi8(out[i],_mm256_setzero_si256()))
