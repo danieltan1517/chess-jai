@@ -488,10 +488,10 @@ transform :: (pos: *Position, output: *s8, out_mask: *u32) {
 affine_txfm :: (input: *s8, output: *s8, inDims: u32, outDims: u32, biases: *s32, weights: *s8, in_mask: *u32, out_mask: *u32, pack8_and_calc_mask: bool) #expand {
   //assert(outDims == 32);
   #asm AVX, AVX2 {
-    movdqu.y out_0: vec, [biases + 0];
-    movdqu.y out_1: vec, [biases + 32];
-    movdqu.y out_2: vec, [biases + 64];
-    movdqu.y out_3: vec, [biases + 96];
+    movdqa.y out_0: vec, [biases + 0];
+    movdqa.y out_1: vec, [biases + 32];
+    movdqa.y out_2: vec, [biases + 64];
+    movdqa.y out_3: vec, [biases + 96];
     pxor.y   second: vec, second, second;
     pxor.y   kZero: vec, kZero, kZero;
   }
@@ -505,13 +505,13 @@ affine_txfm :: (input: *s8, output: *s8, inDims: u32, outDims: u32, biases: *s32
     weights_data := *(cast(*m256)weights)[idx];
     #asm AVX, AVX2 {
       // initialize first and second = 0.
-      movdqu.y first: vec, [weights_data];
+      movdqa.y first: vec, [weights_data];
     }
     factor: s16 = input[idx];
     if next_idx() {
       weights_data := *(cast(*m256)weights)[idx];
       #asm AVX, AVX2 {
-        movdqu.y second, [weights_data];
+        movdqa.y second, [weights_data];
       }
       val: s16 = cast(s16) input[idx];
       factor |= val << 8;
