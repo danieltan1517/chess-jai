@@ -440,8 +440,8 @@ transform :: (pos: *Position, output: [] s8, out_mask: *u32) {
         
         packsswb.x xmm0, xmm1;
         movups.x   [data], xmm0;
-        add      accum, 0x20;
-        add      data,  0x10;
+        add        accum, 0x20;
+        add        data,  0x10;
       }
     }
 
@@ -449,7 +449,7 @@ transform :: (pos: *Position, output: [] s8, out_mask: *u32) {
   }
 }
 
-affine_txfm :: (input: *s8, output: *void, inDims: u32, $outDims: u32, biases: *s32, weights: *s8, in_mask: *u32, out_mask: *u32, pack8_and_calc_mask: bool) {
+affine_txfm :: (input: *s8, output: *void, inDims: u32, $outDims: u32, biases: *s32, weights: *s8, in_mask: *u32, out_mask: *u32, pack8_and_calc_mask: bool) #expand {
   // TODO: optimize affine txfm for sse.
   tmp: [outDims] s32;
   memcpy(*tmp[0], *biases[0], size_of(s32) * outDims);
@@ -457,8 +457,10 @@ affine_txfm :: (input: *s8, output: *void, inDims: u32, $outDims: u32, biases: *
   for idx: 0..inDims-1 {
     factor: s32 = input[idx];
     if factor {
+      index := outDims * idx;
       for i: 0..outDims-1 {
-        tmp[i] += factor * weights[outDims * idx + i];
+        tmp[i] += factor * weights[index];
+        index += 1;
       }
     }
   }
