@@ -263,13 +263,13 @@ update_accumulator :: (pos: *Position) -> bool {
         ft_b_tile := (*ft_biases[i*TILE_HEIGHT]);
         memcpy(accTile, ft_b_tile, size_of(s16) * kHalfDimensions);
       } else {
-        prevAccTile := cast(*m256) *prevAcc.accumulation[c][i*TILE_HEIGHT];
+        prevAccTile := *prevAcc.accumulation[c][i*TILE_HEIGHT];
         memcpy(accTile, prevAccTile, size_of(s16) * kHalfDimensions);
         // Difference calculation for the deactivated features
         for k: 0..removed_indices[c].size-1 {
           index := removed_indices[c].values[k];
           offset := kHalfDimensions*index + i*TILE_HEIGHT;
-          column := cast(*m256) *ft_weights[offset];
+          column := *ft_weights[offset];
           acc_data := accTile;
           for j: 0..NUM_REGS-1 {
             #asm AVX, AVX2 {
@@ -547,7 +547,6 @@ affine_txfm :: (input: *s8, output: *s8, inDims: u32, outDims: u32, biases: *s32
   }
 
   //outVec: *m256 = cast(*m256)output;
-  SHIFT :: 6;
   #asm AVX, AVX2 {
     // __m256i out16_0 = _mm256_srai_epi16(_mm256_packs_epi32(out_0, out_1), SHIFT);
     // __m256i out16_1 = _mm256_srai_epi16(_mm256_packs_epi32(out_2, out_3), SHIFT);
@@ -556,18 +555,18 @@ affine_txfm :: (input: *s8, output: *s8, inDims: u32, outDims: u32, biases: *s32
 
     packssdw.y out16_0: vec, out_0, out_1;
     packssdw.y out16_1: vec, out_2, out_3;
-    psraw.y    out16_0, out16_0, SHIFT;
-    psraw.y    out16_1, out16_1, SHIFT;
+    psraw.y    out16_0, out16_0, 6;
+    psraw.y    out16_1, out16_1, 6;
     packsswb.y output_data: vec, out16_0, out16_1;
-    movdqu.y [output], output_data;
+    movdqu.y   [output], output_data;
   }
 
   #if pack8_and_calc_mask then {
     #asm AVX, AVX2 {
       // outMask[0] = _mm256_movemask_epi8(_mm256_cmpgt_epi8(outVec[0], kZero));
       pcmpgtb.y output_data, output_data, kZero;
-      pmovmskb reg: gpr, output_data;
-      mov.d [out_mask], reg;
+      pmovmskb  reg: gpr, output_data;
+      mov.d     [out_mask], reg;
     }
   } else {
     #asm AVX, AVX2 {
