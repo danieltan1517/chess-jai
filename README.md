@@ -81,7 +81,7 @@ This code is divided up into the following files:
 * Bitboards with Little Endian Rank-File Mapping
 * Fancy Magic Bitboards with Parallel Bit Extract
 * Kogge-Stone Algorithm
-* Move generator generates 297 million positions per second
+* Move generator generates 324 million positions per second
 * Moves encoded as 16-bit integers
 
 ### Search
