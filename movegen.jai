@@ -726,22 +726,19 @@ do_en_passant_moves :: (chess: *Chess, pawn: u64, en_passant: u64, $turn: Turn, 
   while pawn {
     pawn_sq := bit_scan_forward(pawn);
     pawn_bitboard := cast(u64) (1 << pawn_sq);
-    if king == 0 || queen_rook == 0 {
-      // do enpassant move.
-      add_move(move_gen, pawn_sq, ep_sq, Move16.Ep_Capture);
-    } else {
+    if king != 0 && queen_rook != 0 {
       while queen_rook {
         sq := bit_scan_forward(queen_rook);
         between := between_squares(sq, ksq);
         erase_both := occupied & ~pawn_bitboard;
         if (between & erase_both) == 0 
           return;
-        queen_rook = popbit(queen_rook);
+        queen_rook &= popbit(queen_rook);
       }
-
-      // do enpassant move.
-      add_move(move_gen, pawn_sq, ep_sq, Move16.Ep_Capture);
     }
+
+    // do enpassant move.
+    add_move(move_gen, pawn_sq, ep_sq, Move16.Ep_Capture);
 
     pawn = popbit(pawn);
   }
