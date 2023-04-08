@@ -1795,8 +1795,8 @@ bitloop :: (bitboard: *u64, body: Code, flags: For_Flags) #expand {
   loop := << bitboard;
   while loop {
     `it_index := bit_scan_forward(loop);
-    `it := cast(u64) (1 << it_index);
-    loop = popbit(loop);
+    `it := loop & cast,no_check(u64)(-cast,no_check(int)loop);
+    loop ^= it;
     #insert body;
   }
 }
