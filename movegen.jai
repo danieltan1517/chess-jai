@@ -20,10 +20,6 @@ chess_fen :: (chess: *Chess, fen_string: string) -> bool {
   memset(chess, 0, size_of(Chess));
   tokens := split(fen_string, " ");
   rows   := split(tokens[0], "/");
-  defer {
-    array_free(tokens);
-    array_free(rows);
-  }
   for tokens {
     if !it remove it;
   }
