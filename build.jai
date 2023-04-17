@@ -160,7 +160,7 @@ build_debug :: (cpu_info: *Cpu_X86, executable_name: string) -> Workspace {
 
   target_options := get_build_options(w);
   target_options.output_executable_name = executable_name;
-  target_options.optimization_level = .DEBUG;
+  set_optimization(*target_options, .DEBUG);
   target_options.backend = .X64;
   target_options.stack_trace = true;
   set_build_options(target_options, w);
@@ -194,8 +194,7 @@ build_release :: (cpu_info: *Cpu_X86, executable_name: string) -> Workspace {
 
   target_options := get_build_options(w);
   target_options.output_executable_name = executable_name;
-  target_options.optimization_level = .RELEASE;
-  set_optimization_level(*target_options, 3, 0); 
+  set_optimization(*target_options, .VERY_OPTIMIZED);
   target_options.stack_trace = false;
   set_build_options(target_options, w);
 

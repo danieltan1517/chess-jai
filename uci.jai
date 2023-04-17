@@ -11,7 +11,7 @@ main :: () {
     reset_temporary_storage();
     if equal(input, "quit") {
       free_threads();
-      exit(0); // get around seg fault bug.
+      return;
     }
 
     if equal(input, "uci") {
