@@ -68,7 +68,6 @@ add_chess_engine_files :: (w: Workspace, cpu_info: *Cpu_X86, type: NNUE_Type) {
 
 }
 
-
 add_ui_files :: (w: Workspace) {
   // OS specific code.
   #if OS == .LINUX {
@@ -85,18 +84,13 @@ add_ui_files :: (w: Workspace) {
 }
 
 #run {
-  w := compiler_create_workspace("workspace");
   cpu_info := get_cpu_info();
   defer set_build_options_dc(.{do_output=false});
-  if !w {
-    print("Workspace creation failed.\n");
-    return;
-  }
-  target_options := get_build_options(w);
+  target_options := get_build_options();
   args := target_options.compile_time_command_line;
   flags: CompileFlags = 0;
   nnue_type: NNUE_Type = .auto;
-  if args.count == 1 then {
+  if args.count == 0 then {
     flags = CompileFlags.ui | .ai | .release;
   }
 

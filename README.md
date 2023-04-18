@@ -26,6 +26,7 @@ This code is divided up into the following files:
 * `ui.jai` is the `main` function for the UI. This file handles the User Interface with `Simp` and `GetRect`
 * `linux.jai` is code specific to the Linux OS.
 * `windows.jai` is code specific to the Windows OS.
+* `macos.jai` is code specific to Mac OS.
 * the `resources` contains the following information
   * Fonts
   * Sound Effects
@@ -51,7 +52,7 @@ This code is divided up into the following files:
 * Multi-engine support
 * UCI Engine Options
 * Console command-line
-* Windows and Linux support
+* Windows, Mac, and Linux support
 * Chess Clock with Increment
 * Blindfold Mode
 * Highlight Squares with Right Click
