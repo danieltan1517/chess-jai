@@ -75,6 +75,8 @@ add_ui_files :: (w: Workspace) {
     add_build_file("linux.jai", w);  
   } else #if OS == .WINDOWS {
     add_build_file("windows.jai", w);  
+  } else #if OS == .MACOS {
+    add_build_file("macos.jai", w);  
   }
 
   // cross platform layer.
