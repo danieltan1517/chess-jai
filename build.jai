@@ -11,16 +11,18 @@ add_chess_engine_files :: (w: Workspace, cpu_info: *Cpu_X86, type: NNUE_Type) {
 
   // OS specific code.
   #if OS == .LINUX {
-    add_build_file(tprint("%/%", #filepath, "linux.jai"), w);  
+    add_build_file("linux.jai", w);  
   } else #if OS == .WINDOWS {
-    add_build_file(tprint("%/%", #filepath, "windows.jai"), w);  
+    add_build_file("windows.jai", w);  
+  } else #if OS == .MACOS {
+    add_build_file("macos.jai", w);  
   }
 
   // cross platform layer.
-  add_build_file(tprint("%/%", #filepath, "uci.jai"), w);  
-  add_build_file(tprint("%/%", #filepath, "search.jai"), w);  
-  add_build_file(tprint("%/%", #filepath, "eval.jai"), w);  
-  add_build_file(tprint("%/%", #filepath, "movegen.jai"), w);  
+  add_build_file("uci.jai", w);  
+  add_build_file("search.jai", w);  
+  add_build_file("eval.jai", w);  
+  add_build_file("movegen.jai", w);  
 
   // determine which NNUE SIMD to build.
   if type == .auto {
@@ -40,13 +42,13 @@ add_chess_engine_files :: (w: Workspace, cpu_info: *Cpu_X86, type: NNUE_Type) {
     assert(false);
   case .cpu;
     print("Building Chess Engine with NNUE CPU\n");
-    add_build_file(tprint("%/%", #filepath, "nnue_cpu.jai"), w);  
+    add_build_file("nnue_cpu.jai", w);  
   case .sse;
     print("Building Chess Engine with NNUE SSE\n");
-    add_build_file(tprint("%/%", #filepath, "nnue_sse.jai"), w);  
+    add_build_file("nnue_sse.jai", w);  
   case .avx2; 
     print("Building Chess Engine with NNUE AVX2\n");
-    add_build_file(tprint("%/%", #filepath, "nnue_avx2.jai"), w);
+    add_build_file("nnue_avx2.jai", w);
   case;
     assert(false, "Invalid build script.\n");
   }
@@ -70,9 +72,9 @@ add_chess_engine_files :: (w: Workspace, cpu_info: *Cpu_X86, type: NNUE_Type) {
 add_ui_files :: (w: Workspace) {
   // OS specific code.
   #if OS == .LINUX {
-    add_build_file(tprint("%/%", #filepath, "linux.jai"), w);  
+    add_build_file("linux.jai", w);  
   } else #if OS == .WINDOWS {
-    add_build_file(tprint("%/%", #filepath, "windows.jai"), w);  
+    add_build_file("windows.jai", w);  
   }
 
   // cross platform layer.
@@ -195,9 +197,6 @@ build_release :: (cpu_info: *Cpu_X86, executable_name: string) -> Workspace {
   target_options := get_build_options(w);
   target_options.output_executable_name = executable_name;
   set_optimization(*target_options, .VERY_OPTIMIZED);
-  target_options.llvm_options.verify_input = false;
-  target_options.llvm_options.verify_output = false;
-  target_options.llvm_options.merge_functions = false;
   target_options.llvm_options.enable_split_modules = false;
   target_options.stack_trace = false;
   set_build_options(target_options, w);
