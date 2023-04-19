@@ -79,8 +79,8 @@ add_ui_files :: (w: Workspace) {
   }
 
   // cross platform layer.
-  add_build_file(tprint("%/%", #filepath, "ui.jai"), w);  
-  add_build_file(tprint("%/%", #filepath, "movegen.jai"), w);  
+  add_build_file("ui.jai", w);  
+  add_build_file("movegen.jai", w);  
 }
 
 #run {
@@ -162,23 +162,7 @@ build_debug :: (cpu_info: *Cpu_X86, executable_name: string) -> Workspace {
   target_options.backend = .X64;
   target_options.stack_trace = true;
   set_build_options(target_options, w);
-
-  if check_feature(cpu_info.feature_leaves, .BMI1) {
-    print("BLSR Enabled\n");
-    add_build_string("ENABLE_BLSR :: true;\n", w);
-  } else {
-    print("BLSR Disabled\n");
-    add_build_string("ENABLE_BLSR :: false;\n", w);
-  }
-
-  if check_feature(cpu_info.feature_leaves, .BMI2) {
-    print("Fancy Magic Bitboards Enabled\n");
-    add_build_string("FANCY_MAGIC_BITBOARDS :: true;\n", w);
-  } else {
-    print("Regular Magic Bitboards Enabled\n");
-    add_build_string("FANCY_MAGIC_BITBOARDS :: false;\n", w);
-  }
-
+  movegen_features(cpu_info, w);
   print("Creating Debug Build for: %\n", executable_name);
   return w;
 }
@@ -196,26 +180,19 @@ build_release :: (cpu_info: *Cpu_X86, executable_name: string) -> Workspace {
   target_options.llvm_options.enable_split_modules = false;
   target_options.stack_trace = false;
   set_build_options(target_options, w);
-
-  if check_feature(cpu_info.feature_leaves, .BMI1) {
-    print("BLSR Enabled\n");
-    add_build_string("ENABLE_BLSR :: true;\n", w);
-  } else {
-    print("BLSR Disabled\n");
-    add_build_string("ENABLE_BLSR :: false;\n", w);
-  }
-
-  if check_feature(cpu_info.feature_leaves, .BMI2) {
-    print("Fancy Magic Bitboards Enabled\n");
-    add_build_string("FANCY_MAGIC_BITBOARDS :: true;\n", w);
-  } else {
-    print("Regular Magic Bitboards Enabled\n");
-    add_build_string("FANCY_MAGIC_BITBOARDS :: false;\n", w);
-  }
-
+  movegen_features(cpu_info, w);
   print("Creating Release Build for: %\n", executable_name);
   return w;
-
 }
 
+movegen_features :: (cpu_info: *Cpu_X86, w: Workspace) {
+  enable_blsr := check_feature(cpu_info.feature_leaves, .BMI1) == true;
+  code := tprint("ENABLE_BLSR :: %;\n", enable_blsr);
+  print(code);
+  add_build_string(code, w);
 
+  enable_fancy_magic_bitboards := check_feature(cpu_info.feature_leaves, .BMI2) == true;
+  code = tprint("FANCY_MAGIC_BITBOARDS :: %;\n", enable_fancy_magic_bitboards);
+  print(code);
+  add_build_string(code, w);
+}

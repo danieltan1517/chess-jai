@@ -137,10 +137,10 @@ This code is divided up into the following files:
   * CPU w/o SIMD
 
 ### Credits
+* Thank you to Jai Beta Users Patrik Smělý and Don Swet (github.com/cookednick) for testing the Chess program on Mac OS.
 * Thank you to Maksim Korzh, author of the BBC chess engine. His work provided the main inspiration for this project. Here is a link to the [BBC Chess Engine](https://github.com/maksimKorzh/bbc).
 * Thank you to Daniel Shawul for translating Stockfish NNUE into C. His work was the basis for my NNUE implementation. [nnue-probe](https://github.com/dshawul/nnue-probe)
 * Thank you to Jonathan Blow, for allowing me access to the Jai Compiler Beta. [Jai-Community-Wiki](https://github.com/Jai-Community/Jai-Community-Library)
 * [Berserk Chess Engine](https://github.com/jhonnold/berserk) was a great chess engine I learned a lot from. The code is well-organized and well-written. I highly recommend looking through Jay Honnold's work if you want to learn how to take your chess engine to the next level.
 * [The Stockfish PyTorch NNUE Guide](https://github.com/glinscott/nnue-pytorch/blob/master/docs/nnue.md) is an incredibly detailed look at how NNUE works. I recommend reading it over and over again to get a full grasp about what is going on.
-
 
