@@ -274,9 +274,9 @@ update_accumulator :: (pos: *Position) -> bool {
           for j: 0..NUM_REGS-1 {
             #asm AVX, AVX2 {
               //acc[j] = vec_sub_16(acc[j], column[j]);
-              movdqu.y xmm0: vec, [acc_data];
+              movdqa.y xmm0: vec, [acc_data];
               psubw.y  xmm0, xmm0, [column];
-              movdqu.y [acc_data], xmm0;
+              movdqa.y [acc_data], xmm0;
               add      acc_data, 32;
               add      column, 32;
             }
@@ -293,9 +293,9 @@ update_accumulator :: (pos: *Position) -> bool {
         for j: 0..NUM_REGS-1 {
           #asm AVX, AVX2 {
             // acc[j] = vec_add_16(acc[j], column[j]);
-            movdqu.y xmm0: vec, [acc_data];
+            movdqa.y xmm0: vec, [acc_data];
             paddw.y  xmm0, xmm0, [column];
-            movdqu.y [acc_data], xmm0;
+            movdqa.y [acc_data], xmm0;
             add acc_data, 32;
             add column, 32;
           }
@@ -334,9 +334,9 @@ refresh_accumulator :: (pos: *Position) {
       for j: 0..NUM_REGS-1 {
         #asm AVX, AVX2 {
           // acc[j] = vec_add_16(acc[j], column[j]);
-          movdqu.y xmm0: vec, [acc_j];
+          movdqa.y xmm0: vec, [acc_j];
           paddw.y xmm0, xmm0, [column];
-          movdqu.y [acc_j], xmm0;
+          movdqa.y [acc_j], xmm0;
           add acc_j, 32;
           add column, 32;
         }
