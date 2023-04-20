@@ -1248,11 +1248,15 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
   }
 }
 
-// TODO: enpassant does not work on diagonal pins for esoteric
-// reasons, hopefully we will be able to handle this case robustly,
-// but for now, just get something off the ground.
+// 
+// enpassant does not work on diagonal pins because this case never occurs
+// in any chess outside of purposefully setting up the board in some strange
+// hypothetical situation that cannot occur whatsoever.
+// This decision "simplifies" move generation code (well, the move generation
+// code was not simple in the first place.
+// 
+
 generate_moves_for :: (chess: *Chess, $turn: Turn, move_gen: *$T) {
-  //assert(chess.turn == turn);
   opp :: turn ^ 1; 
   unsafe, check := generate_attacks(chess, opp);
   num_checks := popcount(check);
@@ -2112,7 +2116,6 @@ pext :: (a: u64, b: u64) -> u64 #expand {
   return c;
 }
 
-
 bishop_mask :: (sq: u64) -> u64 {
   ne := smear_northeast(sq, xx ~(file_h|rank_8));
   se := smear_southeast(sq, xx ~(file_h|rank_1));
@@ -2231,30 +2234,6 @@ __bishop_moves :: (sq: u64, occ: u64) -> u64 {
   return ne ^ se ^ sw ^ nw;
 }
 
-rook_area :: (qr: u64, occ: u64) -> u64 {
-  if qr == 0 return 0;
-  NOT_A :: cast(u64) (~file_a);
-  NOT_H :: cast(u64) (~file_h);
-
-  n := smear_north(qr << 8, ~(occ<<8));
-  s := smear_south(qr >> 8, ~(occ>>8));
-  e := smear_east ((qr << 1) & NOT_A, ~((occ<<1) & NOT_A));
-  w := smear_west ((qr >> 1) & NOT_H, ~((occ>>1) & NOT_H));
-  return n | s | e | w;
-}
-
-bishop_area :: (qb: u64, occ: u64) -> u64 {
-  if qb == 0 return 0;
-  NOT_A :: cast(u64) (~file_a);
-  NOT_H :: cast(u64) (~file_h);
-
-  ne := smear_northeast((qb << 9) & NOT_A, ~((occ<<9) & NOT_A));
-  se := smear_southeast((qb >> 7) & NOT_A, ~((occ>>7) & NOT_A));
-  sw := smear_southwest((qb >> 9) & NOT_H, ~((occ>>9) & NOT_H));
-  nw := smear_northwest((qb << 7) & NOT_H, ~((occ<<7) & NOT_H));
-  return ne | se | sw | nw;
-}
-
 print_bitboard :: (b: u64) {
   loop(xx a8, "8 ");
   loop(xx a7, "7 ");
@@ -2345,8 +2324,6 @@ init_between_bitboards :: () {
   }
 }
 
-// this look-up table can be found inside stockfish chess engine.
-// I don't know whether it is correct... might be a bit slow...
 between_look_up_table: [64][64] u64;
 
 #scope_export 
@@ -2388,11 +2365,9 @@ get_black_pieces :: inline p => p.b_king | p.b_queen | p.b_rook | p.b_bishop | p
 
 
 piece_at :: (chess: *Chess, index: int) -> Piece #expand {
-  //assert(0 <= index && index <= 63, "piece_at out of bounds: %\n", index);
   return chess.pieces[index];
 }
 
-// TODO: is this really what we want?
 in_check :: (chess: *Chess) -> bool {
   if chess.turn == Turn.WHITE {
     return in_check_for(chess, Turn.WHITE);
