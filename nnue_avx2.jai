@@ -113,19 +113,19 @@ nnue_init :: (file_name: string) -> bool {
     rdi := biases;
     // translated from godbolt's clang -O3 assembly language output.
     #asm AVX {
-      movdqu.x xmm0: vec, [rdi+16]; 
-      movdqu.x xmm1: vec, [rdi+32];
-      movdqu.x xmm2: vec, [rdi+48];
-      movdqu.x xmm3: vec, [rdi+64];
-      movdqu.x xmm4: vec, [rdi+80];
-      movdqu.x xmm5: vec, [rdi+96];
+      movdqa.x xmm0: vec, [rdi+16]; 
+      movdqa.x xmm1: vec, [rdi+32];
+      movdqa.x xmm2: vec, [rdi+48];
+      movdqa.x xmm3: vec, [rdi+64];
+      movdqa.x xmm4: vec, [rdi+80];
+      movdqa.x xmm5: vec, [rdi+96];
 
-      movdqu.x [rdi+16], xmm3; 
-      movdqu.x [rdi+32], xmm0;
-      movdqu.x [rdi+48], xmm4;
-      movdqu.x [rdi+64], xmm1;
-      movdqu.x [rdi+80], xmm5;
-      movdqu.x [rdi+96], xmm2;
+      movdqa.x [rdi+16], xmm3; 
+      movdqa.x [rdi+32], xmm0;
+      movdqa.x [rdi+48], xmm4;
+      movdqa.x [rdi+64], xmm1;
+      movdqa.x [rdi+80], xmm5;
+      movdqa.x [rdi+96], xmm2;
     }
   }
 }
