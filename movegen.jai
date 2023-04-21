@@ -1593,7 +1593,6 @@ generate_tactics_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T)
   knight  := get_knight(chess, turn); 
   pawn    := get_pawn(chess, turn);
   king_sq := bit_scan_forward(king);
-  king_file := file_of(king_sq);
   pieces := king|queen|rook|bishop|knight|pawn;
   opponent_pieces := chess.occupied & ~pieces;
   pinned : u64 = 0;
@@ -1720,7 +1719,7 @@ generate_tactics_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T)
   }
 }
 
-file_of :: inline (i: int) -> u64 {
+file_of :: inline (i: int) -> u64 #expand {
   f := i & 7;
   file: u64 = (cast(u64) file_a) << f;
   return file;
