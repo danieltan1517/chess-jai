@@ -2104,7 +2104,7 @@ fetch_and_add :: (val: *int) #expand {
 multi_pv: int = 1;
 
 heapify :: (queue: *MoveQueue, index: int) {
-
+  array: [] Queue_Pair = queue.array;
   while true {
     largest := index;
     left := 2 * index + 1;
@@ -2112,18 +2112,18 @@ heapify :: (queue: *MoveQueue, index: int) {
  
     N := queue.count;
  
-    if left < N && queue.array[left].priority > queue.array[largest].priority then
+    if left < N && array[left].priority > array[largest].priority then
       largest = left;
  
-    if right < N && queue.array[right].priority > queue.array[largest].priority then
+    if right < N && array[right].priority > array[largest].priority then
       largest = right;
 
     if largest == index then
       break;
  
-    temp := queue.array[index];
-    queue.array[index] = queue.array[largest];
-    queue.array[largest] = temp;
+    temp := array[index];
+    array[index] = array[largest];
+    array[largest] = temp;
     index = largest;
   }
 
