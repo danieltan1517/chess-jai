@@ -613,7 +613,7 @@ negamax_pv :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
     update_tactics(chess, bmove, depth, cap_moves, num_captures, quiet_moves, num_quiets);
 
   tt_store(chess.hash, best_score, hash_flag, depth, bmove);
-  return alpha;
+  return best_score;
 
 }
 
@@ -924,7 +924,7 @@ negamax_zw :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
       }
     
       if score >= beta then
-        return beta;
+        return score;
     }
 
     // prob cut.
@@ -939,7 +939,7 @@ negamax_zw :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
        
         // make move.
         cap, castling := make_move(chess, move);
-        score := -quiescene(chess, -prob_beta, -prob_beta+1, 0);
+        score := -quiescene(chess, -prob_beta, -prob_beta + 1, 0);
         if score >= prob_beta then
           score = -negamax_zw(chess, depth-4, -prob_beta, -prob_beta + 1, 0);
     
@@ -1109,7 +1109,7 @@ negamax_zw :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
         if flags <= Move16.Double_Pawn_Push 
           update_quiet(chess, move, depth, quiet_moves, num_quiets, cap_moves, num_captures);
         tt_store(chess.hash, best_score, TFLAGS.BETA, depth, move);
-        return beta;
+        return best_score;
       } 
     }
 
@@ -1119,7 +1119,7 @@ negamax_zw :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
   if move_count == 0 then
     return ifx in_check(chess) then -INF+ply else 0+ply;
   tt_store(chess.hash, best_score, .ALPHA, depth, bmove);
-  return alpha;
+  return best_score;
 }
 
 update_quiet :: (chess: *ChessGame, move: Move16, depth: int, quiet_moves: []Move16, num_quiets: int, cap_moves: []Move16, num_captures: int) {
@@ -1213,9 +1213,9 @@ tt_prune :: (tthit: bool, ttentry: TTData, ply: int, pv_node: bool, alpha: int, 
     if flag == TFLAGS.EXACT then
       `return score;
     if flag == TFLAGS.ALPHA && score <= alpha then
-      `return alpha;
+      `return score;
     if flag == TFLAGS.BETA && score >= beta then
-      `return beta;
+      `return score;
   }
 
   ttscore :: (score: int) -> int #expand {
