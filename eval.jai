@@ -47,15 +47,23 @@ initialize_piece_list :: (chess: *Chess) -> [33] s32, [33] s32 {
   squares[1] = xx bit_scan_forward(chess.b_king);
 
   index := 2;
-  for p, i: chess.pieces {
+  occupied := chess.occupied & ~(chess.w_king | chess.b_king);
+  while occupied {
+    sq := cast(s32) bit_scan_forward(occupied);
+    piece := cast(s32) chess.pieces[sq];
+    pieces[index] = piece;
+    squares[index] = sq;
+    index += 1;
+    occupied &= occupied - 1;
+  }
+
+
+  /*for p, i: chess.pieces {
     if p == Piece.NONE || p == Piece.W_KING || p == Piece.B_KING {
       continue;
     }
 
-    pieces[index] = xx p;
-    squares[index] = xx i;
-    index += 1;
-  }
+  }*/
 
   pieces[index] = 0;
   squares[index] = 0;
