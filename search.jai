@@ -127,7 +127,7 @@ search :: (chess: *ChessGame) -> bestmove: Move16 {
       if score <= alpha then {
         if chess.main_thread == true
           print("info depth %1 lowerbound %2%3", cur_depth, score, NEWLINE);
-        alpha = max(alpha-delta, -INF);
+        alpha = max(score-delta, -INF);
         delta += delta + delta / 5;
         continue;
       }
@@ -135,7 +135,7 @@ search :: (chess: *ChessGame) -> bestmove: Move16 {
       if score >= beta then {
         if chess.main_thread == true
           print("info depth %1 upperbound %2%3", cur_depth, score, NEWLINE);
-        beta = min(beta+delta, INF);
+        beta = min(score+delta, INF);
         delta += delta + delta / 5;
         continue;
       }
@@ -300,7 +300,7 @@ negamax_root :: (chess: *ChessGame, root_moves: *MoveQueue, multipv: int, depth:
   move_count := 0;
   bmove := Move16.Quiet;
   pto := -1;
-  score_margin := -80_000 * depth;
+  best_score: int = -INF;
   for :pv move, move_score : chess {
     move_count += 1;
     if root_multipv(move, root_moves) {
@@ -341,25 +341,27 @@ negamax_root :: (chess: *ChessGame, root_moves: *MoveQueue, multipv: int, depth:
 
     unmake_move(chess, move, cap, castling);
     chess.en_passant = ep;
-    if eval > alpha {
-      using chess.history;
-      hash_flag = TFLAGS.EXACT;
-      bmove = move;
-      pv_table[ply][0] = move;
-      move_count := pv_table[ply+1].move_count;
-      memcpy(*pv_table[ply][1], *pv_table[ply+1][0], move_count * size_of(Move16));
-      pv_table[ply].move_count = move_count + 1;
-      alpha = eval;
-
-      if eval >= beta then {
-        // non-captures == Quiet|Pawn Push Moves
-        if flags <= Move16.Double_Pawn_Push 
-          update_quiet(chess, move, depth, quiet_moves, num_quiets, cap_moves, num_captures);
-        tt_store(chess.hash, beta, TFLAGS.BETA, depth, move);
-        return beta;
+    if eval > best_score then {
+      best_score = eval;
+      if best_score > alpha {
+        using chess.history;
+        hash_flag = TFLAGS.EXACT;
+        bmove = move;
+        pv_table[ply][0] = move;
+        move_count := pv_table[ply+1].move_count;
+        memcpy(*pv_table[ply][1], *pv_table[ply+1][0], move_count * size_of(Move16));
+        pv_table[ply].move_count = move_count + 1;
+        alpha = best_score;
+     
+        if best_score >= beta then {
+          // non-captures == Quiet|Pawn Push Moves
+          if flags <= Move16.Double_Pawn_Push 
+            update_quiet(chess, move, depth, quiet_moves, num_quiets, cap_moves, num_captures);
+          tt_store(chess.hash, best_score, TFLAGS.BETA, depth, move);
+          return best_score;
+        } 
       } 
-    } 
-
+    }
     moves_searched += 1;
   }
 
@@ -369,9 +371,9 @@ negamax_root :: (chess: *ChessGame, root_moves: *MoveQueue, multipv: int, depth:
   if hash_flag == TFLAGS.EXACT && get_move16_flag(bmove) > Move16.Double_Pawn_Push then 
     update_tactics(chess, bmove, depth, cap_moves, num_captures, quiet_moves, num_quiets);
 
-  tt_store(chess.hash, alpha, hash_flag, depth, bmove);
-  append(root_moves, cast(s16)alpha, bmove);
-  return alpha;
+  tt_store(chess.hash, best_score, hash_flag, depth, bmove);
+  append(root_moves, cast(s16)best_score, bmove);
+  return best_score;
 
   root_multipv :: (move: Move16, moves: *MoveQueue) -> bool {
     i := 0;
@@ -461,6 +463,7 @@ negamax_pv :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
     return -1;
   }
 
+  best_score: int = -INF;
   score_margin := -80_000 * depth;
   for :pv move, move_score : chess {
     move_count += 1;
@@ -579,25 +582,27 @@ negamax_pv :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
 
     unmake_move(chess, move, cap, castling);
     chess.en_passant = ep;
-    if eval > alpha {
-      using chess.history;
-      hash_flag = TFLAGS.EXACT;
-      bmove = move;
-      pv_table[ply][0] = move;
-      move_count := pv_table[ply+1].move_count;
-      memcpy(*pv_table[ply][1], *pv_table[ply+1][0], move_count * size_of(Move16));
-      pv_table[ply].move_count = move_count + 1;
-      alpha = eval;
-
-      if eval >= beta then {
-        // non-captures == Quiet|Pawn Push Moves
-        if flags <= Move16.Double_Pawn_Push 
-          update_quiet(chess, move, depth, quiet_moves, num_quiets, cap_moves, num_captures);
-        tt_store(chess.hash, beta, TFLAGS.BETA, depth, move);
-        return beta;
+    if eval > best_score then {
+      best_score = eval;
+      if best_score > alpha {
+        using chess.history;
+        hash_flag = TFLAGS.EXACT;
+        bmove = move;
+        pv_table[ply][0] = move;
+        move_count := pv_table[ply+1].move_count;
+        memcpy(*pv_table[ply][1], *pv_table[ply+1][0], move_count * size_of(Move16));
+        pv_table[ply].move_count = move_count + 1;
+        alpha = eval;
+     
+        if best_score >= beta then {
+          // non-captures == Quiet|Pawn Push Moves
+          if flags <= Move16.Double_Pawn_Push 
+            update_quiet(chess, move, depth, quiet_moves, num_quiets, cap_moves, num_captures);
+          tt_store(chess.hash, best_score, TFLAGS.BETA, depth, move);
+          return best_score;
+        } 
       } 
-    } 
-
+    }
     moves_searched += 1;
   }
 
@@ -607,7 +612,7 @@ negamax_pv :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
   if hash_flag == TFLAGS.EXACT && get_move16_flag(bmove) > Move16.Double_Pawn_Push then 
     update_tactics(chess, bmove, depth, cap_moves, num_captures, quiet_moves, num_quiets);
 
-  tt_store(chess.hash, alpha, hash_flag, depth, bmove);
+  tt_store(chess.hash, best_score, hash_flag, depth, bmove);
   return alpha;
 
 }
@@ -943,7 +948,7 @@ negamax_zw :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
         chess.en_passant = ep;
     
         if score >= prob_beta then {
-          tt_store(chess.hash, prob_beta, TFLAGS.BETA, depth-4, move);
+          tt_store(chess.hash, score, TFLAGS.BETA, depth-4, move);
           return score;
         }
       }
@@ -976,6 +981,7 @@ negamax_zw :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
     return -1;
   }
 
+  best_score: int = -INF;
   score_margin := -80_000 * depth;
   for :pv move, move_score : chess {
     move_count += 1;
@@ -1089,27 +1095,30 @@ negamax_zw :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
 
     unmake_move(chess, move, cap, castling);
     chess.en_passant = ep;
-    if eval >= beta then {
-      using chess.history;
-      bmove = move;
-      pv_table[ply][0] = move;
-      move_count := pv_table[ply+1].move_count;
-      memcpy(*pv_table[ply][1], *pv_table[ply+1][0], move_count * size_of(Move16));
-      pv_table[ply].move_count = move_count + 1;
-
-      // non-captures == Quiet|Pawn Push Moves
-      if flags <= Move16.Double_Pawn_Push 
-        update_quiet(chess, move, depth, quiet_moves, num_quiets, cap_moves, num_captures);
-      tt_store(chess.hash, beta, TFLAGS.BETA, depth, move);
-      return beta;
-    } 
+    if eval >= best_score {
+      best_score = eval;
+      if best_score >= beta then {
+        using chess.history;
+        bmove = move;
+        pv_table[ply][0] = move;
+        move_count := pv_table[ply+1].move_count;
+        memcpy(*pv_table[ply][1], *pv_table[ply+1][0], move_count * size_of(Move16));
+        pv_table[ply].move_count = move_count + 1;
+     
+        // non-captures == Quiet|Pawn Push Moves
+        if flags <= Move16.Double_Pawn_Push 
+          update_quiet(chess, move, depth, quiet_moves, num_quiets, cap_moves, num_captures);
+        tt_store(chess.hash, best_score, TFLAGS.BETA, depth, move);
+        return beta;
+      } 
+    }
 
     moves_searched += 1;
   }
 
   if move_count == 0 then
     return ifx in_check(chess) then -INF+ply else 0+ply;
-  tt_store(chess.hash, alpha, .ALPHA, depth, bmove);
+  tt_store(chess.hash, best_score, .ALPHA, depth, bmove);
   return alpha;
 }
 
@@ -1403,25 +1412,26 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
     killer_moves[ply+1][0] = 0;
   }
 
+  best_score: int = -INF;
   hash_flag := TFLAGS.ALPHA;
   pos_check := in_check(chess);
   if !pos_check {
     // no standing pat while in check 
-    eval := evaluate(chess, fifty);
-    if eval >= beta then {
-      return beta;
+    best_score = evaluate(chess, fifty);
+    if best_score >= beta then {
+      return best_score;
     }
 
     // delta pruning:
     if can_delta_prune(chess) {
-      if eval < (alpha - 975) then {
-        return alpha; 
+      if best_score < (alpha - 975) then {
+        return best_score; 
       }
     }
 
-    if alpha < eval then {
+    if alpha < best_score then {
       hash_flag = TFLAGS.EXACT;
-      alpha = eval; 
+      alpha = best_score; 
     }
   }
 
@@ -1441,21 +1451,24 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
     score := -quiescene(chess, -beta, -alpha, next_fifty);
     unmake_move(chess, move, cap, flags);
     chess.en_passant = ep;
-    if score > alpha then {
-      hash_flag = TFLAGS.EXACT;
-      best_move = move;
-      alpha = score;
-
-      using chess.history;
-      pv_table[ply][0] = move;
-      move_count := pv_table[ply+1].move_count;
-      memcpy(*pv_table[ply][1], *pv_table[ply+1][0], move_count * size_of(Move16));
-      pv_table[ply].move_count = move_count + 1;
-      if score >= beta then {
-        tt_store(chess.hash, beta, TFLAGS.BETA, 0, move);
-        return beta;
+    if score >= best_score {
+      best_score = score;
+      if best_score > alpha then {
+        hash_flag = TFLAGS.EXACT;
+        best_move = move;
+        alpha = best_score;
+     
+        using chess.history;
+        pv_table[ply][0] = move;
+        move_count := pv_table[ply+1].move_count;
+        memcpy(*pv_table[ply][1], *pv_table[ply+1][0], move_count * size_of(Move16));
+        pv_table[ply].move_count = move_count + 1;
+        if best_score >= beta then {
+          tt_store(chess.hash, best_score, TFLAGS.BETA, 0, move);
+          return best_score;
+        }
+     
       }
-
     }
 
   }
@@ -1464,8 +1477,8 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
     return -INF+ply;
   }
 
-  tt_store(chess.hash, alpha, hash_flag, 0, best_move);
-  return alpha;
+  tt_store(chess.hash, best_score, hash_flag, 0, best_move);
+  return best_score;
 
   pv :: (chess: *ChessGame, body: Code, f: For_Flags) #expand {
     stage: enum {PV; CAPTURES; QUIETS; END; } = .PV;
@@ -1523,11 +1536,11 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
   bad_capture :: (chess: *Chess, move: Move16, from: int, to: int) -> bool {
     pfrom := cast(int) piece_at(chess, from);
     pto   := cast(int) piece_at(chess, to);
-    if PVALUE[pfrom] > PVALUE[pto] then {
-      value := see(chess, move);
-      return value < 0;
+    if PVALUE[pfrom] <= PVALUE[pto] then {
+      return false;
     }
-    return false;
+
+    return see(chess, move) < 0;
   }
 }
 
