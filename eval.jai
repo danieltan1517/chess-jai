@@ -57,14 +57,6 @@ initialize_piece_list :: (chess: *Chess) -> [33] s32, [33] s32 {
     occupied &= occupied - 1;
   }
 
-
-  /*for p, i: chess.pieces {
-    if p == Piece.NONE || p == Piece.W_KING || p == Piece.B_KING {
-      continue;
-    }
-
-  }*/
-
   pieces[index] = 0;
   squares[index] = 0;
 
