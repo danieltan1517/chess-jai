@@ -475,10 +475,8 @@ affine_txfm :: (input: *s8, output: *void, inDims: u32, biases: *s32, weights: *
         add idx, offset;
       }
       factor: s32 = input[idx];
-      if factor {
-        index := idx << 5;  // idx * 32.
-        sse_simd(factor, *tmp[0], *weights[index]);
-      }
+      index := idx << 5;  // idx * 32.
+      sse_simd(factor, *tmp[0], *weights[index]);
       mask &= mask - 1;
     }
 
