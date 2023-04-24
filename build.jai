@@ -151,17 +151,12 @@ NNUE_Type :: enum {
 
 build_debug :: (cpu_info: *Cpu_X86, executable_name: string) -> Workspace {
   w := compiler_create_workspace(executable_name);
-  if !w {
-    print("Workspace creation failed.\n");
-    return w;
-  }
-
-  target_options := get_build_options(w);
-  target_options.output_executable_name = executable_name;
-  set_optimization(*target_options, .DEBUG);
-  target_options.backend = .X64;
-  target_options.stack_trace = true;
-  set_build_options(target_options, w);
+  options := get_build_options(w);
+  options.output_executable_name = executable_name;
+  set_optimization(*options, .DEBUG);
+  options.backend = .X64;
+  options.stack_trace = true;
+  set_build_options(options, w);
   movegen_features(cpu_info, w);
   print("Creating Debug Build for: %\n", executable_name);
   return w;
@@ -169,17 +164,12 @@ build_debug :: (cpu_info: *Cpu_X86, executable_name: string) -> Workspace {
 
 build_release :: (cpu_info: *Cpu_X86, executable_name: string) -> Workspace {
   w := compiler_create_workspace(executable_name);
-  if !w {
-    print("Workspace creation failed.\n");
-    return w;
-  }
-
-  target_options := get_build_options(w);
-  target_options.output_executable_name = executable_name;
-  set_optimization(*target_options, .VERY_OPTIMIZED);
-  target_options.llvm_options.enable_split_modules = false;
-  target_options.stack_trace = false;
-  set_build_options(target_options, w);
+  options := get_build_options(w);
+  options.output_executable_name = executable_name;
+  set_optimization(*options, .VERY_OPTIMIZED);
+  options.llvm_options.enable_split_modules = false;
+  options.stack_trace = false;
+  set_build_options(options, w);
   movegen_features(cpu_info, w);
   print("Creating Release Build for: %\n", executable_name);
   return w;
