@@ -452,12 +452,37 @@ affine_txfm :: (input: *s8, output: *void, inDims: u32, biases: *s32, weights: *
   tmp: [32] s32;
   memcpy(*tmp[0], *biases[0], size_of(s32) * 32);
 
-  for idx: 0..inDims-1 {
-    factor: s32 = input[idx];
-    if factor {
-      index := idx << 5;  // idx * 32.
-      sse_simd(factor, *tmp[0], *weights[index]);
+  offset := 0;
+  mask: u32 = 0;
+  input_pointer := input;
+  #asm SSE {
+    pxor.x zeroes: vec, zeroes;
+  }
+
+  while offset < inDims {
+    // input 
+    #asm SSE, SSE2 {
+      movups.x   xmm0: vec, [input_pointer];
+      pcmpgtb.x  xmm0, zeroes;
+      pmovmskb.x mask, xmm0;
+      add input_pointer, 16;
     }
+
+    while mask {
+      idx: int;
+      #asm SSE {
+        bsf idx, mask;
+        add idx, offset;
+      }
+      factor: s32 = input[idx];
+      if factor {
+        index := idx << 5;  // idx * 32.
+        sse_simd(factor, *tmp[0], *weights[index]);
+      }
+      mask &= mask - 1;
+    }
+
+    offset += 16;
   }
 
   // GCC -O3 "optimized" output
