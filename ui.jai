@@ -155,9 +155,11 @@ main :: () {
 
   ctrl_pressed := 0;
 
-  //engine, etf := load_engine("stockfish");
   //assert(etf);
-  //array_add(*chess_engines, engine);
+  engine, etf := load_engine("ceij", "ceij");
+  if etf == true {
+    array_add(*chess_engines, engine);
+  }
 
   defer {
     for *engine: chess_engines {
