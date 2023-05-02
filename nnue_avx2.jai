@@ -553,26 +553,26 @@ affine_txfm :: (input: *s8, output: *s8, inDims: u32, outDims: u32, biases: *s32
     // __m256i *outVec = (__m256i *)output;
     // outVec[0] = _mm256_packs_epi16(out16_0, out16_1);
 
-    packssdw.y out16_0: vec, out_0, out_1;
-    packssdw.y out16_1: vec, out_2, out_3;
-    psraw.y    out16_0, out16_0, 6;
-    psraw.y    out16_1, out16_1, 6;
-    packsswb.y output_data: vec, out16_0, out16_1;
-    movdqu.y   [output], output_data;
+    packssdw.y out_0, out_0, out_1;
+    packssdw.y out_1, out_2, out_3;
+    psraw.y    out_0, out_0, 6;
+    psraw.y    out_1, out_1, 6;
+    packsswb.y out_0, out_0, out_1;
+    movdqu.y   [output], out_0;
   }
 
   #if pack8_and_calc_mask then {
     #asm AVX, AVX2 {
       // outMask[0] = _mm256_movemask_epi8(_mm256_cmpgt_epi8(outVec[0], kZero));
-      pcmpgtb.y output_data, output_data, kZero;
-      pmovmskb  reg: gpr, output_data;
+      pcmpgtb.y out_0, out_0, kZero;
+      pmovmskb  reg: gpr, out_0;
       mov.d     [out_mask], reg;
     }
   } else {
     #asm AVX, AVX2 {
       // outVec[0] = _mm256_max_epi8(outVec[0], kZero);
-      pmaxsb.y output_data, output_data, kZero;
-      movdqu.y [output], output_data;
+      pmaxsb.y out_0, out_0, kZero;
+      movdqu.y [output], out_0;
     }
   }
 
