@@ -648,16 +648,24 @@ affine_propagate :: (input: *s8, biases: s32, weights: *s8) -> s32 #expand {
     pshufd.x ones_xmm, ones_xmm, 0x0;
   }
 
-  for < 3..0 {
+  for < 1..0 {
     #asm SSE, SSE2, SSE3 {
-       movq        input_xmm: vec, [input];
-       movq        weights_xmm: vec, [weights];
+       movups.x    input_xmm: vec,   [input];
+       movaps.x    weights_xmm: vec, [weights];
        pmaddubsw.x input_xmm, weights_xmm;
-       punpcklwd.x input_xmm, zero_xmm;
-       pmaddwd.x   input_xmm, ones_xmm;
-       paddd.x     sum_xmm, input_xmm;
-       add         input,   0x08;
-       add         weights, 0x08;
+
+       movaps.x    xmm_result: vec, input_xmm;
+       punpcklwd.x xmm_result, zero_xmm;
+       pmaddwd.x   xmm_result, ones_xmm;
+       paddd.x     sum_xmm, xmm_result;
+
+       movaps.x    xmm_result, input_xmm;
+       punpckhwd.x xmm_result, zero_xmm;
+       pmaddwd.x   xmm_result, ones_xmm;
+       paddd.x     sum_xmm, xmm_result;
+
+       add         input,   0x10;
+       add         weights, 0x10;
     }
   }
 
