@@ -641,12 +641,12 @@ affine_txfm :: (input: *s8, output: *void, inDims: u32, biases: *s32, weights: *
 affine_propagate :: (input: *s8, biases: s32, weights: *s8) -> s32 #expand {
   eax: s32 = 0x0001_0001;
   #asm SSE, SSE2, SSE3, SSE4_1 {
+    movups.x    xmm0: vec, [input];
+    movups.x    xmm1: vec, [input + 0x10];
+    pmaddubsw.x xmm0, [weights];
+    pmaddubsw.x xmm1, [weights + 0x10];
     movd        ones_xmm: vec, eax;
     pshufd      ones_xmm, ones_xmm, 0x0;
-    movups.x    xmm0: vec, [input];
-    pmaddubsw.x xmm0, [weights];
-    movups.x    xmm1: vec, [input + 0x10];
-    pmaddubsw.x xmm1, [weights + 0x10];
     pmaddwd.x   xmm0, ones_xmm;
     pmaddwd.x   xmm1, ones_xmm;
     paddd.x     xmm0, xmm1;
