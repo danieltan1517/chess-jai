@@ -641,23 +641,19 @@ affine_txfm :: (input: *s8, output: *void, inDims: u32, biases: *s32, weights: *
 affine_propagate :: (input: *s8, biases: s32, weights: *s8) -> s32 #expand {
   eax: s32 = 0x0001_0001;
   #asm SSE, SSE2, SSE3, SSE4_1 {
-    sum_xmm: vec;
-    ones_xmm: vec;
-    input_xmm: vec;
-    movd        ones_xmm, eax;
+    movd        ones_xmm: vec, eax;
     pshufd      ones_xmm, ones_xmm, 0x0;
-    movups.x    input_xmm, [input];
-    pmaddubsw.x input_xmm, [weights];
-    pmaddwd.x   input_xmm, ones_xmm;
-    movaps.x    sum_xmm,   input_xmm;
-    movups.x    input_xmm, [input + 0x10];
-    pmaddubsw.x input_xmm, [weights + 0x10];
-    pmaddwd.x   input_xmm, ones_xmm;
-    paddd.x     sum_xmm, input_xmm;
-    pshufd      input_xmm, sum_xmm, 0x1b;
-    paddd.x     sum_xmm, input_xmm;
-    movd        eax, sum_xmm;
-    pextrd      val: gpr, sum_xmm, 1;
+    movups.x    xmm0: vec, [input];
+    pmaddubsw.x xmm0, [weights];
+    movups.x    xmm1: vec, [input + 0x10];
+    pmaddubsw.x xmm1, [weights + 0x10];
+    pmaddwd.x   xmm0, ones_xmm;
+    pmaddwd.x   xmm1, ones_xmm;
+    paddd.x     xmm0, xmm1;
+    pshufd      xmm1, xmm0, 0x1b;
+    paddd.x     xmm0, xmm1;
+    movd        eax, xmm0;
+    pextrd      val: gpr, xmm0, 1;
     add         eax, val;
     add         eax, biases;
   }
