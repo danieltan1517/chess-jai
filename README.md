@@ -1,10 +1,12 @@
 # Chess Engine in Jai
 
-This Chess Engine in Jai is a hobby project designed to test out and find bugs with the Jai Compiler.
+This Chess Engine in Jai is a hobby project designed to find bugs and benchmark the Jai Compiler.
 You can find video demos of this Chess Engine [here](https://www.youtube.com/watch?v=2OvE0I_rdpI&list=PL2fmKE0pL4IyET-eKbbBPw_i9IHN1QmFZ&index=1) 
 
 ## How to Build:
 This project includes both a Chess Graphical User Interface and a UCI compatible Chess Engine.
+
+Type `jai build.jai` to build both the UI and AI on `release` mode
 
 Type `jai build.jai - ui` to build the GUI.
 
@@ -14,7 +16,7 @@ Type `jai build.jai - ui ai` to build both the GUI and the AI.
 
 Type `jai build.jai - release` to build an optimized build.
 
-The build script will try to detect the CPU you are using, and pick either `AVX2` or `cpu` automatically based on your processor. Send the flag `avx2` or `cpu` to manually toggle what you want.
+The build script will try to detect the CPU you are using, and pick either `AVX2`, `SSE`, or `cpu` automatically based on your processor. Send the flags `avx2`, `sse`, or `cpu` to manually toggle what you want. `cpu` means running with no SIMD support. Because Neural Networks are based on matrix multiplication, SIMD is needed to obtain the best performance.
 
 ## Code Organization
 This code is divided up into the following files:
@@ -34,6 +36,7 @@ This code is divided up into the following files:
   * Neural Network Model for AI
 * The Efficiently Updatable Neural Network Code is organized as follows:
   * `nnue_avx2.jai` contains code for AVX2 processors.
+  * `nnue_sse.jai` contains code for SSE processors.
   * `nnue_cpu.jai` is a default code with no SIMD.
 
 ## User Interface Features
