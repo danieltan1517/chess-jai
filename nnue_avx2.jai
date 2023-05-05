@@ -465,7 +465,7 @@ transform :: (pos: *Position, output: *s8, out_mask: *u32) {
       #asm AVX, AVX2 {
         // out[i] = vec_packs(s0, s1); => out[i] = _mm256_packs_epi16(s0, s1);
         // *outMask++ = _mm256_movemask_epi8(_mm256_cmpgt_epi8(out[i],_mm256_setzero_si256()))
-        movdqu.y   xmm0: vec, [s0];
+        movdqa.y   xmm0: vec, [s0];
         packsswb.y xmm0, xmm0, [s0 + 32];
         movdqu.y   [output], xmm0;
         pcmpgtb.y xmm0, xmm0, xmm3; 
