@@ -1621,7 +1621,7 @@ perft :: (chess: *Chess, depth: int) -> int {
 #run {
   for i: 1..63 {
     for j: 1..63 {
-      LMR := log(cast(float)i) * log(cast(float)j) * 0.5 + 3.0;
+      LMR := log(cast(float)i) * log(cast(float)j) * 0.5 + 1.0;
       LateMoveReduction[i][j] = cast (int) LMR;
     }
   }
