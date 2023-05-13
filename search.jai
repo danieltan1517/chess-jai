@@ -323,19 +323,19 @@ negamax_root :: (chess: *ChessGame, root_moves: *MoveQueue, multipv: int, depth:
     next_fifty := fifty_move(chess, move, fifty);
     cap, castling := make_move(chess, move);
     eval := 0;
-    if ext==1 || moves_searched == 0 {
+    if moves_searched == 0 {
       eval = -negamax_pv(chess, depth+ext-1, -beta, -alpha, next_fifty);
     } else {
       if in_check(chess) {
         // do not reduce depth on check.
         eval = -negamax_zw(chess, depth, -alpha-1, -alpha, next_fifty);
       } else {
-        eval = -negamax_zw(chess, depth+ext-1, -alpha-1, -alpha, next_fifty);
+        eval = -negamax_zw(chess, depth-1, -alpha-1, -alpha, next_fifty);
       }
 
       // search the move again that has failed to be proved to be bad with normal alpha beta score bounds
       if eval > alpha then {
-        eval = -negamax_pv(chess, depth+ext-1, -beta, -alpha, next_fifty);
+        eval = -negamax_pv(chess, depth-1, -beta, -alpha, next_fifty);
       }
     }
 
@@ -445,7 +445,7 @@ negamax_pv :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
   moves_searched := 0;
 
   improving := get_improving(chess);
-  late_move_prune := (7 + (depth*depth)) / (2-improving);
+  late_move_prune := (3 + (depth*depth)) / (2-improving);
 
   tt_capture: bool = false;
   tt_quiet: bool   = false;
@@ -490,9 +490,8 @@ negamax_pv :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
     }
 
     ext := 0;
-    if chess.node_state & NodeState.SSE && depth>=7 && ply<chess.depth && move == hash_move && tthit && cast(int)ttentry.depth >= depth-3 
-       && abs(ttentry.score) < 20_000 && ttentry.flag == TFLAGS.ALPHA && abs(alpha) < (INF-50) {
-
+    if chess.node_state & NodeState.SSE && depth>=4 && move == hash_move && tthit && cast(int)ttentry.depth >= depth-5 
+       && ttentry.flag == TFLAGS.ALPHA && abs(alpha) < (INF-50) {
       if to == pto && flags >= Move16.Capture {
         // recapture extension.
         ext = 1;
@@ -502,7 +501,7 @@ negamax_pv :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
         // singular extension:
         // if one move is better than all the rest, then we consider this singular
         // "singular" is determined by checking all other moves at a shallow depth on a nullwindow
-        singular_beta := ttentry.score - 3*depth;
+        singular_beta := ttentry.score - depth;
         chess.excluded_move = move;
         chess.exply = ply;
         chess.node_state ^= NodeState.SSE;
@@ -568,6 +567,8 @@ negamax_pv :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
         if tt_quiet then {
           R -= 2;
         }
+
+        R -= move_score / 10_000;
         R = max(0, R);
         eval = -negamax_zw(chess, depth+ext-R-1, -alpha-1, -alpha, next_fifty);
       } else {
@@ -667,11 +668,10 @@ pv :: (chess: *ChessGame, body: Code, f: For_Flags) #expand {
       if stage == {
       case .PV;
         stage = .CAPTURES;
-        if is_legal(chess, `ttmove) then {
-          append(*move_queue, 0x7FFF, `ttmove);
-        } 
-        if `ttmove != `hash_move && is_legal(chess, `hash_move) then {
+        if is_legal(chess, `hash_move) then {
           append(*move_queue, 0x7FFF, `hash_move);
+        } else if is_legal(chess, `ttmove) {
+          append(*move_queue, 0x7FFF, `ttmove);
         }
       case .CAPTURES;
         stage = .KILLERS;
@@ -721,11 +721,10 @@ pvcut :: (chess: *ChessGame, body: Code, f: For_Flags) #expand {
       if stage == {
       case .PV;
         stage = .CAPTURES;
-        if is_legal(chess, `ttmove) then {
-          append(*move_queue, 0x7FFF, `ttmove);
-        } 
-        if `ttmove != `hash_move && is_legal(chess, `hash_move) then {
+        if is_legal(chess, `hash_move) then {
           append(*move_queue, 0x7FFF, `hash_move);
+        } else if is_legal(chess, `ttmove) {
+          append(*move_queue, 0x7FFF, `ttmove);
         }
       case .CAPTURES;
         stage = .END;
@@ -907,8 +906,9 @@ negamax_zw :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
     // razoring.
     if depth <= 5 && eval + (200*depth) <= alpha {
       score := quiescene(chess, alpha, beta, fifty);
-      if score <= alpha then
+      if score <= alpha then {
         return score;
+      }
     }
 
     // null move pruning w/ verification at higher depths.
@@ -923,8 +923,9 @@ negamax_zw :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
         score = negamax_zw(chess, depth-R-1, beta-1, beta, 0);
       }
     
-      if score >= beta then
+      if score >= beta then {
         return score;
+      }
     }
 
     // prob cut.
@@ -963,7 +964,7 @@ negamax_zw :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
   moves_searched := 0;
 
   improving := get_improving(chess);
-  late_move_prune := (7 + (depth*depth)) / (2-improving);
+  late_move_prune := (3 + (depth*depth)) / (2-improving);
 
   tt_capture: bool = false;
   tt_quiet: bool   = false;
@@ -1008,9 +1009,8 @@ negamax_zw :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
     }
 
     ext := 0;
-    if chess.node_state & NodeState.SSE && ply>0 && depth>=7 && ply<chess.depth && move == hash_move && tthit && cast(int)ttentry.depth >= depth-3 
-       && abs(ttentry.score) < 20_000 && ttentry.flag == TFLAGS.ALPHA && abs(alpha) < (INF-50) {
-
+    if chess.node_state & NodeState.SSE && depth>=7 && move == hash_move && tthit && cast(int)ttentry.depth >= depth-5 
+       && ttentry.flag == TFLAGS.ALPHA {
       if to == pto && flags >= Move16.Capture {
         // recapture extension.
         ext = 1;
@@ -1020,7 +1020,7 @@ negamax_zw :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
         // singular extension:
         // if one move is better than all the rest, then we consider this singular
         // singular is determined by checking all other moves at a shallow depth on a nullwindow
-        singular_beta := ttentry.score - 3*depth;
+        singular_beta := ttentry.score - depth;
         chess.excluded_move = move;
         chess.exply = ply;
         chess.node_state ^= NodeState.SSE;
@@ -1085,6 +1085,7 @@ negamax_zw :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
           R -= 2;
         }
 
+        R -= move_score / 10_000;
         R = max(0, R);
         eval = -negamax_zw(chess, depth+ext-R-1, -alpha-1, -alpha, next_fifty);
       } else {
@@ -1430,7 +1431,7 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
     }
 
     if alpha < best_score then {
-      hash_flag = TFLAGS.EXACT;
+      // hash_flag = TFLAGS.EXACT;
       alpha = best_score; 
     }
   }
@@ -1620,7 +1621,7 @@ perft :: (chess: *Chess, depth: int) -> int {
 #run {
   for i: 1..63 {
     for j: 1..63 {
-      LMR := log(cast(float)i) * log(cast(float)j) * 0.5;
+      LMR := log(cast(float)i) * log(cast(float)j) * 0.5 + 3.0;
       LateMoveReduction[i][j] = cast (int) LMR;
     }
   }
