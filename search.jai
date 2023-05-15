@@ -490,7 +490,7 @@ negamax_pv :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
     }
 
     ext := 0;
-    if chess.node_state & NodeState.SSE && depth>=7 && depth < chess.depth && move == hash_move && tthit && cast(int)ttentry.depth >= depth-3 
+    if chess.node_state & NodeState.SSE && depth>=7 && ply < chess.depth && move == hash_move && tthit && cast(int)ttentry.depth >= depth-3 
        && ttentry.flag == TFLAGS.ALPHA && abs(alpha) < (INF-50) {
       if to == pto && flags >= Move16.Capture {
         // recapture extension.
@@ -1009,7 +1009,7 @@ negamax_zw :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
     }
 
     ext := 0;
-    if chess.node_state & NodeState.SSE && depth>=7 && depth < chess.depth && move == hash_move && tthit && cast(int)ttentry.depth >= depth-3 
+    if chess.node_state & NodeState.SSE && depth>=7 && ply < chess.depth && move == hash_move && tthit && cast(int)ttentry.depth >= depth-3 
        && ttentry.flag == TFLAGS.ALPHA {
       if to == pto && flags >= Move16.Capture {
         // recapture extension.
