@@ -568,7 +568,7 @@ negamax_pv :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
           R -= 2;
         }
 
-        R -= move_score / 10_000;
+        R -= move_score / 40_000;
         R = max(0, R);
         eval = -negamax_zw(chess, depth+ext-R-1, -alpha-1, -alpha, next_fifty);
       } else {
@@ -1085,7 +1085,7 @@ negamax_zw :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
           R -= 2;
         }
 
-        R -= move_score / 10_000;
+        R -= move_score / 40_000;
         R = max(0, R);
         eval = -negamax_zw(chess, depth+ext-R-1, -alpha-1, -alpha, next_fifty);
       } else {
@@ -1621,7 +1621,7 @@ perft :: (chess: *Chess, depth: int) -> int {
 #run {
   for i: 1..63 {
     for j: 1..63 {
-      LMR := log(cast(float)i) * log(cast(float)j) * 0.5 + 1.0;
+      LMR := log(cast(float)i) * log(cast(float)j) * 0.5;
       LateMoveReduction[i][j] = cast (int) LMR;
     }
   }
