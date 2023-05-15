@@ -585,10 +585,10 @@ negamax_pv :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
     chess.en_passant = ep;
     if eval > best_score then {
       best_score = eval;
+      bmove = move;
       if best_score > alpha {
         using chess.history;
         hash_flag = TFLAGS.EXACT;
-        bmove = move;
         pv_table[ply][0] = move;
         move_count := pv_table[ply+1].move_count;
         memcpy(*pv_table[ply][1], *pv_table[ply+1][0], move_count * size_of(Move16));
@@ -1098,9 +1098,9 @@ negamax_zw :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
     chess.en_passant = ep;
     if eval >= best_score {
       best_score = eval;
+      bmove = move;
       if best_score >= beta then {
         using chess.history;
-        bmove = move;
         pv_table[ply][0] = move;
         move_count := pv_table[ply+1].move_count;
         memcpy(*pv_table[ply][1], *pv_table[ply+1][0], move_count * size_of(Move16));
