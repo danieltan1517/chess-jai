@@ -53,20 +53,32 @@ add_chess_engine_files :: (w: Workspace, cpu_info: *Cpu_X86, type: NNUE_Type) {
     print("Building Chess Engine with NNUE AVX2\n");
     add_build_file("nnue_avx2.jai", w);
   case .nnue_probe;
-    // I only tested this on Linux. I believe this only works on Linux only,
-    // and cannot run anywhere else.
-    if !file_exists() && !file_exists("nnue-probe") {
-      print("Downloading nnue-probe library by Daniel Shawul.\n");
-      run_command("git", "clone", "https://github.com/dshawul/nnue-probe");
-      run_command("make", "--directory=nnue-probe/src");
-      if OS == .LINUX {
-        file_move("nnue-probe/src/libnnueprobe.so", "libnnueprobe.so");
-      } else if OS == .WINDOWS {
-        file_move("nnue-probe/src/libnnueprobe.dll", "libnnueprobe.dll");
-      } else if OS == .MACOS {
-        file_move("nnue-probe/src/libnnueprobe.dylib", "libnnueprobe.dylib");
-      }
+    print("Building Chess Engine with NNUE Probe\n");
+
+    // I only tested this on Linux. I believe nnue-probe only works on Linux only,
+    // and cannot run on windows/mac, but I could be wrong...
+    library: string;
+    location: string;
+    if OS == .LINUX {
+      library = "libnnueprobe.so";
+      location = "nnue-probe/src/libnnueprobe.so";
+    } else if OS == .WINDOWS {
+      library =  "libnnueprobe.dll";
+      location = "nnue-probe/src/libnnueprobe.dll";
+    } else if OS == .MACOS {
+      library =  "libnnueprobe.dylib";
+      location = "nnue-probe/src/libnnueprobe.dylib";
     }
+    if !file_exists(library) {
+      if !file_exists("nnue-probe") {
+        print("Downloading nnue-probe library by Daniel Shawul.\n");
+        run_command("git", "clone", "https://github.com/dshawul/nnue-probe");
+      }
+
+      run_command("make", "--directory=nnue-probe/src");
+      file_move(location, library);
+    }
+
     add_build_file("nnue_probe.jai", w);
   case;
     assert(false, "Invalid build script.\n");
@@ -79,8 +91,9 @@ add_chess_engine_files :: (w: Workspace, cpu_info: *Cpu_X86, type: NNUE_Type) {
     NEWLINE := ifx OS == .WINDOWS "\r\n" else "\n";
     builder: String_Builder;
     print_to_builder(*builder, "uci_response :: #string END%1", NEWLINE);
-    print_to_builder(*builder, "id name %1 -- neural network %2%3", ai_exe_name, type, NEWLINE);
+    print_to_builder(*builder, "id name %1%2", ai_exe_name, NEWLINE);
     print_to_builder(*builder, "id author %1%2", author, NEWLINE);
+    print_to_builder(*builder, "info string neural network type %1%2", type, NEWLINE);
     print_to_builder(*builder, "END%1", NEWLINE);
     return builder_to_string(*builder);
   }

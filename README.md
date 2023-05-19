@@ -16,6 +16,8 @@ Type `jai build.jai - ui ai` to build both the GUI and the AI.
 
 Type `jai build.jai - release` to build an optimized build.
 
+Type `jai build.jai - release ai nnue_probe` to build the engine using Daniel Shawul's NNUE-Probe library. This C library is entirely optional, and is used to provide the best SIMD code for unsupported computers (e.g. AVX512, ARM NEON, MMX, etc.)
+
 The build script will try to detect the CPU you are using, and pick either `AVX2`, `SSE`, or `cpu` automatically based on your processor. Send the flags `avx2`, `sse`, or `cpu` to manually toggle what you want. `cpu` means running with no SIMD support. Because Neural Networks are based on matrix multiplication, SIMD is needed to obtain the best performance.
 
 ## Code Organization
@@ -37,7 +39,8 @@ This code is divided up into the following files:
 * The Efficiently Updatable Neural Network Code is organized as follows:
   * `nnue_avx2.jai` contains code for AVX2 processors.
   * `nnue_sse.jai` contains code for SSE processors.
-  * `nnue_cpu.jai` is a default code with no SIMD.
+  * `nnue_probe.jai` contains code for interacting with the NNUE-Probe C library by Daniel Shawul. This can be used to get the best optimization for SIMD architectures unsupported by the existing Jai code (e.g. AVX512 SIMD, ARM NEON SIMD, X86-64 MMX SIMD, etc.)
+  * `nnue_cpu.jai` is a default code with no SIMD. Because it is general with no SIMD whatsoever, this allows someone to run it on any platform.
 
 ## User Interface Features
 
