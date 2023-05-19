@@ -1,12 +1,4 @@
 // for NNUE resources: https://hxim.github.io/Stockfish-Evaluation-Guide/
-#run {
-  nnue_default :: "resources/nn-04cf2b4ed1da.nnue";
-  if nnue_init(nnue_default) {
-    print("NNUE % initialized\n", nnue_default);
-  } else {
-    assert(false, "Error. Neural Network is not initialized.\n"); 
-  }
-}
 
 uci_evaluate :: (chess: *Chess) -> int {
   pieces, squares := initialize_piece_list(chess);

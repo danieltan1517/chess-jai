@@ -1,3 +1,14 @@
+#run {
+  nnue_default :: "resources/nn-04cf2b4ed1da.nnue";
+  if nnue_init(nnue_default) {
+    print("NNUE % initialized\n", nnue_default);
+  } else {
+    assert(false, "Error. Neural Network is not initialized.\n"); 
+  }
+}
+
+init_nnue :: () #expand {} // initialization is done at compile time.
+
 nnue_init :: (file_name: string) -> bool {
   file, success :=  file_open(file_name);
   if !success {
@@ -193,10 +204,10 @@ IndexList :: struct {
 nnue_evaluate_pos :: (pos: *Position) -> s32 {
   input_mask:   [FtOutDims / (8 * size_of(u32)) ] u32 #align 8;
   hidden1_mask: [8 / size_of(u32)] u32 #align 8;
-
   input: [FtOutDims] s8;
   hidden1_out: [32] s8;
   hidden2_out: [32] s8; 
+
   transform(pos, input, input_mask.data);
   affine_txfm(*input[0], *hidden1_out[0], FtOutDims, *hidden1_biases[0], *hidden1_weights[0]);
   affine_txfm(*hidden1_out[0], *hidden2_out[0], 32, *hidden2_biases[0], *hidden2_weights[0]);

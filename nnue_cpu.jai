@@ -1,3 +1,14 @@
+#run {
+  nnue_default :: "resources/nn-04cf2b4ed1da.nnue";
+  if nnue_init(nnue_default) {
+    print("NNUE % initialized\n", nnue_default);
+  } else {
+    assert(false, "Error. Neural Network is not initialized.\n"); 
+  }
+}
+
+init_nnue :: () #expand {} // initialization is done at compile time.
+
 nnue_init :: (file_name: string) -> bool {
   file, success :=  file_open(file_name);
   if !success {

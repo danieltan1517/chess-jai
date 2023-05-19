@@ -2,6 +2,9 @@
 #import "Compiler";
 #import "Machine_X64";
 #import "String";
+#import "File";
+#import "File_Utilities";
+#import "Process";
 
 ui_exe_name :: "chess";
 ai_exe_name :: "ceij";
@@ -49,6 +52,22 @@ add_chess_engine_files :: (w: Workspace, cpu_info: *Cpu_X86, type: NNUE_Type) {
   case .avx2; 
     print("Building Chess Engine with NNUE AVX2\n");
     add_build_file("nnue_avx2.jai", w);
+  case .nnue_probe;
+    // I only tested this on Linux. I believe this only works on Linux only,
+    // and cannot run anywhere else.
+    if !file_exists() && !file_exists("nnue-probe") {
+      print("Downloading nnue-probe library by Daniel Shawul.\n");
+      run_command("git", "clone", "https://github.com/dshawul/nnue-probe");
+      run_command("make", "--directory=nnue-probe/src");
+      if OS == .LINUX {
+        file_move("nnue-probe/src/libnnueprobe.so", "libnnueprobe.so");
+      } else if OS == .WINDOWS {
+        file_move("nnue-probe/src/libnnueprobe.dll", "libnnueprobe.dll");
+      } else if OS == .MACOS {
+        file_move("nnue-probe/src/libnnueprobe.dylib", "libnnueprobe.dylib");
+      }
+    }
+    add_build_file("nnue_probe.jai", w);
   case;
     assert(false, "Invalid build script.\n");
   }
@@ -110,6 +129,9 @@ add_ui_files :: (w: Workspace) {
       nnue_type = .sse;
     case "cpu";
       nnue_type = .cpu;
+    case "nnue_probe";
+      nnue_type = .nnue_probe;
+      
     }
   }
 
@@ -147,6 +169,7 @@ NNUE_Type :: enum {
   cpu;
   sse;
   avx2;
+  nnue_probe;
 }
 
 build_debug :: (cpu_info: *Cpu_X86, executable_name: string) -> Workspace {
