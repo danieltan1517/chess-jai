@@ -267,52 +267,36 @@ update_accumulator :: (pos: *Position) -> bool {
   added_indices[0].size = 0;
   added_indices[1].size = 0;
   append_changed_indices(pos, removed_indices.data, added_indices.data, reset.data);
-  for i: 0..kHalfDimensions / TILE_HEIGHT - 1 {
-    for c: 0..1 {
-      accTile := (*accumulator.accumulation[c][i*TILE_HEIGHT]);
-      if reset[c] then {
-        ft_b_tile := (*ft_biases[i*TILE_HEIGHT]);
-        memcpy(accTile, ft_b_tile, size_of(s16) * kHalfDimensions);
-      } else {
-        prevAccTile := *prevAcc.accumulation[c][i*TILE_HEIGHT];
-        memcpy(accTile, prevAccTile, size_of(s16) * kHalfDimensions);
-        // Difference calculation for the deactivated features
-        for k: 0..removed_indices[c].size-1 {
-          index := removed_indices[c].values[k];
-          offset := kHalfDimensions*index + i*TILE_HEIGHT;
-          column := *ft_weights[offset];
-          acc_data := accTile;
-          for j: 0..NUM_REGS-1 {
-            #asm AVX, AVX2 {
-              //acc[j] = vec_sub_16(acc[j], column[j]);
-              movdqa.y xmm0: vec, [acc_data];
-              psubw.y  xmm0, xmm0, [column];
-              movdqa.y [acc_data], xmm0;
-              add      acc_data, 32;
-              add      column, 32;
-            }
-          }
-        }
-      }
 
-      // Difference calculation for the activated features
-      for k: 0..added_indices[c].size-1 {
-        index := added_indices[c].values[k];
-        offset := kHalfDimensions*index + i*TILE_HEIGHT;
-        column := *ft_weights[offset];
-        acc_data := accTile;
-        for j: 0..NUM_REGS-1 {
-          #asm AVX, AVX2 {
-            // acc[j] = vec_add_16(acc[j], column[j]);
-            movdqa.y xmm0: vec, [acc_data];
-            paddw.y  xmm0, xmm0, [column];
-            movdqa.y [acc_data], xmm0;
-            add acc_data, 32;
-            add column, 32;
-          }
-        }
+  #asm AVX, AVX2 {
+    zeroall;
+    ymm0:  vec; ymm1:  vec; ymm2:  vec; ymm3:  vec;
+    ymm4:  vec; ymm5:  vec; ymm6:  vec; ymm7:  vec;
+    ymm8:  vec; ymm9:  vec; ymm10: vec; ymm11: vec;
+    ymm12: vec; ymm13: vec; ymm14: vec; ymm15: vec;
+  }
+
+  for c: 0..1 {
+    accTile := (*accumulator.accumulation[c][0]);
+    if reset[c] then {
+      copy_biases(*ft_biases[0]);
+    } else {
+      copy_biases(*prevAcc.accumulation[c][0]);
+
+      // Difference calculation for the deactivated features
+      for k: 0..removed_indices[c].size-1 {
+        index := removed_indices[c].values[k] * kHalfDimensions;
+        sub_weights(*ft_weights[index]);
       }
     }
+
+    // Difference calculation for the activated features
+    for k: 0..added_indices[c].size-1 {
+      index := added_indices[c].values[k] * kHalfDimensions;
+      add_weights(*ft_weights[index]);
+    }
+
+    store_accumulator(accTile);
   }
 
   accumulator.computedAccumulation = 1;
@@ -324,6 +308,90 @@ update_accumulator :: (pos: *Position) -> bool {
     prevAcc = *pos.nnue[i].accumulator;
     return !prevAcc.computedAccumulation;
   }
+
+  copy_biases :: (tile: *void) #expand {
+    #asm AVX, AVX2 {
+      movdqa.y ymm0,  [tile + 0x000];
+      movdqa.y ymm1,  [tile + 0x020];
+      movdqa.y ymm2,  [tile + 0x040];
+      movdqa.y ymm3,  [tile + 0x060];
+      movdqa.y ymm4,  [tile + 0x080];
+      movdqa.y ymm5,  [tile + 0x0a0];
+      movdqa.y ymm6,  [tile + 0x0c0];
+      movdqa.y ymm7,  [tile + 0x0e0];
+      movdqa.y ymm8,  [tile + 0x100];
+      movdqa.y ymm9,  [tile + 0x120];
+      movdqa.y ymm10, [tile + 0x140];
+      movdqa.y ymm11, [tile + 0x160];
+      movdqa.y ymm12, [tile + 0x180];
+      movdqa.y ymm13, [tile + 0x1a0];
+      movdqa.y ymm14, [tile + 0x1c0];
+      movdqa.y ymm15, [tile + 0x1e0];
+    }
+  }
+
+  sub_weights :: (tile: *void) #expand {
+    #asm AVX, AVX2 {
+      psubw.y ymm0,  ymm0,  [tile + 0x000];
+      psubw.y ymm1,  ymm1,  [tile + 0x020];
+      psubw.y ymm2,  ymm2,  [tile + 0x040];
+      psubw.y ymm3,  ymm3,  [tile + 0x060];
+      psubw.y ymm4,  ymm4,  [tile + 0x080];
+      psubw.y ymm5,  ymm5,  [tile + 0x0a0];
+      psubw.y ymm6,  ymm6,  [tile + 0x0c0];
+      psubw.y ymm7,  ymm7,  [tile + 0x0e0];
+      psubw.y ymm8,  ymm8,  [tile + 0x100];
+      psubw.y ymm9,  ymm9,  [tile + 0x120];
+      psubw.y ymm10, ymm10, [tile + 0x140];
+      psubw.y ymm11, ymm11, [tile + 0x160];
+      psubw.y ymm12, ymm12, [tile + 0x180];
+      psubw.y ymm13, ymm13, [tile + 0x1a0];
+      psubw.y ymm14, ymm14, [tile + 0x1c0];
+      psubw.y ymm15, ymm15, [tile + 0x1e0];
+    }
+  }
+
+  add_weights :: (tile: *void) #expand {
+    #asm AVX, AVX2 {
+      paddw.y ymm0,  ymm0,  [tile + 0x000];
+      paddw.y ymm1,  ymm1,  [tile + 0x020];
+      paddw.y ymm2,  ymm2,  [tile + 0x040];
+      paddw.y ymm3,  ymm3,  [tile + 0x060];
+      paddw.y ymm4,  ymm4,  [tile + 0x080];
+      paddw.y ymm5,  ymm5,  [tile + 0x0a0];
+      paddw.y ymm6,  ymm6,  [tile + 0x0c0];
+      paddw.y ymm7,  ymm7,  [tile + 0x0e0];
+      paddw.y ymm8,  ymm8,  [tile + 0x100];
+      paddw.y ymm9,  ymm9,  [tile + 0x120];
+      paddw.y ymm10, ymm10, [tile + 0x140];
+      paddw.y ymm11, ymm11, [tile + 0x160];
+      paddw.y ymm12, ymm12, [tile + 0x180];
+      paddw.y ymm13, ymm13, [tile + 0x1a0];
+      paddw.y ymm14, ymm14, [tile + 0x1c0];
+      paddw.y ymm15, ymm15, [tile + 0x1e0];
+    }
+  }
+
+  store_accumulator :: (tile: *void) #expand {
+    #asm AVX, AVX2 {
+      movdqa.y [tile + 0x000],ymm0;
+      movdqa.y [tile + 0x020],ymm1;
+      movdqa.y [tile + 0x040],ymm2;
+      movdqa.y [tile + 0x060],ymm3;
+      movdqa.y [tile + 0x080],ymm4;
+      movdqa.y [tile + 0x0a0],ymm5;
+      movdqa.y [tile + 0x0c0],ymm6;
+      movdqa.y [tile + 0x0e0],ymm7;
+      movdqa.y [tile + 0x100],ymm8;
+      movdqa.y [tile + 0x120],ymm9;
+      movdqa.y [tile + 0x140],ymm10;
+      movdqa.y [tile + 0x160],ymm11;
+      movdqa.y [tile + 0x180],ymm12; 
+      movdqa.y [tile + 0x1a0],ymm13;
+      movdqa.y [tile + 0x1c0],ymm14; 
+      movdqa.y [tile + 0x1e0],ymm15; 
+    }
+  }
 }
 
 refresh_accumulator :: (pos: *Position) {
@@ -333,29 +401,90 @@ refresh_accumulator :: (pos: *Position) {
   activeIndices[1].size = 0;
   append_active_indices(pos, activeIndices.data);
   numChunks :: (kHalfDimensions/TILE_HEIGHT) - 1;
-  memcpy(*accumulator.accumulation[0], *ft_biases[0], size_of(s16) * kHalfDimensions);
-  memcpy(*accumulator.accumulation[1], *ft_biases[0], size_of(s16) * kHalfDimensions);
+
+  #asm AVX, AVX2 {
+    ymm0:  vec; ymm1:  vec; ymm2:  vec; ymm3:  vec;
+    ymm4:  vec; ymm5:  vec; ymm6:  vec; ymm7:  vec;
+    ymm8:  vec; ymm9:  vec; ymm10: vec; ymm11: vec;
+    ymm12: vec; ymm13: vec; ymm14: vec; ymm15: vec;
+  }
+
   for c: 0..1 {
-    accTile := *accumulator.accumulation[c][0];
+    acc := *accumulator.accumulation[c][0];
+    copy_biases(*ft_biases[0]);
     for k: 0..activeIndices[c].size-1 {
       index  := activeIndices[c].values[k];
       offset := kHalfDimensions * index;
-      acc_j  := accTile;
-      column := *ft_weights[offset];
-      for j: 0..NUM_REGS-1 {
-        #asm AVX, AVX2 {
-          // acc[j] = vec_add_16(acc[j], column[j]);
-          movdqa.y xmm0: vec, [acc_j];
-          paddw.y xmm0, xmm0, [column];
-          movdqa.y [acc_j], xmm0;
-          add acc_j, 32;
-          add column, 32;
-        }
-      }
+      add_weights(*ft_weights[offset]);
     }
+    store_accumulator(acc);
   }
 
   accumulator.computedAccumulation = 1;
+
+  copy_biases :: (tile: *void) #expand {
+    #asm AVX, AVX2 {
+      movdqa.y ymm0,  [tile + 0x000];
+      movdqa.y ymm1,  [tile + 0x020];
+      movdqa.y ymm2,  [tile + 0x040];
+      movdqa.y ymm3,  [tile + 0x060];
+      movdqa.y ymm4,  [tile + 0x080];
+      movdqa.y ymm5,  [tile + 0x0a0];
+      movdqa.y ymm6,  [tile + 0x0c0];
+      movdqa.y ymm7,  [tile + 0x0e0];
+      movdqa.y ymm8,  [tile + 0x100];
+      movdqa.y ymm9,  [tile + 0x120];
+      movdqa.y ymm10, [tile + 0x140];
+      movdqa.y ymm11, [tile + 0x160];
+      movdqa.y ymm12, [tile + 0x180];
+      movdqa.y ymm13, [tile + 0x1a0];
+      movdqa.y ymm14, [tile + 0x1c0];
+      movdqa.y ymm15, [tile + 0x1e0];
+    }
+  }
+
+  add_weights :: (tile: *void) #expand {
+    #asm AVX, AVX2 {
+      paddw.y ymm0,  ymm0,  [tile + 0x000];
+      paddw.y ymm1,  ymm1,  [tile + 0x020];
+      paddw.y ymm2,  ymm2,  [tile + 0x040];
+      paddw.y ymm3,  ymm3,  [tile + 0x060];
+      paddw.y ymm4,  ymm4,  [tile + 0x080];
+      paddw.y ymm5,  ymm5,  [tile + 0x0a0];
+      paddw.y ymm6,  ymm6,  [tile + 0x0c0];
+      paddw.y ymm7,  ymm7,  [tile + 0x0e0];
+      paddw.y ymm8,  ymm8,  [tile + 0x100];
+      paddw.y ymm9,  ymm9,  [tile + 0x120];
+      paddw.y ymm10, ymm10, [tile + 0x140];
+      paddw.y ymm11, ymm11, [tile + 0x160];
+      paddw.y ymm12, ymm12, [tile + 0x180];
+      paddw.y ymm13, ymm13, [tile + 0x1a0];
+      paddw.y ymm14, ymm14, [tile + 0x1c0];
+      paddw.y ymm15, ymm15, [tile + 0x1e0];
+    }
+  }
+
+  store_accumulator :: (tile: *void) #expand {
+    #asm AVX, AVX2 {
+      movdqa.y [tile + 0x000],ymm0;
+      movdqa.y [tile + 0x020],ymm1;
+      movdqa.y [tile + 0x040],ymm2;
+      movdqa.y [tile + 0x060],ymm3;
+      movdqa.y [tile + 0x080],ymm4;
+      movdqa.y [tile + 0x0a0],ymm5;
+      movdqa.y [tile + 0x0c0],ymm6;
+      movdqa.y [tile + 0x0e0],ymm7;
+      movdqa.y [tile + 0x100],ymm8;
+      movdqa.y [tile + 0x120],ymm9;
+      movdqa.y [tile + 0x140],ymm10;
+      movdqa.y [tile + 0x160],ymm11;
+      movdqa.y [tile + 0x180],ymm12; 
+      movdqa.y [tile + 0x1a0],ymm13;
+      movdqa.y [tile + 0x1c0],ymm14; 
+      movdqa.y [tile + 0x1e0],ymm15; 
+    }
+  }
+
 }
 
 append_active_indices :: (pos: *Position, active: *IndexList) {
@@ -467,24 +596,74 @@ transform :: (pos: *Position, output: *s8, out_mask: *u32) {
 
   #asm AVX, AVX2 {
     // lift the xmm0 register out of the loop.
-    pxor.y xmm3: vec, xmm3, xmm3;
+    zeroall;
+    pxor.y zeroes: vec, zeroes, zeroes;
+    ymm0:  vec; ymm1:  vec; ymm2:  vec; ymm3:  vec;
+    ymm4:  vec; ymm5:  vec; ymm6:  vec; ymm7:  vec;
+    val: gpr;
   }
 
   for p: 0..1 {
-    for i: 0..numChunks {
-      s0 := *(cast(*m256) *accumulation[pers])[i * 2];
-      #asm AVX, AVX2 {
-        // out[i] = vec_packs(s0, s1); => out[i] = _mm256_packs_epi16(s0, s1);
-        // *outMask++ = _mm256_movemask_epi8(_mm256_cmpgt_epi8(out[i],_mm256_setzero_si256()))
-        movdqa.y   xmm0: vec, [s0];
-        packsswb.y xmm0, xmm0, [s0 + 32];
-        movdqu.y   [output], xmm0;
-        pcmpgtb.y xmm0, xmm0, xmm3; 
-        pmovmskb  val: gpr, xmm0;
-        mov.d     [out_mask], val;
-        add       output, 32;
-        add       out_mask, 4;
-      }
+    tile := *accumulation[pers][0];
+    #asm AVX, AVX2 {
+      movdqa.y   ymm0,       [tile + 0x000];
+      packsswb.y ymm0, ymm0, [tile + 0x020];
+      movdqa.y   ymm1,       [tile + 0x040];
+      packsswb.y ymm1, ymm1, [tile + 0x060];
+      movdqa.y   ymm2,       [tile + 0x080];
+      packsswb.y ymm2, ymm2, [tile + 0x0a0];
+      movdqa.y   ymm3,       [tile + 0x0c0];
+      packsswb.y ymm3, ymm3, [tile + 0x0e0];
+      movdqa.y   ymm4,       [tile + 0x100];
+      packsswb.y ymm4, ymm4, [tile + 0x120];
+      movdqa.y   ymm5,       [tile + 0x140];
+      packsswb.y ymm5, ymm5, [tile + 0x160];
+      movdqa.y   ymm6,       [tile + 0x180];
+      packsswb.y ymm6, ymm6, [tile + 0x1a0];
+      movdqa.y   ymm7,       [tile + 0x1c0];
+      packsswb.y ymm7, ymm7, [tile + 0x1e0];
+
+      movdqu.y   [output + 0x000], ymm0;
+      pcmpgtb.y  ymm0, ymm0, zeroes; 
+      pmovmskb   val, ymm0;
+      mov.d      [out_mask + 0x00], val;
+
+      movdqu.y   [output + 0x020], ymm1;
+      pcmpgtb.y  ymm1, ymm1, zeroes; 
+      pmovmskb   val, ymm1;
+      mov.d      [out_mask + 0x04], val;
+
+      movdqu.y   [output + 0x040], ymm2;
+      pcmpgtb.y  ymm2, ymm2, zeroes; 
+      pmovmskb   val, ymm2;
+      mov.d      [out_mask + 0x08], val;
+
+      movdqu.y   [output + 0x060], ymm3;
+      pcmpgtb.y  ymm3, ymm3, zeroes; 
+      pmovmskb   val, ymm3;
+      mov.d      [out_mask + 0x0c], val;
+
+      movdqu.y   [output + 0x080], ymm4;
+      pcmpgtb.y  ymm4, ymm4, zeroes; 
+      pmovmskb   val, ymm4;
+      mov.d      [out_mask + 0x10], val;
+
+      movdqu.y   [output + 0x0a0], ymm5;
+      pcmpgtb.y  ymm5, ymm5, zeroes; 
+      pmovmskb   val, ymm5;
+      mov.d      [out_mask + 0x14], val;
+
+      movdqu.y   [output + 0x0c0], ymm6;
+      pcmpgtb.y  ymm6, ymm6, zeroes; 
+      pmovmskb   val, ymm6;
+      mov.d      [out_mask + 0x18], val;
+
+      movdqu.y   [output + 0x0e0], ymm7;
+      pcmpgtb.y  ymm7, ymm7, zeroes; 
+      pmovmskb   val, ymm7;
+      mov.d      [out_mask + 0x1c], val;
+      add        output, 0x100;
+      add        out_mask, 0x20;
     }
 
     pers ^= 1;
@@ -494,6 +673,7 @@ transform :: (pos: *Position, output: *s8, out_mask: *u32) {
 affine_txfm :: (input: *s8, output: *s8, inDims: u32, outDims: u32, biases: *s32, weights: *s8, in_mask: *u32, out_mask: *u32, pack8_and_calc_mask: bool) #expand {
   //assert(outDims == 32);
   #asm AVX, AVX2 {
+    zeroall;
     movdqa.y out_0: vec, [biases + 0];
     movdqa.y out_1: vec, [biases + 32];
     movdqa.y out_2: vec, [biases + 64];
