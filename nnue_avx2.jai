@@ -590,7 +590,6 @@ transform :: (pos: *Position, output: *s8, out_mask: *u32) {
     refresh_accumulator(pos);
   accumulation: [][256] s16 = pos.nnue[0].accumulator.accumulation;
   pers := pos.player;
-  numChunks :: (((16*kHalfDimensions) / SIMD_WIDTH) / 2) - 1;
 
   #asm AVX, AVX2 {
     // lift the xmm0 register out of the loop.
