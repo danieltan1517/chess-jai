@@ -737,7 +737,6 @@ affine_txfm :: (input: *s8, output: *s8, inDims: u32, outDims: u32, biases: *s32
     }
   }
 
-  //outVec: *m256 = cast(*m256)output;
   #asm AVX, AVX2 {
     // __m256i out16_0 = _mm256_srai_epi16(_mm256_packs_epi32(out_0, out_1), SHIFT);
     // __m256i out16_1 = _mm256_srai_epi16(_mm256_packs_epi32(out_2, out_3), SHIFT);
