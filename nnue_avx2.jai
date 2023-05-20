@@ -7,7 +7,7 @@
   }
 }
 
-init_nnue :: () #expand {} // initialization is done at compile time.
+nnue_startup :: () #expand {} // initialization is done at compile time.
 
 nnue_init :: (file_name: string) -> bool {
   file, success :=  file_open(file_name);
@@ -400,7 +400,6 @@ refresh_accumulator :: (pos: *Position) {
   activeIndices[0].size = 0;
   activeIndices[1].size = 0;
   append_active_indices(pos, activeIndices.data);
-  numChunks :: (kHalfDimensions/TILE_HEIGHT) - 1;
 
   #asm AVX, AVX2 {
     ymm0:  vec; ymm1:  vec; ymm2:  vec; ymm3:  vec;
@@ -413,9 +412,8 @@ refresh_accumulator :: (pos: *Position) {
     acc := *accumulator.accumulation[c][0];
     copy_biases(*ft_biases[0]);
     for k: 0..activeIndices[c].size-1 {
-      index  := activeIndices[c].values[k];
-      offset := kHalfDimensions * index;
-      add_weights(*ft_weights[offset]);
+      index  := kHalfDimensions * activeIndices[c].values[k];
+      add_weights(*ft_weights[index]);
     }
     store_accumulator(acc);
   }

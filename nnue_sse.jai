@@ -7,7 +7,7 @@
   }
 }
 
-init_nnue :: () #expand {} // initialization is done at compile time.
+nnue_startup :: () #expand {} // initialization is done at compile time.
 
 nnue_init :: (file_name: string) -> bool {
   file, success :=  file_open(file_name);

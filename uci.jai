@@ -1,5 +1,5 @@
 main :: () {
-  init_nnue();
+  nnue_startup();
   init_global_bitboards();
   initialize_move_randomness();
   init_ttable();

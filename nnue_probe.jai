@@ -12,7 +12,7 @@ nnue_evaluate :: (player: s32, pieces: *s32, squares: *s32) -> s32 #foreign nnue
 nnue_evaluate_incremental :: (player: s32, pieces: *s32, squares: *s32, nnue: **NNUEdata) -> s32 #foreign nnue_probe;
 nnue_init :: (file_name: *u8) -> bool #foreign nnue_probe;
 
-init_nnue :: () #expand {
+nnue_startup :: () #expand { // initialization is done at compile time.
   #import "File_Utilities";
   if !file_exists(nnue_default) {
     print("Error. % does not exist", nnue_default);
