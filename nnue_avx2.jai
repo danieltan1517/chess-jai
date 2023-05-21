@@ -621,44 +621,38 @@ transform :: (pos: *Position, output: *s8, out_mask: *u32) {
       packsswb.y ymm7, ymm7, [tile + 0x1e0];
 
       movdqu.y   [output + 0x000], ymm0;
+      movdqu.y   [output + 0x020], ymm1;
+      movdqu.y   [output + 0x040], ymm2;
+      movdqu.y   [output + 0x060], ymm3;
+      movdqu.y   [output + 0x080], ymm4;
+      movdqu.y   [output + 0x0a0], ymm5;
+      movdqu.y   [output + 0x0c0], ymm6;
+      movdqu.y   [output + 0x0e0], ymm7;
       pcmpgtb.y  ymm0, ymm0, zeroes; 
+      pcmpgtb.y  ymm1, ymm1, zeroes; 
+      pcmpgtb.y  ymm2, ymm2, zeroes; 
+      pcmpgtb.y  ymm3, ymm3, zeroes; 
+      pcmpgtb.y  ymm4, ymm4, zeroes; 
+      pcmpgtb.y  ymm5, ymm5, zeroes; 
+      pcmpgtb.y  ymm6, ymm6, zeroes; 
+      pcmpgtb.y  ymm7, ymm7, zeroes; 
       pmovmskb   val, ymm0;
       mov.d      [out_mask + 0x00], val;
-
-      movdqu.y   [output + 0x020], ymm1;
-      pcmpgtb.y  ymm1, ymm1, zeroes; 
       pmovmskb   val, ymm1;
       mov.d      [out_mask + 0x04], val;
-
-      movdqu.y   [output + 0x040], ymm2;
-      pcmpgtb.y  ymm2, ymm2, zeroes; 
       pmovmskb   val, ymm2;
       mov.d      [out_mask + 0x08], val;
-
-      movdqu.y   [output + 0x060], ymm3;
-      pcmpgtb.y  ymm3, ymm3, zeroes; 
       pmovmskb   val, ymm3;
       mov.d      [out_mask + 0x0c], val;
-
-      movdqu.y   [output + 0x080], ymm4;
-      pcmpgtb.y  ymm4, ymm4, zeroes; 
       pmovmskb   val, ymm4;
       mov.d      [out_mask + 0x10], val;
-
-      movdqu.y   [output + 0x0a0], ymm5;
-      pcmpgtb.y  ymm5, ymm5, zeroes; 
       pmovmskb   val, ymm5;
       mov.d      [out_mask + 0x14], val;
-
-      movdqu.y   [output + 0x0c0], ymm6;
-      pcmpgtb.y  ymm6, ymm6, zeroes; 
       pmovmskb   val, ymm6;
       mov.d      [out_mask + 0x18], val;
-
-      movdqu.y   [output + 0x0e0], ymm7;
-      pcmpgtb.y  ymm7, ymm7, zeroes; 
       pmovmskb   val, ymm7;
       mov.d      [out_mask + 0x1c], val;
+
       add        output, 0x100;
       add        out_mask, 0x20;
     }
