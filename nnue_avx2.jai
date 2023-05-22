@@ -155,7 +155,6 @@ nnue_evaluate :: (player: s32, pieces: *s32, squares: *s32) -> s32 {
 }
 
 nnue_evaluate_incremental :: (player: s32, pieces: *s32, squares: *s32, nnue: **NNUEdata) -> s32 {
-  //assert(nnue[0] && cast(int)(*nnue[0].accumulator) % 64 == 0);
   pos: Position;
   pos.nnue[0] = nnue[0];
   pos.nnue[1] = nnue[1];
@@ -482,7 +481,6 @@ refresh_accumulator :: (pos: *Position) {
       movdqa.y [tile + 0x1e0],ymm15; 
     }
   }
-
 }
 
 append_active_indices :: (pos: *Position, active: *IndexList) {
@@ -662,7 +660,6 @@ transform :: (pos: *Position, output: *s8, out_mask: *u32) {
 }
 
 affine_txfm :: (input: *s8, output: *s8, inDims: u32, outDims: u32, biases: *s32, weights: *s8, in_mask: *u32, out_mask: *u32, pack8_and_calc_mask: bool) #expand {
-  //assert(outDims == 32);
   #asm AVX, AVX2 {
     zeroall;
     movdqa.y out_0: vec, [biases + 0];
@@ -739,12 +736,12 @@ affine_txfm :: (input: *s8, output: *s8, inDims: u32, outDims: u32, biases: *s32
     psraw.y    out_0, out_0, 6;
     psraw.y    out_1, out_1, 6;
     packsswb.y out_0, out_0, out_1;
-    movdqu.y   [output], out_0;
   }
 
   #if pack8_and_calc_mask then {
     #asm AVX, AVX2 {
       // outMask[0] = _mm256_movemask_epi8(_mm256_cmpgt_epi8(outVec[0], kZero));
+      movdqu.y   [output], out_0;
       pcmpgtb.y out_0, out_0, kZero;
       pmovmskb  reg: gpr, out_0;
       mov.d     [out_mask], reg;
