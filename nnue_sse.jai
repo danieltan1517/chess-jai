@@ -787,8 +787,8 @@ affine_txfm :: (input: *s8, output: *void, inDims: u32, biases: *s32, weights: *
       movups.x   xmm_relu: vec, [tmp_data];
       packssdw.x xmm_relu, xmm_000;
       psraw.x    xmm_relu, 6;
-      //pmaxsw.x   xmm_relu, xmm_000;
-      //pminsw.x   xmm_relu, xmm_127;
+      pmaxsw.x   xmm_relu, xmm_000;
+      pminsw.x   xmm_relu, xmm_127;
       packsswb.x xmm_relu, xmm_000;
       movups.x   [outVec], xmm_relu;
       add        tmp_data, 0x10;
