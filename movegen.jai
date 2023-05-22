@@ -2330,6 +2330,13 @@ between_squares :: inline (i: int, j: int) -> u64 #expand {
   return between_look_up_table[i][j];
 }
 
+// a boolean value set by the metaprogram enabling BLSR instruction.
+// #placeholder ENABLE_BLSR; 
+
+// a boolean value set by the metaprogram enabling FANCY MAGIC BITBOARDS.
+// #placeholder FANCY_MAGIC_BITBOARDS;
+
+
 serialized_bb :: enum s16 {
   a1; b1; c1; d1; e1; f1; g1; h1;
   a2; b2; c2; d2; e2; f2; g2; h2;
@@ -2468,12 +2475,6 @@ popbit :: (a: u64) -> u64 #expand {
 #import "Machine_X64";
 #import "Basic";
 #import "String";
-
-// a boolean value set by the metaprogram enabling BLSR instruction.
-#placeholder ENABLE_BLSR; 
-
-// a boolean value set by the metaprogram enabling FANCY MAGIC BITBOARDS.
-#placeholder FANCY_MAGIC_BITBOARDS;
 
 
 #no_reset zobrist_piece_table : [13][64] u64 #align 64;

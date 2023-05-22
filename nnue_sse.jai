@@ -572,7 +572,8 @@ transform :: (pos: *Position, output: [] s8, out_mask: *u32) {
     while accindex < 256 {
       accum := *accumulation[pers][accindex];
       #asm SSE {
-        xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7:  vec;
+        xmm0: vec; xmm1: vec; xmm2: vec; xmm3: vec;
+        xmm4: vec; xmm5: vec; xmm6: vec; xmm7: vec;
         movaps.x   xmm0, [accum + 0x00];
         packsswb.x xmm0, [accum + 0x10];
         movaps.x   xmm1, [accum + 0x20];
@@ -786,8 +787,8 @@ affine_txfm :: (input: *s8, output: *void, inDims: u32, biases: *s32, weights: *
       movups.x   xmm_relu: vec, [tmp_data];
       packssdw.x xmm_relu, xmm_000;
       psraw.x    xmm_relu, 6;
-      pmaxsw.x   xmm_relu, xmm_000;
-      pminsw.x   xmm_relu, xmm_127;
+      //pmaxsw.x   xmm_relu, xmm_000;
+      //pminsw.x   xmm_relu, xmm_127;
       packsswb.x xmm_relu, xmm_000;
       movups.x   [outVec], xmm_relu;
       add        tmp_data, 0x10;

@@ -71,8 +71,6 @@ main :: () {
   }
 }
 
-#placeholder uci_response;
-
 #scope_file
 os: OS;
 
