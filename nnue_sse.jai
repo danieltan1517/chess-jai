@@ -561,12 +561,6 @@ transform :: (pos: *Position, output: [] s8, out_mask: *u32) {
     refresh_accumulator(pos);
   accumulation: [][256] s16 = pos.nnue[0].accumulator.accumulation;
   pers := pos.player; 
-  offset := 0;
-
-  #asm SSE {
-    xmm0:  vec; xmm1:  vec; xmm2:  vec; xmm3:  vec;
-    xmm4:  vec; xmm5:  vec; xmm6:  vec; xmm7:  vec;
-  }
 
   // 128 bit xmm register
   // 8 bit data
@@ -578,6 +572,7 @@ transform :: (pos: *Position, output: [] s8, out_mask: *u32) {
     while accindex < 256 {
       accum := *accumulation[pers][accindex];
       #asm SSE {
+        xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7:  vec;
         movaps.x   xmm0, [accum + 0x00];
         packsswb.x xmm0, [accum + 0x10];
         movaps.x   xmm1, [accum + 0x20];
