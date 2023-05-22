@@ -564,34 +564,47 @@ transform :: (pos: *Position, output: [] s8, out_mask: *u32) {
   offset := 0;
 
   #asm SSE {
-    mov.d  reg: gpr, 0x00_7f_00_7f;
-    movd   xmm_127: vec, reg;
-    pshufd xmm_127, xmm_127, 0;
-    pxor.x xmm_000: vec, xmm_000;
+    xmm0:  vec; xmm1:  vec; xmm2:  vec; xmm3:  vec;
+    xmm4:  vec; xmm5:  vec; xmm6:  vec; xmm7:  vec;
   }
 
   // 128 bit xmm register
   // 8 bit data
   // 128 / 8 => 16 numbers at a time.
   // 256 numbers total / 16 numbers per SIMD = 16 times.
-  COUNT :: 15;
-  data := output.data;
+  data  := *output[0];
   for p: 0..1 {
-    accum := *accumulation[pers][0];
-    for < COUNT..0 {
-      #asm SSE, SSE4_1 {
-        movaps.x   xmm0: vec, [accum];
-        pmaxsw.x   xmm0, xmm_000;
-        pminsw.x   xmm0, xmm_127;
-        movaps.x   xmm1: vec, [accum + 0x10];
-        pmaxsw.x   xmm1, xmm_000;
-        pminsw.x   xmm1, xmm_127;
-        
-        packsswb.x xmm0, xmm1;
-        movups.x   [data], xmm0;
-        add        accum, 0x20;
-        add        data,  0x10;
+    accindex := 0;
+    while accindex < 256 {
+      accum := *accumulation[pers][accindex];
+      #asm SSE {
+        movaps.x   xmm0, [accum + 0x00];
+        packsswb.x xmm0, [accum + 0x10];
+        movaps.x   xmm1, [accum + 0x20];
+        packsswb.x xmm1, [accum + 0x30];
+        movaps.x   xmm2, [accum + 0x40];
+        packsswb.x xmm2, [accum + 0x50];
+        movaps.x   xmm3, [accum + 0x60];
+        packsswb.x xmm3, [accum + 0x70];
+        movaps.x   xmm4, [accum + 0x80];
+        packsswb.x xmm4, [accum + 0x90];
+        movaps.x   xmm5, [accum + 0xa0];
+        packsswb.x xmm5, [accum + 0xb0];
+        movaps.x   xmm6, [accum + 0xc0];
+        packsswb.x xmm6, [accum + 0xd0];
+        movaps.x   xmm7, [accum + 0xe0];
+        packsswb.x xmm7, [accum + 0xf0];
+        movups.x   [data + 0x00], xmm0;
+        movups.x   [data + 0x10], xmm1;
+        movups.x   [data + 0x20], xmm2;
+        movups.x   [data + 0x30], xmm3;
+        movups.x   [data + 0x40], xmm4;
+        movups.x   [data + 0x50], xmm5;
+        movups.x   [data + 0x60], xmm6;
+        movups.x   [data + 0x70], xmm7;
+        add data, 0x80;
       }
+      accindex += 128;
     }
 
     pers ^= 1;
