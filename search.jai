@@ -330,7 +330,11 @@ negamax_root :: (chess: *ChessGame, root_moves: *MoveQueue, multipv: int, depth:
         // do not reduce depth on check.
         eval = -negamax_zw(chess, depth, -alpha-1, -alpha, next_fifty);
       } else {
-        eval = -negamax_zw(chess, depth-1, -alpha-1, -alpha, next_fifty);
+        R := 0;
+        if flags <= .Double_Pawn_Push {
+          R -= (move_count >> 4);
+        }
+        eval = -negamax_zw(chess, depth - R - 1, -alpha-1, -alpha, next_fifty);
       }
 
       // search the move again that has failed to be proved to be bad with normal alpha beta score bounds
@@ -355,8 +359,9 @@ negamax_root :: (chess: *ChessGame, root_moves: *MoveQueue, multipv: int, depth:
      
         if best_score >= beta then {
           // non-captures == Quiet|Pawn Push Moves
-          if flags <= Move16.Double_Pawn_Push 
+          if flags <= Move16.Double_Pawn_Push then {
             update_quiet(chess, move, depth, quiet_moves, num_quiets, cap_moves, num_captures);
+          }
           tt_store(chess.hash, best_score, TFLAGS.BETA, depth, move);
           return best_score;
         } 
@@ -483,9 +488,9 @@ negamax_pv :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
         break;
       if flags <= Move16.Double_Pawn_Push && move_score < score_margin then
         break;
-      if depth < 6 && flags == Move16.Capture && PVALUE[att] > PVALUE[vic] && see(chess,move) < -250*depth  then
+      if depth < 6 && flags == Move16.Capture && PVALUE[att] > PVALUE[vic] && see(chess,move, -250*depth)  then
         continue;
-      else if depth < 6 && flags <= Move16.Double_Pawn_Push && see(chess,move) < -90*depth*depth then
+      else if depth < 6 && flags <= Move16.Double_Pawn_Push && see(chess,move, -90*depth*depth) then
         continue;
     }
 
@@ -1002,9 +1007,9 @@ negamax_zw :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
         break;
       if flags <= Move16.Double_Pawn_Push && move_score < score_margin then
         break;
-      if depth < 6 && flags == Move16.Capture && PVALUE[att] > PVALUE[vic] && see(chess,move) < -250*depth  then
+      if depth < 6 && flags == Move16.Capture && PVALUE[att] > PVALUE[vic] && see(chess, move, -250*depth) then
         continue;
-      else if depth < 6 && flags <= Move16.Double_Pawn_Push && see(chess,move) < -90*depth*depth then
+      else if depth < 6 && flags <= Move16.Double_Pawn_Push && see(chess, move, -90*depth*depth) then
         continue;
     }
 
@@ -1541,7 +1546,7 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
       return false;
     }
 
-    return see(chess, move) < 0;
+    return see(chess, move, 0);
   }
 }
 
@@ -1721,7 +1726,7 @@ add_move :: (queue: *MoveQueue, from: int, to: int, flags: Move16) #expand {
 }
 
 // static exchange evaluation.
-see :: (chess: *Chess, move: Move16) -> eval: int {
+see :: (chess: *Chess, move: Move16, threshold: int) -> bool {
   _, from, to := decode_move16(move);
   target := cast(int) piece_at(chess, to);
   apiece := cast(int) piece_at(chess, from);
@@ -1733,7 +1738,10 @@ see :: (chess: *Chess, move: Move16) -> eval: int {
   from_set := cast(u64) 1 << from;
   occupied := chess.occupied;
   attadef  := attacks_to(occupied, to);
-  gain[d] = PVALUE[target];
+  gain[d] = PVALUE[target] - cast(s16)threshold;
+  if gain[d] < 0 then
+    return false;
+
   turn := chess.turn;
 
   bishops := (chess.w_bishop|chess.b_bishop|chess.w_queen|chess.b_queen);
@@ -1760,7 +1768,7 @@ see :: (chess: *Chess, move: Move16) -> eval: int {
     gain[i-1]= -max(-gain[i-1], gain[i]);
   }
 
-  return gain[0];
+  return gain[0] < threshold;
 
   attacks_to :: (occ: u64, sq: int) -> u64 #expand {
     to := cast(u64) (1 << sq);
