@@ -7,6 +7,10 @@ OS :: struct {}
 
 // defines the AI uci message loop.
 getline :: (os: *OS, loop_body: Code, flags: For_Flags) #expand {
+  nonblock_stdin :: () #expand {
+    flags := fcntl(STDIN_FILENO, F_GETFL, 0) | O_NONBLOCK;
+    fcntl(STDIN_FILENO, F_SETFL, flags);
+  }
   nonblock_stdin();
   `it_index := 0;
   while outer := true {
@@ -26,11 +30,6 @@ getline :: (os: *OS, loop_body: Code, flags: For_Flags) #expand {
       #insert (break=break outer) loop_body;
       messages = rest;
     }
-  }
-
-  nonblock_stdin :: () #expand {
-    flags := fcntl(STDIN_FILENO, F_GETFL, 0) | O_NONBLOCK;
-    fcntl(STDIN_FILENO, F_SETFL, flags);
   }
 }
 

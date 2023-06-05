@@ -10,27 +10,6 @@
 nnue_startup :: () #expand {} // initialization is done at compile time.
 
 nnue_init :: (file_name: string) -> bool {
-  file, success :=  file_open(file_name);
-  if !success {
-    return false;
-  }
-  length :=  file_length(file);
-  buffer := NewArray(length, u8);
-  defer {
-    array_free(buffer);
-    file_close(*file);
-  }
-
-  if !file_read(file, buffer.data, length) {
-    return false;
-  }
-
-  // verify that the file is correct.
-  if !verify_file(buffer) then
-    return false;
-
-  init_weights(buffer);
-  return true;
 
   verify_file :: (buffer: [] u8) -> bool {
     if buffer.count != 21022697 then
@@ -47,6 +26,30 @@ nnue_init :: (file_name: string) -> bool {
     if <<cast(*u32)(d + NetworkStart) != 0x63337156 then
       return false;
     return true;
+  }
+
+  read_hidden_weights :: (weight: []s8, dims: int, d: *s8) -> *s8 {
+
+    wt_idx :: (r: int, c: int, dims: int) -> int {
+      return c * 32 + r;
+    }
+    i := 0;
+    for r: 0..31 {
+      for c: 0..dims-1 {
+        index := wt_idx(r, c, dims);
+        weight[index] = <<d;
+        d += 1;
+      }
+    }
+
+    return d;
+  }
+
+  read_output_weights :: (weight: []s8, data: *s8) {
+    for i: 0..31 {
+      weight[i] = << data;
+      data += 1;
+    }
   }
 
   init_weights :: (buffer: [] u8) {
@@ -88,29 +91,29 @@ nnue_init :: (file_name: string) -> bool {
 
   }
 
-  read_hidden_weights :: (weight: []s8, dims: int, d: *s8) -> *s8 {
-    i := 0;
-    for r: 0..31 {
-      for c: 0..dims-1 {
-        index := wt_idx(r, c, dims);
-        weight[index] = <<d;
-        d += 1;
-      }
-    }
 
-    return d;
-
-    wt_idx :: (r: int, c: int, dims: int) -> int {
-      return c * 32 + r;
-    }
+  file, success :=  file_open(file_name);
+  if !success {
+    return false;
+  }
+  length :=  file_length(file);
+  buffer := NewArray(length, u8);
+  defer {
+    array_free(buffer);
+    file_close(*file);
   }
 
-  read_output_weights :: (weight: []s8, data: *s8) {
-    for i: 0..31 {
-      weight[i] = << data;
-      data += 1;
-    }
+  if !file_read(file, buffer.data, length) {
+    return false;
   }
+
+  // verify that the file is correct.
+  if !verify_file(buffer) then
+    return false;
+
+  init_weights(buffer);
+  return true;
+
 }
 
 nnue_evaluate :: (player: s32, pieces: *s32, squares: *s32) -> s32 {
@@ -211,11 +214,19 @@ nnue_evaluate_pos :: (pos: *Position) -> s32 {
   affine_txfm(input.data, hidden1_out.data, FtOutDims, 32, hidden1_biases.data, hidden1_weights.data, input_mask.data, hidden1_mask.data, true);
   affine_txfm(hidden1_out.data, hidden2_out.data, 32, 32, hidden2_biases.data, hidden2_weights.data, hidden1_mask.data, null, false);
   out_value := affine_propagate(hidden2_out.data, output_biases.data, output_weights.data);
-  return out_value / FV_SCALE;
   FV_SCALE :: 16;
+  return out_value / FV_SCALE;
 }
 
 update_accumulator :: (pos: *Position) -> bool {
+
+  acc :: (i: int) -> bool #expand {
+    if !pos.nnue[i] then
+      return true;
+    prevAcc = *pos.nnue[i].accumulator;
+    return !prevAcc.computedAccumulation;
+  }
+
   accumulator := *pos.nnue[0].accumulator;
   if accumulator.computedAccumulation then
     return true;
@@ -259,13 +270,6 @@ update_accumulator :: (pos: *Position) -> bool {
 
   accumulator.computedAccumulation = 1;
   return true;
-
-  acc :: (i: int) -> bool #expand {
-    if !pos.nnue[i] then
-      return true;
-    prevAcc = *pos.nnue[i].accumulator;
-    return !prevAcc.computedAccumulation;
-  }
 }
 
 refresh_accumulator :: (pos: *Position) {
@@ -293,6 +297,13 @@ append_active_indices :: (pos: *Position, active: *IndexList) {
 }
 
 append_changed_indices :: (pos: *Position, removed: *IndexList, added: *IndexList, reset: *bool) {
+
+  KING :: (c: int) -> s32 #expand {
+    wking : s32 : 1;
+    bking : s32 : 7;
+    return ifx c then bking else wking;
+  }
+
   dp := *pos.nnue[0].dirtyPiece;
   if pos.nnue[1].accumulator.computedAccumulation then {
     for c: 0..cast(s32)1 {
@@ -314,12 +325,6 @@ append_changed_indices :: (pos: *Position, removed: *IndexList, added: *IndexLis
         half_kp_append_changed_indices(pos, c, dp2, *removed[c], *added[c]);
       }
     }
-  }
-
-  KING :: (c: int) -> s32 #expand {
-    return ifx c then bking else wking;
-    wking : s32 : 1;
-    bking : s32 : 7;
   }
 }
 
@@ -421,10 +426,8 @@ affine_txfm :: (input: *s8, output: *void, inDims: u32, $outDims: u32, biases: *
 
   outVec := cast(*s8)output;
   for i: 0..outDims-1 {
-    outVec[i] = cast(s8) clamp(tmp[i] >> SHIFT, 0, 127);
+    outVec[i] = cast(s8) clamp(tmp[i] >> 6, 0, 127);
   }
-
-  SHIFT :: 6;
 }
 
 affine_propagate :: (input: *s8, biases: *s32, weights: *s8) -> s32 {

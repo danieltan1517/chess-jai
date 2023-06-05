@@ -10,28 +10,56 @@
 nnue_startup :: () #expand {} // initialization is done at compile time.
 
 nnue_init :: (file_name: string) -> bool {
-  file, success :=  file_open(file_name);
-  if !success {
-    return false;
+
+  read_hidden_weights :: (weight: []s8, dims: int, d: *s8) -> *s8 {
+
+    wt_idx :: (r: u32, c: u32, dims: int) -> u32 {
+      if dims > 32 {
+        b: u32 = c & 0x18;
+        b = (b << 1) | (b >> 1);
+        c = xx ((c & ~0x18) | (b & 0x18));
+      }
+      return c * 32 + r;
+    }
+
+    i := 0;
+    for r: 0..cast(u32)31 {
+      for c: 0..cast(u32)(dims-1) {
+        index := wt_idx(r, c, dims);
+        weight[index] = <<d;
+        d += 1;
+      }
+    }
+
+    return d;
   }
-  length :=  file_length(file);
-  buffer := NewArray(length, u8);
-  defer {
-    array_free(buffer);
-    file_close(*file);
+
+  read_output_weights :: (weight: []s8, data: *s8) {
+    for i: 0..31 {
+      weight[i] = << data;
+      data += 1;
+    }
   }
 
-  if !file_read(file, buffer.data, length) {
-    return false;
+  permute_biases :: (biases: *s32) #expand {
+    rdi := biases;
+    // translated from godbolt's clang -O3 assembly language output.
+    #asm AVX {
+      movdqa.x xmm0: vec, [rdi+16]; 
+      movdqa.x xmm1: vec, [rdi+32];
+      movdqa.x xmm2: vec, [rdi+48];
+      movdqa.x xmm3: vec, [rdi+64];
+      movdqa.x xmm4: vec, [rdi+80];
+      movdqa.x xmm5: vec, [rdi+96];
+
+      movdqa.x [rdi+16], xmm3; 
+      movdqa.x [rdi+32], xmm0;
+      movdqa.x [rdi+48], xmm4;
+      movdqa.x [rdi+64], xmm1;
+      movdqa.x [rdi+80], xmm5;
+      movdqa.x [rdi+96], xmm2;
+    }
   }
-
-  // verify that the file is correct.
-  if !verify_file(buffer) then
-    return false;
-
-  init_weights(buffer);
-  return true;
-
   verify_file :: (buffer: [] u8) -> bool {
     if buffer.count != 21022697 then
       return false;
@@ -91,54 +119,28 @@ nnue_init :: (file_name: string) -> bool {
     permute_biases(hidden2_biases.data);
   }
 
-  read_hidden_weights :: (weight: []s8, dims: int, d: *s8) -> *s8 {
-    i := 0;
-    for r: 0..cast(u32)31 {
-      for c: 0..cast(u32)(dims-1) {
-        index := wt_idx(r, c, dims);
-        weight[index] = <<d;
-        d += 1;
-      }
-    }
-
-    return d;
-
-    wt_idx :: (r: u32, c: u32, dims: int) -> u32 {
-      if dims > 32 {
-        b: u32 = c & 0x18;
-        b = (b << 1) | (b >> 1);
-        c = xx ((c & ~0x18) | (b & 0x18));
-      }
-      return c * 32 + r;
-    }
+  file, success :=  file_open(file_name);
+  if !success {
+    return false;
+  }
+  length :=  file_length(file);
+  buffer := NewArray(length, u8);
+  defer {
+    array_free(buffer);
+    file_close(*file);
   }
 
-  read_output_weights :: (weight: []s8, data: *s8) {
-    for i: 0..31 {
-      weight[i] = << data;
-      data += 1;
-    }
+  if !file_read(file, buffer.data, length) {
+    return false;
   }
 
-  permute_biases :: (biases: *s32) #expand {
-    rdi := biases;
-    // translated from godbolt's clang -O3 assembly language output.
-    #asm AVX {
-      movdqa.x xmm0: vec, [rdi+16]; 
-      movdqa.x xmm1: vec, [rdi+32];
-      movdqa.x xmm2: vec, [rdi+48];
-      movdqa.x xmm3: vec, [rdi+64];
-      movdqa.x xmm4: vec, [rdi+80];
-      movdqa.x xmm5: vec, [rdi+96];
+  // verify that the file is correct.
+  if !verify_file(buffer) then
+    return false;
 
-      movdqa.x [rdi+16], xmm3; 
-      movdqa.x [rdi+32], xmm0;
-      movdqa.x [rdi+48], xmm4;
-      movdqa.x [rdi+64], xmm1;
-      movdqa.x [rdi+80], xmm5;
-      movdqa.x [rdi+96], xmm2;
-    }
-  }
+  init_weights(buffer);
+  return true;
+
 }
 
 nnue_evaluate :: (player: s32, pieces: *s32, squares: *s32) -> s32 {
@@ -252,54 +254,6 @@ m256 :: union {
 }
 
 update_accumulator :: (pos: *Position) -> bool {
-  accumulator := *pos.nnue[0].accumulator;
-  if accumulator.computedAccumulation then
-    return true;
-  prevAcc: *Accumulator = null;
-  if acc_if(1) && acc_if(2) then
-    return false;
-  removed_indices: [2] IndexList;
-  added_indices: [2] IndexList;
-  reset: [2] bool;
-  removed_indices[0].size = 0;
-  removed_indices[1].size = 0;
-  added_indices[0].size = 0;
-  added_indices[1].size = 0;
-  append_changed_indices(pos, removed_indices.data, added_indices.data, reset.data);
-
-  #asm AVX, AVX2 {
-    zeroall;
-    ymm0:  vec; ymm1:  vec; ymm2:  vec; ymm3:  vec;
-    ymm4:  vec; ymm5:  vec; ymm6:  vec; ymm7:  vec;
-    ymm8:  vec; ymm9:  vec; ymm10: vec; ymm11: vec;
-    ymm12: vec; ymm13: vec; ymm14: vec; ymm15: vec;
-  }
-
-  for c: 0..1 {
-    accTile := (*accumulator.accumulation[c][0]);
-    if reset[c] then {
-      copy_biases(*ft_biases[0]);
-    } else {
-      copy_biases(*prevAcc.accumulation[c][0]);
-
-      // Difference calculation for the deactivated features
-      for k: 0..removed_indices[c].size-1 {
-        index := removed_indices[c].values[k] * kHalfDimensions;
-        sub_weights(*ft_weights[index]);
-      }
-    }
-
-    // Difference calculation for the activated features
-    for k: 0..added_indices[c].size-1 {
-      index := added_indices[c].values[k] * kHalfDimensions;
-      add_weights(*ft_weights[index]);
-    }
-
-    store_accumulator(accTile);
-  }
-
-  accumulator.computedAccumulation = 1;
-  return true;
 
   acc_if :: (i: int) -> bool #expand {
     if !pos.nnue[i] then
@@ -391,16 +345,26 @@ update_accumulator :: (pos: *Position) -> bool {
       movdqa.y [tile + 0x1e0],ymm15; 
     }
   }
-}
 
-refresh_accumulator :: (pos: *Position) {
+
+
   accumulator := *pos.nnue[0].accumulator;
-  activeIndices: [2] IndexList;
-  activeIndices[0].size = 0;
-  activeIndices[1].size = 0;
-  append_active_indices(pos, activeIndices.data);
+  if accumulator.computedAccumulation then
+    return true;
+  prevAcc: *Accumulator = null;
+  if acc_if(1) && acc_if(2) then
+    return false;
+  removed_indices: [2] IndexList;
+  added_indices: [2] IndexList;
+  reset: [2] bool;
+  removed_indices[0].size = 0;
+  removed_indices[1].size = 0;
+  added_indices[0].size = 0;
+  added_indices[1].size = 0;
+  append_changed_indices(pos, removed_indices.data, added_indices.data, reset.data);
 
   #asm AVX, AVX2 {
+    zeroall;
     ymm0:  vec; ymm1:  vec; ymm2:  vec; ymm3:  vec;
     ymm4:  vec; ymm5:  vec; ymm6:  vec; ymm7:  vec;
     ymm8:  vec; ymm9:  vec; ymm10: vec; ymm11: vec;
@@ -408,17 +372,33 @@ refresh_accumulator :: (pos: *Position) {
   }
 
   for c: 0..1 {
-    acc := *accumulator.accumulation[c][0];
-    copy_biases(*ft_biases[0]);
-    for k: 0..activeIndices[c].size-1 {
-      index  := kHalfDimensions * activeIndices[c].values[k];
+    accTile := (*accumulator.accumulation[c][0]);
+    if reset[c] then {
+      copy_biases(*ft_biases[0]);
+    } else {
+      copy_biases(*prevAcc.accumulation[c][0]);
+
+      // Difference calculation for the deactivated features
+      for k: 0..removed_indices[c].size-1 {
+        index := removed_indices[c].values[k] * kHalfDimensions;
+        sub_weights(*ft_weights[index]);
+      }
+    }
+
+    // Difference calculation for the activated features
+    for k: 0..added_indices[c].size-1 {
+      index := added_indices[c].values[k] * kHalfDimensions;
       add_weights(*ft_weights[index]);
     }
-    store_accumulator(acc);
+
+    store_accumulator(accTile);
   }
 
   accumulator.computedAccumulation = 1;
+  return true;
+}
 
+refresh_accumulator :: (pos: *Position) {
   copy_biases :: (tile: *void) #expand {
     #asm AVX, AVX2 {
       movdqa.y ymm0,  [tile + 0x000];
@@ -481,6 +461,35 @@ refresh_accumulator :: (pos: *Position) {
       movdqa.y [tile + 0x1e0],ymm15; 
     }
   }
+
+
+
+
+  accumulator := *pos.nnue[0].accumulator;
+  activeIndices: [2] IndexList;
+  activeIndices[0].size = 0;
+  activeIndices[1].size = 0;
+  append_active_indices(pos, activeIndices.data);
+
+  #asm AVX, AVX2 {
+    ymm0:  vec; ymm1:  vec; ymm2:  vec; ymm3:  vec;
+    ymm4:  vec; ymm5:  vec; ymm6:  vec; ymm7:  vec;
+    ymm8:  vec; ymm9:  vec; ymm10: vec; ymm11: vec;
+    ymm12: vec; ymm13: vec; ymm14: vec; ymm15: vec;
+  }
+
+  for c: 0..1 {
+    acc := *accumulator.accumulation[c][0];
+    copy_biases(*ft_biases[0]);
+    for k: 0..activeIndices[c].size-1 {
+      index  := kHalfDimensions * activeIndices[c].values[k];
+      add_weights(*ft_weights[index]);
+    }
+    store_accumulator(acc);
+  }
+
+  accumulator.computedAccumulation = 1;
+
 }
 
 append_active_indices :: (pos: *Position, active: *IndexList) {
@@ -489,6 +498,13 @@ append_active_indices :: (pos: *Position, active: *IndexList) {
 }
 
 append_changed_indices :: (pos: *Position, removed: *IndexList, added: *IndexList, reset: *bool) {
+
+  KING :: (c: int) -> s32 #expand {
+    wking : s32 : 1;
+    bking : s32 : 7;
+    return ifx c then bking else wking;
+  }
+
   dp := *pos.nnue[0].dirtyPiece;
   if pos.nnue[1].accumulator.computedAccumulation then {
     for c: 0..cast(s32)1 {
@@ -510,12 +526,6 @@ append_changed_indices :: (pos: *Position, removed: *IndexList, added: *IndexLis
         half_kp_append_changed_indices(pos, c, dp2, *removed[c], *added[c]);
       }
     }
-  }
-
-  KING :: (c: int) -> s32 #expand {
-    return ifx c then bking else wking;
-    wking : s32 : 1;
-    bking : s32 : 7;
   }
 }
 
@@ -660,6 +670,28 @@ transform :: (pos: *Position, output: *s8, out_mask: *u32) {
 }
 
 affine_txfm :: (input: *s8, output: *s8, inDims: u32, outDims: u32, biases: *s32, weights: *s8, in_mask: *u32, out_mask: *u32, pack8_and_calc_mask: bool) #expand {
+
+
+  // mask2_t = u64
+  next_idx :: () -> bool #expand {
+    while v == 0 {
+      offset += 8 * size_of(u64);
+      if offset >= inDims then
+        return false;
+      v = << cast(*u64)((cast(*s8)in_mask) + (offset/8));
+    }
+    idx = offset + bsf(v);
+    v &= v - 1;
+    return true;
+  }
+
+  bsf :: (value: u64) -> int #expand {
+    result: int = 0;
+    #asm { bsf.q result, value; }
+    return result;
+  }
+
+
   #asm AVX, AVX2 {
     zeroall;
     movdqa.y out_0: vec, [biases + 0];
@@ -752,25 +784,6 @@ affine_txfm :: (input: *s8, output: *s8, inDims: u32, outDims: u32, biases: *s32
       pmaxsb.y out_0, out_0, kZero;
       movdqu.y [output], out_0;
     }
-  }
-
-  // mask2_t = u64
-  next_idx :: () -> bool #expand {
-    while v == 0 {
-      offset += 8 * size_of(u64);
-      if offset >= inDims then
-        return false;
-      v = << cast(*u64)((cast(*s8)in_mask) + (offset/8));
-    }
-    idx = offset + bsf(v);
-    v &= v - 1;
-    return true;
-  }
-
-  bsf :: (value: u64) -> int #expand {
-    result: int = 0;
-    #asm { bsf.q result, value; }
-    return result;
   }
 }
 

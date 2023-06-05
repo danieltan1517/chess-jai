@@ -10,28 +10,6 @@
 nnue_startup :: () #expand {} // initialization is done at compile time.
 
 nnue_init :: (file_name: string) -> bool {
-  file, success :=  file_open(file_name);
-  if !success {
-    return false;
-  }
-  length :=  file_length(file);
-  buffer := NewArray(length, u8);
-  defer {
-    array_free(buffer);
-    file_close(*file);
-  }
-
-  if !file_read(file, buffer.data, length) {
-    return false;
-  }
-
-  // verify that the file is correct.
-  if !verify_file(buffer) then
-    return false;
-
-  init_weights(buffer);
-  return true;
-
   verify_file :: (buffer: [] u8) -> bool {
     if buffer.count != 21022697 then
       return false;
@@ -47,6 +25,31 @@ nnue_init :: (file_name: string) -> bool {
     if <<cast(*u32)(d + NetworkStart) != 0x63337156 then
       return false;
     return true;
+  }
+
+  read_hidden_weights :: (weight: []s8, dims: int, d: *s8) -> *s8 {
+
+    wt_idx :: (r: int, c: int, dims: int) -> int {
+      return c * 32 + r;
+    }
+
+    i := 0;
+    for r: 0..31 {
+      for c: 0..dims-1 {
+        index := wt_idx(r, c, dims);
+        weight[index] = <<d;
+        d += 1;
+      }
+    }
+
+    return d;
+  }
+
+  read_output_weights :: (weight: []s8, data: *s8) {
+    for i: 0..31 {
+      weight[i] = << data;
+      data += 1;
+    }
   }
 
   init_weights :: (buffer: [] u8) {
@@ -88,29 +91,28 @@ nnue_init :: (file_name: string) -> bool {
 
   }
 
-  read_hidden_weights :: (weight: []s8, dims: int, d: *s8) -> *s8 {
-    i := 0;
-    for r: 0..31 {
-      for c: 0..dims-1 {
-        index := wt_idx(r, c, dims);
-        weight[index] = <<d;
-        d += 1;
-      }
-    }
-
-    return d;
-
-    wt_idx :: (r: int, c: int, dims: int) -> int {
-      return c * 32 + r;
-    }
+  file, success :=  file_open(file_name);
+  if !success {
+    return false;
+  }
+  length :=  file_length(file);
+  buffer := NewArray(length, u8);
+  defer {
+    array_free(buffer);
+    file_close(*file);
   }
 
-  read_output_weights :: (weight: []s8, data: *s8) {
-    for i: 0..31 {
-      weight[i] = << data;
-      data += 1;
-    }
+  if !file_read(file, buffer.data, length) {
+    return false;
   }
+
+  // verify that the file is correct.
+  if !verify_file(buffer) then
+    return false;
+
+  init_weights(buffer);
+  return true;
+
 }
 
 nnue_evaluate :: (player: s32, pieces: *s32, squares: *s32) -> s32 {
@@ -213,59 +215,17 @@ nnue_evaluate_pos :: (pos: *Position) -> s32 {
   affine_txfm(*hidden1_out[0], *hidden2_out[0], 32, *hidden2_biases[0], *hidden2_weights[0]);
   out_value := affine_propagate(*hidden2_out[0], output_biases[0], *output_weights[0]);
 
-  return out_value / FV_SCALE;
   FV_SCALE :: 16;
+  return out_value / FV_SCALE;
 }
 
 update_accumulator :: (pos: *Position) -> bool {
-  accumulator := *pos.nnue[0].accumulator;
-  if accumulator.computedAccumulation then
-    return true;
-  prevAcc: *Accumulator = null;
-  if acc(1) && acc(2) then
-    return false;
- 
-  removed_indices: [2] IndexList;
-  added_indices: [2] IndexList;
-  reset: [2] bool;
-  removed_indices[0].size = 0;
-  removed_indices[1].size = 0;
-  added_indices[0].size = 0;
-  added_indices[1].size = 0;
-  append_changed_indices(pos, removed_indices.data, added_indices.data, reset.data);
 
-  #asm SSE {
-    xmm0:  vec; xmm1:  vec; xmm2:  vec; xmm3:  vec;
-    xmm4:  vec; xmm5:  vec; xmm6:  vec; xmm7:  vec;
-    xmm8:  vec; xmm9:  vec; xmm10: vec; xmm11: vec;
-    xmm12: vec; xmm13: vec; xmm14: vec; xmm15: vec;
-  }
-
-  for c: 0..1 {
-    accindex := 0;
-    while accindex < 256 {
-      acc_tile := *accumulator.accumulation[c][accindex];
-      if reset[c] then {
-        copy_biases(*ft_biases[accindex]);
-      } else {
-        copy_biases(*prevAcc.accumulation[c][accindex]);
-        
-        // Difference calculation for the deactivated features
-        for k: 0..removed_indices[c].size-1 {
-          index := removed_indices[c].values[k] * kHalfDimensions;
-          sub_weights(*ft_weights[index + accindex]);
-        }
-      }
-     
-      // Difference calculation for the activated features
-      for k: 0..added_indices[c].size-1 {
-        index := added_indices[c].values[k] * kHalfDimensions;
-        add_weights(*ft_weights[index + accindex]);
-      }
-     
-      store_accumulator(acc_tile);
-      accindex += 128;
-    }
+  acc :: (i: int) -> bool #expand {
+    if !pos.nnue[i] then
+      return true;
+    prevAcc = *pos.nnue[i].accumulator;
+    return !prevAcc.computedAccumulation;
   }
 
   copy_biases :: (tile: *void) #expand {
@@ -352,45 +312,60 @@ update_accumulator :: (pos: *Position) -> bool {
     }
   }
 
-  accumulator.computedAccumulation = 1;
-  return true;
-
-  acc :: (i: int) -> bool #expand {
-    if !pos.nnue[i] then
-      return true;
-    prevAcc = *pos.nnue[i].accumulator;
-    return !prevAcc.computedAccumulation;
-  }
-}
-
-refresh_accumulator :: (pos: *Position) {
   accumulator := *pos.nnue[0].accumulator;
-  activeIndices: [2] IndexList;
-  activeIndices[0].size = 0;
-  activeIndices[1].size = 0;
-  append_active_indices(pos, activeIndices.data);
-  COUNT :: 31;
+  if accumulator.computedAccumulation then
+    return true;
+  prevAcc: *Accumulator = null;
+  if acc(1) && acc(2) then
+    return false;
+ 
+  removed_indices: [2] IndexList;
+  added_indices: [2] IndexList;
+  reset: [2] bool;
+  removed_indices[0].size = 0;
+  removed_indices[1].size = 0;
+  added_indices[0].size = 0;
+  added_indices[1].size = 0;
+  append_changed_indices(pos, removed_indices.data, added_indices.data, reset.data);
+
   #asm SSE {
     xmm0:  vec; xmm1:  vec; xmm2:  vec; xmm3:  vec;
     xmm4:  vec; xmm5:  vec; xmm6:  vec; xmm7:  vec;
     xmm8:  vec; xmm9:  vec; xmm10: vec; xmm11: vec;
     xmm12: vec; xmm13: vec; xmm14: vec; xmm15: vec;
   }
+
   for c: 0..1 {
     accindex := 0;
     while accindex < 256 {
-      copy_biases(*ft_biases[accindex]);
       acc_tile := *accumulator.accumulation[c][accindex];
-      for k: 0..activeIndices[c].size-1 {
-        index := activeIndices[c].values[k];
-        offset := kHalfDimensions * index;
-        add_weights(*ft_weights[offset + accindex]);
+      if reset[c] then {
+        copy_biases(*ft_biases[accindex]);
+      } else {
+        copy_biases(*prevAcc.accumulation[c][accindex]);
+        
+        // Difference calculation for the deactivated features
+        for k: 0..removed_indices[c].size-1 {
+          index := removed_indices[c].values[k] * kHalfDimensions;
+          sub_weights(*ft_weights[index + accindex]);
+        }
       }
+     
+      // Difference calculation for the activated features
+      for k: 0..added_indices[c].size-1 {
+        index := added_indices[c].values[k] * kHalfDimensions;
+        add_weights(*ft_weights[index + accindex]);
+      }
+     
       store_accumulator(acc_tile);
       accindex += 128;
     }
   }
   accumulator.computedAccumulation = 1;
+  return true;
+}
+
+refresh_accumulator :: (pos: *Position) {
 
   copy_biases :: (tile: *void) #expand {
     #asm SSE {
@@ -454,6 +429,33 @@ refresh_accumulator :: (pos: *Position) {
       movdqa.x [tile + 0xf0], xmm15; 
     }
   }
+  accumulator := *pos.nnue[0].accumulator;
+  activeIndices: [2] IndexList;
+  activeIndices[0].size = 0;
+  activeIndices[1].size = 0;
+  append_active_indices(pos, activeIndices.data);
+  COUNT :: 31;
+  #asm SSE {
+    xmm0:  vec; xmm1:  vec; xmm2:  vec; xmm3:  vec;
+    xmm4:  vec; xmm5:  vec; xmm6:  vec; xmm7:  vec;
+    xmm8:  vec; xmm9:  vec; xmm10: vec; xmm11: vec;
+    xmm12: vec; xmm13: vec; xmm14: vec; xmm15: vec;
+  }
+  for c: 0..1 {
+    accindex := 0;
+    while accindex < 256 {
+      copy_biases(*ft_biases[accindex]);
+      acc_tile := *accumulator.accumulation[c][accindex];
+      for k: 0..activeIndices[c].size-1 {
+        index := activeIndices[c].values[k];
+        offset := kHalfDimensions * index;
+        add_weights(*ft_weights[offset + accindex]);
+      }
+      store_accumulator(acc_tile);
+      accindex += 128;
+    }
+  }
+  accumulator.computedAccumulation = 1;
 }
 
 append_active_indices :: (pos: *Position, active: *IndexList) {
@@ -462,6 +464,13 @@ append_active_indices :: (pos: *Position, active: *IndexList) {
 }
 
 append_changed_indices :: (pos: *Position, removed: *IndexList, added: *IndexList, reset: *bool) {
+
+  KING :: (c: int) -> s32 #expand {
+    wking : s32 : 1;
+    bking : s32 : 7;
+    return ifx c then bking else wking;
+  }
+
   dp := *pos.nnue[0].dirtyPiece;
   if pos.nnue[1].accumulator.computedAccumulation then {
     for c: 0..cast(s32)1 {
@@ -483,12 +492,6 @@ append_changed_indices :: (pos: *Position, removed: *IndexList, added: *IndexLis
         half_kp_append_changed_indices(pos, c, dp2, *removed[c], *added[c]);
       }
     }
-  }
-
-  KING :: (c: int) -> s32 #expand {
-    return ifx c then bking else wking;
-    wking : s32 : 1;
-    bking : s32 : 7;
   }
 }
 
@@ -608,39 +611,6 @@ transform :: (pos: *Position, output: [] s8, out_mask: *u32) {
 }
 
 affine_txfm :: (input: *s8, output: *void, inDims: u32, biases: *s32, weights: *s8) #expand {
-  tmp: [32] s32;
-  memcpy(*tmp[0], *biases[0], size_of(s32) * 32);
-
-  offset := 0;
-  mask: u32 = 0;
-  input_pointer := input;
-  #asm SSE {
-    pxor.x zeroes: vec, zeroes;
-  }
-
-  while offset < inDims {
-    // input 
-    #asm SSE, SSE2 {
-      movups.x   xmm0: vec, [input_pointer];
-      pcmpgtb.x  xmm0, zeroes;
-      pmovmskb.x mask, xmm0;
-      add input_pointer, 16;
-    }
-
-    while mask {
-      idx: int;
-      #asm SSE {
-        bsf idx, mask;
-        add idx, offset;
-      }
-      factor: s32 = input[idx];
-      index := idx << 5;  // idx * 32.
-      sse_simd(factor, *tmp[0], *weights[index]);
-      mask &= mask - 1;
-    }
-
-    offset += 16;
-  }
 
   // GCC -O3 "optimized" output
   // terrible scrabbled eggs output, but faster than CPU w/o SIMD
@@ -772,6 +742,42 @@ affine_txfm :: (input: *s8, output: *void, inDims: u32, biases: *s32, weights: *
       movups  [rsi+64], xmm0;
     }
   }
+
+
+  tmp: [32] s32;
+  memcpy(*tmp[0], *biases[0], size_of(s32) * 32);
+
+  offset := 0;
+  mask: u32 = 0;
+  input_pointer := input;
+  #asm SSE {
+    pxor.x zeroes: vec, zeroes;
+  }
+
+  while offset < inDims {
+    // input 
+    #asm SSE, SSE2 {
+      movups.x   xmm0: vec, [input_pointer];
+      pcmpgtb.x  xmm0, zeroes;
+      pmovmskb.x mask, xmm0;
+      add input_pointer, 16;
+    }
+
+    while mask {
+      idx: int;
+      #asm SSE {
+        bsf idx, mask;
+        add idx, offset;
+      }
+      factor: s32 = input[idx];
+      index := idx << 5;  // idx * 32.
+      sse_simd(factor, *tmp[0], *weights[index]);
+      mask &= mask - 1;
+    }
+
+    offset += 16;
+  }
+
 
   #asm SSE2 {
     mov.d    reg: gpr, 0x00_7f_00_7f;

@@ -1,4 +1,15 @@
 main :: () {
+
+  chess_startpos :: (chessgame: *ChessGame) #expand {
+    chess_startpos(*chessgame.chess);
+    chessgame.nnue[chessgame.ply].accumulator.computedAccumulation = 0;
+  }
+
+  chess_fen :: (chessgame: *ChessGame, fen_string: string) -> bool #expand {
+    chessgame.nnue[chessgame.ply].accumulator.computedAccumulation = 0;
+    return chess_fen(*chessgame.chess, fen_string);
+  }
+
   nnue_startup();
   init_global_bitboards();
   initialize_move_randomness();
@@ -58,16 +69,6 @@ main :: () {
     if begins_with(input, "setoption ") {
       set_option(input);
     }
-  }
-
-  chess_startpos :: (chessgame: *ChessGame) #expand {
-    chess_startpos(*chessgame.chess);
-    chessgame.nnue[chessgame.ply].accumulator.computedAccumulation = 0;
-  }
-
-  chess_fen :: (chessgame: *ChessGame, fen_string: string) -> bool #expand {
-    chessgame.nnue[chessgame.ply].accumulator.computedAccumulation = 0;
-    return chess_fen(*chessgame.chess, fen_string);
   }
 }
 

@@ -14,12 +14,12 @@ nnue_init :: (file_name: *u8) -> bool #foreign nnue_probe;
 
 nnue_startup :: () #expand { // initialization is done at compile time.
   #import "File_Utilities";
+
+  nnue_default :: "resources/nn-04cf2b4ed1da.nnue";
   if !file_exists(nnue_default) {
     print("Error. % does not exist", nnue_default);
     `return;
   }
-
-  nnue_default :: "resources/nn-04cf2b4ed1da.nnue";
   nnue_init(nnue_default);
 }
 

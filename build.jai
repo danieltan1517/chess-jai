@@ -12,6 +12,17 @@ author :: "Daniel Tan";
 
 add_chess_engine_files :: (w: Workspace, cpu_info: *Cpu_X86, type: NNUE_Type) {
 
+  create_uci_message :: () -> string #expand {
+    NEWLINE := ifx OS == .WINDOWS "\r\n" else "\n";
+    builder: String_Builder;
+    print_to_builder(*builder, "uci_response :: #string END%1", NEWLINE);
+    print_to_builder(*builder, "id name %1%2", ai_exe_name, NEWLINE);
+    print_to_builder(*builder, "id author %1%2", author, NEWLINE);
+    print_to_builder(*builder, "info string neural network type %1%2", type, NEWLINE);
+    print_to_builder(*builder, "END%1", NEWLINE);
+    return builder_to_string(*builder);
+  }
+
   // OS specific code.
   #if OS == .LINUX {
     add_build_file("linux.jai", w);  
@@ -86,17 +97,7 @@ add_chess_engine_files :: (w: Workspace, cpu_info: *Cpu_X86, type: NNUE_Type) {
 
   uci_message := create_uci_message();
   add_build_string(uci_message, w);
-  create_uci_message :: () -> string #expand {
 
-    NEWLINE := ifx OS == .WINDOWS "\r\n" else "\n";
-    builder: String_Builder;
-    print_to_builder(*builder, "uci_response :: #string END%1", NEWLINE);
-    print_to_builder(*builder, "id name %1%2", ai_exe_name, NEWLINE);
-    print_to_builder(*builder, "id author %1%2", author, NEWLINE);
-    print_to_builder(*builder, "info string neural network type %1%2", type, NEWLINE);
-    print_to_builder(*builder, "END%1", NEWLINE);
-    return builder_to_string(*builder);
-  }
 
 }
 

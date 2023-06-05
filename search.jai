@@ -83,6 +83,33 @@ search_thread :: (group: *Thread_Group, thread: *Thread, work: *void) -> Thread_
 
 // main search function. iterative deepening.
 search :: (chess: *ChessGame) -> bestmove: Move16 {
+
+  print_stats :: (depth: int, line: int) #expand {
+    if chess.main_thread == false return;
+
+    builder: String_Builder;
+    builder.allocator = temp;
+    t_ms := cast(int)(`time_taken*1000.0); // convert secs to ms
+    nps  := cast(int)(nodes_searched/(`time_taken+0.0001));
+    print_to_builder(*builder, "info depth % seldepth % ", depth, chess.maxply);
+    if score >= -INF+20 && score <= INF-20 then {
+      print_to_builder(*builder, "nodes % time % score cp % nps % multipv % pv", nodes_searched, t_ms, score, nps, line);
+    } else {
+      mate := INF - abs(score);
+      mate = (mate/2) + (mate & 1);
+      print_to_builder(*builder, "nodes % time % score mate % nps % multipv % pv", nodes_searched, t_ms, mate, nps, line);
+    }
+    count := chess.history.pv_table[0].move_count - 1;
+    for i: 0..count {
+      move := chess.history.pv_table[0][i];
+      if move == Move16.Quiet break;  // do not print out NULL moves.
+      append(*builder, #char " ");
+      append(*builder, move);
+    }
+    str := builder_to_string(*builder, allocator=__temporary_allocator);
+    print("%1%2", str, NEWLINE);
+  }
+
   clear_history(chess);
   if chess.maxdepth == -1 then
     chess.maxdepth = S64_MAX; // set maxdepth arbitarily high to make it loop infinitely.
@@ -165,31 +192,6 @@ search :: (chess: *ChessGame) -> bestmove: Move16 {
   search_age += 1;
   return pick_move(best_move, best_score, num_multi_pv, *root_moves);
 
-  print_stats :: (depth: int, line: int) #expand {
-    if chess.main_thread == false return;
-
-    builder: String_Builder;
-    builder.allocator = temp;
-    t_ms := cast(int)(`time_taken*1000.0); // convert secs to ms
-    nps  := cast(int)(nodes_searched/(`time_taken+0.0001));
-    print_to_builder(*builder, "info depth % seldepth % ", depth, chess.maxply);
-    if score >= -INF+20 && score <= INF-20 then {
-      print_to_builder(*builder, "nodes % time % score cp % nps % multipv % pv", nodes_searched, t_ms, score, nps, line);
-    } else {
-      mate := INF - abs(score);
-      mate = (mate/2) + (mate & 1);
-      print_to_builder(*builder, "nodes % time % score mate % nps % multipv % pv", nodes_searched, t_ms, mate, nps, line);
-    }
-    count := chess.history.pv_table[0].move_count - 1;
-    for i: 0..count {
-      move := chess.history.pv_table[0][i];
-      if move == Move16.Quiet break;  // do not print out NULL moves.
-      append(*builder, #char " ");
-      append(*builder, move);
-    }
-    str := builder_to_string(*builder, allocator=__temporary_allocator);
-    print("%1%2", str, NEWLINE);
-  }
 }
 
 count_moves :: (chess: *Chess) -> int {
@@ -199,15 +201,19 @@ count_moves :: (chess: *Chess) -> int {
 }
 
 set_maxdepth :: (maxdepth: int) -> int {
+  DEPTH_DIFFICULTY :: int.[1, 2, 3, 4, 5, 6, 9];
   if difficulty == 8 then {
     return maxdepth;
   } else {
     return DEPTH_DIFFICULTY[difficulty-1];
   }
-  DEPTH_DIFFICULTY :: int.[1, 2, 3, 4, 5, 6, 9];
 }
 
 pick_move :: (bestmove: Move16, topscore: s32, nummultipv: int, moves: *MoveQueue) -> Move16 {
+
+  ERROR :: int.[512, 256, 175, 128, 75, 50, 20];
+  BLUNDERING :: u64.[50, 25, 25, 10, 10, 5, 2];
+
   if difficulty == 8 then {
     // only looking for best move.
     return bestmove;
@@ -243,14 +249,13 @@ pick_move :: (bestmove: Move16, topscore: s32, nummultipv: int, moves: *MoveQueu
 
     return move;
   }
-
-  ERROR :: int.[512, 256, 175, 128, 75, 50, 20];
-  BLUNDERING :: u64.[50, 25, 25, 10, 10, 5, 2];
 }
 
 move_rng: PRNG = ---;
 
 get_num_multipv :: (chess: *Chess) -> int {
+
+  LINES :: int.[8, 5, 4, 3, 3, 3, 2, 1];
   num_moves := count_moves(chess);
   num_multi_pv := multi_pv;
   if difficulty != 8 {
@@ -259,8 +264,6 @@ get_num_multipv :: (chess: *Chess) -> int {
 
   num_multi_pv = min(num_moves, num_multi_pv);
   return num_multi_pv;
-
-  LINES :: int.[8, 5, 4, 3, 3, 3, 2, 1];
 }
 
 initialize_move_randomness :: () {
@@ -269,6 +272,17 @@ initialize_move_randomness :: () {
 }
 
 negamax_root :: (chess: *ChessGame, root_moves: *MoveQueue, multipv: int, depth: int, alpha: int, beta: int, fifty: int) -> int {
+
+  root_multipv :: (move: Move16, moves: *MoveQueue) -> bool {
+    i := 0;
+    while i<moves.count {
+      if move == moves.array[i].move then
+        return true;
+      i += 1;
+    }
+    return false;
+  }
+
   ply := chess.ply;
 
   // tt probe.
@@ -379,16 +393,6 @@ negamax_root :: (chess: *ChessGame, root_moves: *MoveQueue, multipv: int, depth:
   tt_store(chess.hash, best_score, hash_flag, depth, bmove);
   append(root_moves, cast(s16)best_score, bmove);
   return best_score;
-
-  root_multipv :: (move: Move16, moves: *MoveQueue) -> bool {
-    i := 0;
-    while i<moves.count {
-      if move == moves.array[i].move then
-        return true;
-      i += 1;
-    }
-    return false;
-  }
 }
 
 negamax_pv :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int) -> int {
@@ -454,10 +458,6 @@ negamax_pv :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
 
   tt_capture: bool = false;
   tt_quiet: bool   = false;
-
-  move_count := 0;
-  bmove := Move16.Quiet;
-  pto := prev_to(chess);
   prev_to :: (chess: ChessGame) -> int {
     if chess.ply >= 1 {
       count := chess.moves.count;
@@ -467,6 +467,10 @@ negamax_pv :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
     }
     return -1;
   }
+
+  move_count := 0;
+  bmove := Move16.Quiet;
+  pto := prev_to(chess);
 
   best_score: int = -INF;
   score_margin := -80_000 * depth;
@@ -776,13 +780,6 @@ filter_quiet_pv :: (move_queue: *MoveQueue, pv: Move16, hash: Move16, kill1: Mov
 }
 
 sort_captures :: (move_queue: *MoveQueue, chess: *ChessGame) {
-  for i: 0..move_queue.count-1 {
-     move := move_queue.array[i].move;
-     flags, from, to := decode_move16(move);
-     priority := score_capture(flags, from, to, chess);
-     move_queue.array[i].priority = priority;
-  }
-  construct_heap(move_queue);
 
   score_capture :: (flag: Move16, from: int, to: int, chess: *ChessGame) -> s32 {
     using chess.history;
@@ -833,9 +830,24 @@ sort_captures :: (move_queue: *MoveQueue, chess: *ChessGame) {
     assert(false);
     return 0;
   }
+
+  for i: 0..move_queue.count-1 {
+     move := move_queue.array[i].move;
+     flags, from, to := decode_move16(move);
+     priority := score_capture(flags, from, to, chess);
+     move_queue.array[i].priority = priority;
+  }
+  construct_heap(move_queue);
 }
 
 sort_quiets :: (move_queue: *MoveQueue, chess: *ChessGame) {
+
+  score_quiets :: (flag: Move16, from: int, to: int, chess: *ChessGame, counter: *[13][64] s32, follow1: *[13][64] s32, follow2: *[13][64] s32) -> s32 {
+    piece := piece_at(chess, from);
+    return chess.history.history_moves[piece][to] + ((<<counter)[piece][to] * 2) + (<<follow1)[piece][to] + ((<<follow2)[piece][to] / 2);
+  }
+
+
   counter := get_countermove_history(chess, 1);
   follow1 := get_countermove_history(chess, 2);
   follow2 := get_countermove_history(chess, 4);
@@ -847,11 +859,6 @@ sort_quiets :: (move_queue: *MoveQueue, chess: *ChessGame) {
      move_queue.array[i].priority = priority;
   }
   construct_heap(move_queue);
-
-  score_quiets :: (flag: Move16, from: int, to: int, chess: *ChessGame, counter: *[13][64] s32, follow1: *[13][64] s32, follow2: *[13][64] s32) -> s32 {
-    piece := piece_at(chess, from);
-    return chess.history.history_moves[piece][to] + ((<<counter)[piece][to] * 2) + (<<follow1)[piece][to] + ((<<follow2)[piece][to] / 2);
-  }
 
 }
 
@@ -967,16 +974,6 @@ negamax_zw :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
   num_captures := 0;
   num_quiets := 0;
   moves_searched := 0;
-
-  improving := get_improving(chess);
-  late_move_prune := (3 + (depth*depth)) / (2-improving);
-
-  tt_capture: bool = false;
-  tt_quiet: bool   = false;
-
-  move_count := 0;
-  bmove := Move16.Quiet;
-  pto := prev_to(chess);
   prev_to :: (chess: ChessGame) -> int {
     if chess.ply >= 1 {
       count := chess.moves.count;
@@ -987,6 +984,15 @@ negamax_zw :: (chess: *ChessGame, depth: int, alpha: int, beta: int, fifty: int)
     return -1;
   }
 
+
+
+  improving := get_improving(chess);
+  late_move_prune := (3 + (depth*depth)) / (2-improving);
+  tt_capture: bool = false;
+  tt_quiet: bool   = false;
+  move_count := 0;
+  bmove := Move16.Quiet;
+  pto := prev_to(chess);
   best_score: int = -INF;
   score_margin := -80_000 * depth;
   for :pv move, move_score : chess {
@@ -1212,6 +1218,14 @@ tt_probe :: (hash: u64, alpha: int, beta: int, depth: int) -> bool, TTData {
 }
 
 tt_prune :: (tthit: bool, ttentry: TTData, ply: int, pv_node: bool, alpha: int, beta: int, depth: int) #expand {
+  ttscore :: (score: int) -> int #expand {
+    if score > INF-20  then
+      return INF-ply;
+    else if score < -INF+20 then
+      return -INF+ply;
+    return score;
+  }
+
   if tthit && !pv_node && ply>0 && ttentry.depth >= depth {
     score := ttscore(ttentry.score);
 
@@ -1224,13 +1238,6 @@ tt_prune :: (tthit: bool, ttentry: TTData, ply: int, pv_node: bool, alpha: int, 
       `return score;
   }
 
-  ttscore :: (score: int) -> int #expand {
-    if score > INF-20  then
-      return INF-ply;
-    else if score < -INF+20 then
-      return -INF+ply;
-    return score;
-  }
 }
 
 tt_store :: (hash: u64, score: int, flag: TFLAGS, depth: int, ttmove: Move16) {
@@ -1252,6 +1259,32 @@ tt_store :: (hash: u64, score: int, flag: TFLAGS, depth: int, ttmove: Move16) {
 // perft results are found here: https://www.chessprogramming.org/Perft_Results
 // more perft results: http://www.rocechess.ch/perft.html
 perft_all :: () {
+  setup_perft_run :: ($fen: string, expected: ..int) #expand {
+    print("Testing FEN=[%1]%2", fen, NEWLINE);
+    if equal(fen, "startpos") {
+      chess_startpos(*chess);
+    } else {
+      chess_fen(*chess, fen);
+    }
+
+    for exp, depth: expected {
+      perft_run(depth+1, exp);
+    }
+    print("------------------------------------%1%1", NEWLINE);
+  }
+
+  perft_run :: (depth: int, expected: int) #expand {
+    time_taken := get_time();
+    nodes := perft(*chess, depth);
+    time_taken = get_time() - time_taken;
+    if nodes == expected {
+      print("perft successful at the depth of: %1, %2 nodes found, time taken: %3%4", depth, nodes, time_taken, NEWLINE);
+    } else {
+      print("FAILED at the depth of: %1, expected: %2, nodes found: %3, time taken: %4\n", depth, expected, nodes, time_taken, NEWLINE);
+    }
+  }
+
+
   chess: Chess;
   setup_perft_run("startpos", 
                   20, 
@@ -1331,31 +1364,6 @@ perft_all :: () {
                   3_605_103);
 
   print("All perft tests complete!%1", NEWLINE);
-
-  setup_perft_run :: ($fen: string, expected: ..int) #expand {
-    print("Testing FEN=[%1]%2", fen, NEWLINE);
-    if equal(fen, "startpos") {
-      chess_startpos(*chess);
-    } else {
-      chess_fen(*chess, fen);
-    }
-
-    for exp, depth: expected {
-      perft_run(depth+1, exp);
-    }
-    print("------------------------------------%1%1", NEWLINE);
-  }
-
-  perft_run :: (depth: int, expected: int) #expand {
-    time_taken := get_time();
-    nodes := perft(*chess, depth);
-    time_taken = get_time() - time_taken;
-    if nodes == expected {
-      print("perft successful at the depth of: %1, %2 nodes found, time taken: %3%4", depth, nodes, time_taken, NEWLINE);
-    } else {
-      print("FAILED at the depth of: %1, expected: %2, nodes found: %3, time taken: %4\n", depth, expected, nodes, time_taken, NEWLINE);
-    }
-  }
 }
 
 perft_divide :: (chess: *Chess, depth: int) -> int {
@@ -1395,6 +1403,68 @@ INF :: S16_MAX; // Alias
 // search capture moves only, we do this to avoid horizon effect
 // see: https://www.chessprogramming.org/Quiescence_Search
 quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
+  pv :: (chess: *ChessGame, body: Code, f: For_Flags) #expand {
+    stage: enum {PV; CAPTURES; QUIETS; END; } = .PV;
+
+    move_queue: MoveQueue(32);
+    unsafe: u64 = 0;
+    check: u64 = 0;
+    turn := chess.turn;
+    while outer_loop := !stop() {
+      while move_queue.count <= 0 {
+        if stage == {
+        case .PV;
+          stage = .CAPTURES;
+          if is_legal(chess, `ttmove) then {
+            append(*move_queue, 0x7FFF, `ttmove);
+          }
+          if `hashmove != `ttmove && is_legal(chess, `hashmove) then {
+            append(*move_queue, 0x7FFF-1, `hashmove);
+          }
+        case .CAPTURES;
+          unsafe, check = generate_attacks(chess);
+          if check == 0 then {
+            stage = .END;
+          } else {
+            stage = .QUIETS;
+          }
+          generate_tactics(unsafe, check, chess, *move_queue);
+          filter_capture_pv(*move_queue, `ttmove, `hashmove);
+          sort_captures(*move_queue, chess);
+        case .QUIETS;
+          stage = .END;
+          generate_quiets(unsafe, check, chess, *move_queue);
+          filter_capture_pv(*move_queue, `ttmove, `hashmove);
+          sort_quiets(*move_queue, chess);
+        case .END;
+          break outer_loop; // terminate loop
+        }
+      }
+      `it, `it_index := pop(*move_queue);
+      #insert body;
+    }
+  }
+
+  can_delta_prune :: (using chess: *Chess) -> bool #expand {
+    w := w_queen | w_rook | w_bishop | w_knight;
+    b := b_queen | b_rook | b_bishop | b_knight;
+    return w != 0 || b != 0;
+  }
+
+  is_promoting_pawn :: inline (using chess: *Chess) -> bool {
+    return (w_pawn & cast(u64)rank_7) != 0 || (b_pawn & cast(u64)rank_2) != 0; 
+  }
+
+  // a bad capture => true, a good capture => false
+  bad_capture :: (chess: *Chess, move: Move16, from: int, to: int) -> bool {
+    pfrom := cast(int) piece_at(chess, from);
+    pto   := cast(int) piece_at(chess, to);
+    if PVALUE[pfrom] <= PVALUE[pto] then {
+      return false;
+    }
+
+    return see(chess, move, 0);
+  }
   ply := chess.ply;
   pv_node := alpha != beta-1;
   tthit, ttentry := tt_probe(chess.hash, alpha, beta, 0);
@@ -1486,68 +1556,6 @@ quiescene :: (chess: *ChessGame, alpha: int, beta: int, fifty: int = 0) -> int {
   tt_store(chess.hash, best_score, hash_flag, 0, best_move);
   return best_score;
 
-  pv :: (chess: *ChessGame, body: Code, f: For_Flags) #expand {
-    stage: enum {PV; CAPTURES; QUIETS; END; } = .PV;
-
-    move_queue: MoveQueue(32);
-    unsafe: u64 = 0;
-    check: u64 = 0;
-    turn := chess.turn;
-    while outer_loop := !stop() {
-      while move_queue.count <= 0 {
-        if stage == {
-        case .PV;
-          stage = .CAPTURES;
-          if is_legal(chess, `ttmove) then {
-            append(*move_queue, 0x7FFF, `ttmove);
-          }
-          if `hashmove != `ttmove && is_legal(chess, `hashmove) then {
-            append(*move_queue, 0x7FFF-1, `hashmove);
-          }
-        case .CAPTURES;
-          unsafe, check = generate_attacks(chess);
-          if check == 0 then {
-            stage = .END;
-          } else {
-            stage = .QUIETS;
-          }
-          generate_tactics(unsafe, check, chess, *move_queue);
-          filter_capture_pv(*move_queue, `ttmove, `hashmove);
-          sort_captures(*move_queue, chess);
-        case .QUIETS;
-          stage = .END;
-          generate_quiets(unsafe, check, chess, *move_queue);
-          filter_capture_pv(*move_queue, `ttmove, `hashmove);
-          sort_quiets(*move_queue, chess);
-        case .END;
-          break outer_loop; // terminate loop
-        }
-      }
-      `it, `it_index := pop(*move_queue);
-      #insert body;
-    }
-  }
-
-  can_delta_prune :: (using chess: *Chess) -> bool #expand {
-    w := w_queen | w_rook | w_bishop | w_knight;
-    b := b_queen | b_rook | b_bishop | b_knight;
-    return w != 0 || b != 0;
-  }
-
-  is_promoting_pawn :: inline (using chess: *Chess) -> bool {
-    return (w_pawn & cast(u64)rank_7) != 0 || (b_pawn & cast(u64)rank_2) != 0; 
-  }
-
-  // a bad capture => true, a good capture => false
-  bad_capture :: (chess: *Chess, move: Move16, from: int, to: int) -> bool {
-    pfrom := cast(int) piece_at(chess, from);
-    pto   := cast(int) piece_at(chess, to);
-    if PVALUE[pfrom] <= PVALUE[pto] then {
-      return false;
-    }
-
-    return see(chess, move, 0);
-  }
 }
 
 PV_Line :: struct {
@@ -1576,26 +1584,6 @@ time_begin: float64;
 // performance test
 // walks the move generation tree of strictly legal moves to count the leaf nodes
 perft :: (chess: *Chess, depth: int) -> int {
-  if depth == 0 then return 1;
-
-  if depth == 1 then {
-    moves: Moves(true);
-    generate_moves(chess, *moves);
-    return moves.count;
-  }
-
-  num_nodes := 0;
-  ep := chess.en_passant;
-  for :gen_moves mov: << chess {
-    cap, castling, hash := make_move(chess, mov);
-
-    num_nodes += perft(chess, depth-1);
-
-    unmake_move(chess, mov, cap, castling, hash);
-    chess.en_passant = ep;
-  }
-  return num_nodes;
-
   gen_moves :: (chess: *Chess, body: Code, f: For_Flags) #expand {
     moves: Moves;
     unsafe, check := generate_attacks(chess);
@@ -1620,6 +1608,26 @@ perft :: (chess: *Chess, depth: int) -> int {
       it_index += 1;
     }
   }
+  if depth == 0 then return 1;
+
+  if depth == 1 then {
+    moves: Moves(true);
+    generate_moves(chess, *moves);
+    return moves.count;
+  }
+
+  num_nodes := 0;
+  ep := chess.en_passant;
+  for :gen_moves mov: << chess {
+    cap, castling, hash := make_move(chess, mov);
+
+    num_nodes += perft(chess, depth-1);
+
+    unmake_move(chess, mov, cap, castling, hash);
+    chess.en_passant = ep;
+  }
+  return num_nodes;
+
 }
 
 #no_reset LateMoveReduction: [64][64] int;
@@ -1635,11 +1643,6 @@ perft :: (chess: *Chess, depth: int) -> int {
 // most valuable victim, least valuable attacker.
 // see: https://www.chessprogramming.org/MVV-LVA
 mvv_lva :: (victim: Piece, attacker: Piece) -> score: s32 {
-  v := cast(int) victim;
-  a := cast(int) attacker;
-  vs := piece_score[v] - (piece_score[a]/100) + 10000;
-  return vs;
-
   piece_score :: #run -> [13] s32 {
     using Piece;
     array: [13] s32;
@@ -1659,6 +1662,11 @@ mvv_lva :: (victim: Piece, attacker: Piece) -> score: s32 {
     array[cast(int)B_PAWN   ] = 1000;
     return array;
   }
+
+  v := cast(int) victim;
+  a := cast(int) attacker;
+  vs := piece_score[v] - (piece_score[a]/100) + 10000;
+  return vs;
 }
 
 nodes_searched := 0;
@@ -1727,6 +1735,73 @@ add_move :: (queue: *MoveQueue, from: int, to: int, flags: Move16) #expand {
 
 // static exchange evaluation.
 see :: (chess: *Chess, move: Move16, threshold: int) -> bool {
+  attacks_to :: (occ: u64, sq: int) -> u64 #expand {
+    to := cast(u64) (1 << sq);
+    atts : u64 = 0;
+    atts |= pawn_captures(to, Turn.BLACK) & chess.w_pawn;
+    atts |= pawn_captures(to, Turn.WHITE) & chess.b_pawn;
+    atts |= knight_moves(to) & (chess.w_knight|chess.b_knight);
+    atts |= bishop_moves(sq, occ) & (chess.w_bishop|chess.b_bishop|chess.w_queen|chess.b_queen);
+    atts |= rook_moves(sq, occ) & (chess.w_rook|chess.b_rook|chess.w_queen|chess.b_queen);
+    atts |= king_moves(to) & (chess.w_king|chess.b_king);
+    return atts;
+  }
+
+  consider_x_rays :: (occ: u64, to: int, from_set: u64, bishops: u64, rooks: u64) -> u64 #expand {
+    atts : u64 = 0;
+    atts |= bishop_moves(to, occ) & bishops;
+    atts |= rook_moves(to, occ) & rooks;
+    return atts & occ;
+  }
+
+  get_least_valuable_piece :: (attadef: u64, turn: Turn)-> bitboard: u64, piece: int #expand {
+
+    least_valuable_piece :: (attadef: u64, $turn: Turn) -> bitboard: u64, piece: int #expand {
+      subset: u64 = 0;
+      pawns := get_pawn(chess, turn);
+      subset = attadef & pawns;
+      if subset then
+        return get_bit(subset), xx Piece.W_PAWN;
+
+      knights := get_knight(chess, turn);
+      subset = attadef & knights;
+      if subset then
+        return get_bit(subset), xx Piece.W_KNIGHT;
+
+      bishops := get_bishop(chess, turn);
+      subset = attadef & bishops;
+      if subset then
+        return get_bit(subset), xx Piece.W_BISHOP;
+
+      rooks := get_rook(chess, turn);
+      subset = attadef & rooks;
+      if subset then
+        return get_bit(subset), xx Piece.W_ROOK;
+
+      queens := get_queen(chess, turn);
+      subset = attadef & queens;
+      if subset then
+        return get_bit(subset), xx Piece.W_QUEEN;
+
+      kings := get_king(chess, turn);
+      subset = attadef & kings;
+      if subset then
+        return get_bit(subset), xx Piece.W_KING;
+
+      return 0, xx Piece.NONE;
+    }
+    if turn == Turn.WHITE {
+      bitboard, piece := least_valuable_piece(attadef, Turn.WHITE);
+      return bitboard, piece;
+    } else {
+      bitboard, piece := least_valuable_piece(attadef, Turn.BLACK);
+      return bitboard, piece;
+    }
+  }
+
+  get_bit :: (bits: u64) -> u64 {
+    return bits & cast(u64)(-cast(int)bits);
+  }
   _, from, to := decode_move16(move);
   target := cast(int) piece_at(chess, to);
   apiece := cast(int) piece_at(chess, from);
@@ -1770,73 +1845,6 @@ see :: (chess: *Chess, move: Move16, threshold: int) -> bool {
 
   return gain[0] < threshold;
 
-  attacks_to :: (occ: u64, sq: int) -> u64 #expand {
-    to := cast(u64) (1 << sq);
-    atts : u64 = 0;
-    atts |= pawn_captures(to, Turn.BLACK) & chess.w_pawn;
-    atts |= pawn_captures(to, Turn.WHITE) & chess.b_pawn;
-    atts |= knight_moves(to) & (chess.w_knight|chess.b_knight);
-    atts |= bishop_moves(sq, occ) & (chess.w_bishop|chess.b_bishop|chess.w_queen|chess.b_queen);
-    atts |= rook_moves(sq, occ) & (chess.w_rook|chess.b_rook|chess.w_queen|chess.b_queen);
-    atts |= king_moves(to) & (chess.w_king|chess.b_king);
-    return atts;
-  }
-
-  consider_x_rays :: (occ: u64, to: int, from_set: u64, bishops: u64, rooks: u64) -> u64 #expand {
-    atts : u64 = 0;
-    atts |= bishop_moves(to, occ) & bishops;
-    atts |= rook_moves(to, occ) & rooks;
-    return atts & occ;
-  }
-
-  get_least_valuable_piece :: (attadef: u64, turn: Turn)-> bitboard: u64, piece: int #expand {
-    if turn == Turn.WHITE {
-      bitboard, piece := least_valuable_piece(attadef, Turn.WHITE);
-      return bitboard, piece;
-    } else {
-      bitboard, piece := least_valuable_piece(attadef, Turn.BLACK);
-      return bitboard, piece;
-    }
-
-    least_valuable_piece :: (attadef: u64, $turn: Turn) -> bitboard: u64, piece: int #expand {
-      subset: u64 = 0;
-      pawns := get_pawn(chess, turn);
-      subset = attadef & pawns;
-      if subset then
-        return get_bit(subset), xx Piece.W_PAWN;
-
-      knights := get_knight(chess, turn);
-      subset = attadef & knights;
-      if subset then
-        return get_bit(subset), xx Piece.W_KNIGHT;
-
-      bishops := get_bishop(chess, turn);
-      subset = attadef & bishops;
-      if subset then
-        return get_bit(subset), xx Piece.W_BISHOP;
-
-      rooks := get_rook(chess, turn);
-      subset = attadef & rooks;
-      if subset then
-        return get_bit(subset), xx Piece.W_ROOK;
-
-      queens := get_queen(chess, turn);
-      subset = attadef & queens;
-      if subset then
-        return get_bit(subset), xx Piece.W_QUEEN;
-
-      kings := get_king(chess, turn);
-      subset = attadef & kings;
-      if subset then
-        return get_bit(subset), xx Piece.W_KING;
-
-      return 0, xx Piece.NONE;
-    }
-  }
-
-  get_bit :: (bits: u64) -> u64 {
-    return bits & cast(u64)(-cast(int)bits);
-  }
 }
 
 PVALUE :: #run -> [13] s16 {
@@ -1941,12 +1949,12 @@ clear :: (using c: *ChessGame) {
 
 // init chess game
 initialize_chess_game_memory :: (using c: *ChessGame) {
+  MAX :: 500;
   array_reserve(*moves, MAX);
   array_reserve(*rtable, MAX);
   array_reserve(*eval, MAX);
   nnue = NewArray(MAX, NNUEdata, alignment=64);
   //assert((cast(s64)nnue.data % 64) == 0);
-  MAX :: 500;
 }
 
 is_draw :: (using,except(fifty) c: *ChessGame, fifty: int) -> bool {
@@ -1977,22 +1985,6 @@ is_draw :: (using,except(fifty) c: *ChessGame, fifty: int) -> bool {
 }
 
 make_move :: (c: *ChessGame, move: Move16) -> Piece, Castling {
-  fetch_and_add(*nodes_searched);
-  flags, from, to := decode_move16(move);
-  piece := c.pieces[from];
-  move32: Move32;
-  move32.mov16 = move;
-  move32.piece = piece;
-  make_move_nnue(c, move);
-
-  cap, castling, hash := make_move(*c.chess, move);
-  key := hash % cast, no_check(u64) ttable.count;
-  array_add(*c.moves, move32);
-  array_add(*c.rtable, hash);
-
-  c.ply += 1;
-  c.maxply = max(c.maxply, c.ply);
-  return cap, castling;
 
   make_move_nnue :: (using c: *ChessGame, move: Move16) #expand {
     dp := *nnue[ply+1].dirtyPiece;
@@ -2055,6 +2047,22 @@ make_move :: (c: *ChessGame, move: Move16) -> Piece, Castling {
       dp.to[1] = to_castle;
     }
   }
+  fetch_and_add(*nodes_searched);
+  flags, from, to := decode_move16(move);
+  piece := c.pieces[from];
+  move32: Move32;
+  move32.mov16 = move;
+  move32.piece = piece;
+  make_move_nnue(c, move);
+
+  cap, castling, hash := make_move(*c.chess, move);
+  key := hash % cast, no_check(u64) ttable.count;
+  array_add(*c.moves, move32);
+  array_add(*c.rtable, hash);
+
+  c.ply += 1;
+  c.maxply = max(c.maxply, c.ply);
+  return cap, castling;
 }
 
 unmake_move :: (c: *ChessGame, move: Move16, cap: Piece, castling: Castling) {
@@ -2086,6 +2094,13 @@ piece_to :: (mov: Move32) -> int, int #expand {
 }
 
 make_null_move :: (c: *ChessGame) -> ep: u64 {
+
+  make_null_move_nnue :: (using c: *ChessGame) #expand {
+    memcpy(*c.nnue[c.ply+1].accumulator, *c.nnue[c.ply].accumulator, size_of(Accumulator));
+    dp := *c.nnue[c.ply+1].dirtyPiece;
+    dp.dirtyNum = 0;
+  }
+
   ep, hash := make_null_move(*c.chess);
   null_move: Move32 = Move32.{0, 0};
   array_add(*c.moves, null_move);
@@ -2095,11 +2110,6 @@ make_null_move :: (c: *ChessGame) -> ep: u64 {
   c.maxply = max(c.maxply, c.ply);
   return ep;
 
-  make_null_move_nnue :: (using c: *ChessGame) #expand {
-    memcpy(*c.nnue[c.ply+1].accumulator, *c.nnue[c.ply].accumulator, size_of(Accumulator));
-    dp := *c.nnue[c.ply+1].dirtyPiece;
-    dp.dirtyNum = 0;
-  }
 }
 
 unmake_null_move :: (c: *ChessGame, ep: u64) {
