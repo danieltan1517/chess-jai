@@ -842,15 +842,15 @@ sort_captures :: (move_queue: *MoveQueue, chess: *ChessGame) {
 
 sort_quiets :: (move_queue: *MoveQueue, chess: *ChessGame) {
 
-  score_quiets :: (flag: Move16, from: int, to: int, chess: *ChessGame, counter: *[13][64] s32, follow1: *[13][64] s32, follow2: *[13][64] s32) -> s32 {
+  score_quiets :: (flag: Move16, from: int, to: int, chess: *ChessGame, counter: [][64] s32, follow1: [][64] s32, follow2: [][64] s32) -> s32 {
     piece := piece_at(chess, from);
-    return chess.history.history_moves[piece][to] + ((<<counter)[piece][to] * 2) + (<<follow1)[piece][to] + ((<<follow2)[piece][to] / 2);
+    return chess.history.history_moves[piece][to] + (counter[piece][to] * 2) + follow1[piece][to] + (follow2[piece][to] / 2);
   }
 
 
-  counter := get_countermove_history(chess, 1);
-  follow1 := get_countermove_history(chess, 2);
-  follow2 := get_countermove_history(chess, 4);
+  counter: [][64] s32 = get_countermove_history(chess, 1);
+  follow1: [][64] s32 = get_countermove_history(chess, 2);
+  follow2: [][64] s32 = get_countermove_history(chess, 4);
 
   for i: 0..move_queue.count-1 {
      move := move_queue.array[i].move;
@@ -1618,7 +1618,7 @@ perft :: (chess: *Chess, depth: int) -> int {
 
   num_nodes := 0;
   ep := chess.en_passant;
-  for :gen_moves mov: << chess {
+  for :gen_moves mov: chess {
     cap, castling, hash := make_move(chess, mov);
 
     num_nodes += perft(chess, depth-1);
@@ -2119,10 +2119,10 @@ unmake_null_move :: (c: *ChessGame, ep: u64) {
   c.ply -= 1;
 }
 
-get_countermove_history :: (chess: *ChessGame, num: int) -> *[13][64]s32 {
+get_countermove_history :: (chess: *ChessGame, num: int) -> [][64] s32 {
   using chess.history;
   prev, to := get_prev_move(chess, num);
-  return *counter_history[prev][to];
+  return counter_history[prev][to];
 }
 
 // fetch and add.

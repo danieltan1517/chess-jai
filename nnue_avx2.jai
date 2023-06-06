@@ -26,7 +26,7 @@ nnue_init :: (file_name: string) -> bool {
     for r: 0..cast(u32)31 {
       for c: 0..cast(u32)(dims-1) {
         index := wt_idx(r, c, dims);
-        weight[index] = <<d;
+        weight[index] = d.*;
         d += 1;
       }
     }
@@ -241,11 +241,6 @@ nnue_evaluate_pos :: (pos: *Position) -> s32 {
   return out_value / FV_SCALE;
 }
 
-
-TILE_HEIGHT :: (NUM_REGS * SIMD_WIDTH / 16);
-NUM_REGS :: 16;
-SIMD_WIDTH :: 256;
-
 m256 :: union {
   i8x32 : [32] s8;
   i16x16: [16] s16;
@@ -373,11 +368,9 @@ update_accumulator :: (pos: *Position) -> bool {
 
   for c: 0..1 {
     accTile := (*accumulator.accumulation[c][0]);
-    if reset[c] then {
-      copy_biases(*ft_biases[0]);
-    } else {
-      copy_biases(*prevAcc.accumulation[c][0]);
-
+    r := reset[c];
+    copy_biases(ifx r then *ft_biases[0] else *prevAcc.accumulation[c][0]);
+    if r == false {
       // Difference calculation for the deactivated features
       for k: 0..removed_indices[c].size-1 {
         index := removed_indices[c].values[k] * kHalfDimensions;
@@ -599,33 +592,26 @@ transform :: (pos: *Position, output: *s8, out_mask: *u32) {
   accumulation: [][256] s16 = pos.nnue[0].accumulator.accumulation;
   pers := pos.player;
 
-  #asm AVX, AVX2 {
-    // lift the xmm0 register out of the loop.
-    zeroall;
-    pxor.y zeroes: vec, zeroes, zeroes;
-    ymm0:  vec; ymm1:  vec; ymm2:  vec; ymm3:  vec;
-    ymm4:  vec; ymm5:  vec; ymm6:  vec; ymm7:  vec;
-    val: gpr;
-  }
-
   for p: 0..1 {
     tile := *accumulation[pers][0];
     #asm AVX, AVX2 {
-      movdqa.y   ymm0,       [tile + 0x000];
+      val: gpr;
+      pxor.y     zeroes: vec, zeroes, zeroes;
+      movdqa.y   ymm0: vec,  [tile + 0x000];
       packsswb.y ymm0, ymm0, [tile + 0x020];
-      movdqa.y   ymm1,       [tile + 0x040];
+      movdqa.y   ymm1: vec,  [tile + 0x040];
       packsswb.y ymm1, ymm1, [tile + 0x060];
-      movdqa.y   ymm2,       [tile + 0x080];
+      movdqa.y   ymm2: vec,  [tile + 0x080];
       packsswb.y ymm2, ymm2, [tile + 0x0a0];
-      movdqa.y   ymm3,       [tile + 0x0c0];
+      movdqa.y   ymm3: vec,  [tile + 0x0c0];
       packsswb.y ymm3, ymm3, [tile + 0x0e0];
-      movdqa.y   ymm4,       [tile + 0x100];
+      movdqa.y   ymm4: vec,  [tile + 0x100];
       packsswb.y ymm4, ymm4, [tile + 0x120];
-      movdqa.y   ymm5,       [tile + 0x140];
+      movdqa.y   ymm5: vec,  [tile + 0x140];
       packsswb.y ymm5, ymm5, [tile + 0x160];
-      movdqa.y   ymm6,       [tile + 0x180];
+      movdqa.y   ymm6: vec,  [tile + 0x180];
       packsswb.y ymm6, ymm6, [tile + 0x1a0];
-      movdqa.y   ymm7,       [tile + 0x1c0];
+      movdqa.y   ymm7: vec,  [tile + 0x1c0];
       packsswb.y ymm7, ymm7, [tile + 0x1e0];
 
       movdqu.y   [output + 0x000], ymm0;
