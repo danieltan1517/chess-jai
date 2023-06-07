@@ -1841,18 +1841,6 @@ init_magic_bitboard :: () {
     sq := cast(u64) (1 << i);
     magic_bishop[i].mask         = bishop_mask(sq);
     #if FANCY_MAGIC_BITBOARDS == false {
-      magic_bishop[i].relevant_bit = bishop_relevant_bits[i];
-      magic_bishop[i].magic        = bishop_magic_array[i]; 
-      bishop_relevant_bits :: u64.[
-        6, 5, 5, 5, 5, 5, 5, 6, 
-        5, 5, 5, 5, 5, 5, 5, 5, 
-        5, 5, 7, 7, 7, 7, 5, 5, 
-        5, 5, 7, 9, 9, 7, 5, 5, 
-        5, 5, 7, 9, 9, 7, 5, 5, 
-        5, 5, 7, 7, 7, 7, 5, 5, 
-        5, 5, 5, 5, 5, 5, 5, 5, 
-        6, 5, 5, 5, 5, 5, 5, 6
-      ];
       bishop_magic_array :: u64.[
         0x40106000a1160020,
         0x20010250810120,
@@ -1919,23 +1907,22 @@ init_magic_bitboard :: () {
         0x300404822c08200,
         0x48081010008a2a80
       ];
+      bishop_relevant_bits :: u64.[
+        6, 5, 5, 5, 5, 5, 5, 6, 
+        5, 5, 5, 5, 5, 5, 5, 5, 
+        5, 5, 7, 7, 7, 7, 5, 5, 
+        5, 5, 7, 9, 9, 7, 5, 5, 
+        5, 5, 7, 9, 9, 7, 5, 5, 
+        5, 5, 7, 7, 7, 7, 5, 5, 
+        5, 5, 5, 5, 5, 5, 5, 5, 
+        6, 5, 5, 5, 5, 5, 5, 6
+      ];
+      magic_bishop[i].relevant_bit = bishop_relevant_bits[i];
+      magic_bishop[i].magic        = bishop_magic_array[i]; 
     }
 
     magic_rook[i].mask           = rook_mask(sq);
     #if FANCY_MAGIC_BITBOARDS == false {
-      magic_rook[i].relevant_bit   = rook_relevant_bits[i];
-      magic_rook[i].magic          = rook_magic_array[i];
-      rook_relevant_bits :: u64.[
-        12, 11, 11, 11, 11, 11, 11, 12, 
-        11, 10, 10, 10, 10, 10, 10, 11, 
-        11, 10, 10, 10, 10, 10, 10, 11, 
-        11, 10, 10, 10, 10, 10, 10, 11, 
-        11, 10, 10, 10, 10, 10, 10, 11, 
-        11, 10, 10, 10, 10, 10, 10, 11, 
-        11, 10, 10, 10, 10, 10, 10, 11, 
-        12, 11, 11, 11, 11, 11, 11, 12
-      ];
-  
       rook_magic_array :: u64.[
         0xa80004000801220,
         0x8040004010002008,
@@ -2002,6 +1989,19 @@ init_magic_bitboard :: () {
         0x200282410a102,
         0x4048240043802106
       ];
+      rook_relevant_bits :: u64.[
+        12, 11, 11, 11, 11, 11, 11, 12, 
+        11, 10, 10, 10, 10, 10, 10, 11, 
+        11, 10, 10, 10, 10, 10, 10, 11, 
+        11, 10, 10, 10, 10, 10, 10, 11, 
+        11, 10, 10, 10, 10, 10, 10, 11, 
+        11, 10, 10, 10, 10, 10, 10, 11, 
+        11, 10, 10, 10, 10, 10, 10, 11, 
+        12, 11, 11, 11, 11, 11, 11, 12
+      ];
+      magic_rook[i].relevant_bit   = rook_relevant_bits[i];
+      magic_rook[i].magic          = rook_magic_array[i];
+  
     }
   }
 
