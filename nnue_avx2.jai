@@ -392,9 +392,6 @@ update_accumulator :: (pos: *Position) -> bool {
 }
 
 refresh_accumulator :: (pos: *Position) {
-  copy_biases :: (tile: *void) #expand {
-  }
-
   accumulator := *pos.nnue[0].accumulator;
   activeIndices: [2] IndexList;
   activeIndices[0].size = 0;
