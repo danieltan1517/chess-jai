@@ -639,24 +639,34 @@ transform :: (pos: *Position, output: *s8, out_mask: *u32) {
 
 affine_txfm :: (input: *s8, output: *s8, inDims: u32, outDims: u32, biases: *s32, weights: *s8, in_mask: *u32, out_mask: *u32, pack8_and_calc_mask: bool) #expand {
 
-
-  // mask2_t = u64
-  next_idx :: () -> bool #expand {
-    while v == 0 {
-      offset += 8 * size_of(u64);
-      if offset >= inDims then
-        return false;
-      v = << cast(*u64)((cast(*s8)in_mask) + (offset/8));
-    }
-    idx = offset + bsf(v);
-    v &= v - 1;
-    return true;
-  }
-
   bsf :: (value: u64) -> int #expand {
     result: int = 0;
     #asm { bsf.q result, value; }
     return result;
+  }
+
+  // mask2_t = u64
+  next_idx :: () -> bool #expand {
+    #if pack8_and_calc_mask{
+      while v == 0 {
+        offset += 8 * size_of(u64);
+        if offset >= inDims then
+          return false;
+        v = << cast(*u64)((cast(*s8)in_mask) + (offset/8));
+      }
+
+      idx = offset + bsf(v);
+      v &= v - 1;
+      return true;
+    } else {
+      if v == 0 then {
+        return false;
+      }
+
+      idx = bsf(v);
+      v &= v - 1;
+      return true;
+    }
   }
 
 
