@@ -143,28 +143,34 @@ nnue_init :: (file_name: string) -> bool {
 
 }
 
-nnue_evaluate :: (player: s32, pieces: *s32, squares: *s32) -> s32 {
-  nnue: NNUEdata;
-  nnue.accumulator.computedAccumulation = 0;
-  pos: Position;
-  pos.nnue[0] = *nnue;
-  pos.nnue[1] = null;
-  pos.nnue[2] = null;
-  pos.player  = player;
-  pos.pieces = pieces;
-  pos.squares = squares;
-  return nnue_evaluate_pos(*pos);
+nnue_evaluate :: (chess: *ChessGame) -> int {
+  a_nnue: [3] *NNUEdata;
+  a_nnue[0] = null;
+  a_nnue[1] = null;
+  a_nnue[2] = null;
+
+  i := 0;
+  while i<3 && chess.ply >= i {
+    a_nnue[i] = chess.nnue.data + chess.ply - i;
+    i += 1;
+  }
+
+  using chess.chess;
+  return nnue_evaluate_pos(chess.turn, chess.pieces, chess.occupied, chess.w_king, chess.b_king, a_nnue.data);
 }
 
-nnue_evaluate_incremental :: (player: s32, pieces: *s32, squares: *s32, nnue: **NNUEdata) -> s32 {
-  pos: Position;
-  pos.nnue[0] = nnue[0];
-  pos.nnue[1] = nnue[1];
-  pos.nnue[2] = nnue[2];
-  pos.player = player;
-  pos.pieces = pieces;
-  pos.squares = squares;
-  return nnue_evaluate_pos(*pos);
+nnue_evaluate_board :: (chess: Chess) -> int {
+  nnue: NNUEdata;
+  nnue.accumulator.computedAccumulation = 0;
+  nnue_data: [3] *NNUEdata;
+  nnue_data[0] = *nnue;
+  nnue_data[1] = null;
+  nnue_data[2] = null;
+  return nnue_evaluate_pos(chess.turn, chess.pieces, chess.occupied, chess.w_king, chess.b_king, nnue_data.data);
+}
+
+nnue_evaluate_incremental :: (turn: Turn, pieces: [64] Piece, occupied: u64, w_king: u64, b_king: u64, nnue: **NNUEdata) -> s32 #expand {
+  return nnue_evaluate_pos(turn, pieces, occupied, w_king, b_king, nnue);
 }
 
 DirtyPiece :: struct {
@@ -215,26 +221,19 @@ NnueVersion : u32 : 0x7AF32F16;
 TransformerStart :: 3*4 + 177;
 NetworkStart :: TransformerStart+4 + 2*256 + 2*256*64*641;
 
-Position :: struct {
-  player: s32;
-  pieces: *s32;
-  squares: *s32;
-  nnue: [3] *NNUEdata;
-}
-
 IndexList :: struct {
   size: s32;
   values: [30] s32;
 }
 
-nnue_evaluate_pos :: (pos: *Position) -> s32 {
+nnue_evaluate_pos :: (turn: Turn, pieces: [64] Piece, occupied: u64, w_king: u64, b_king: u64, nnue: **NNUEdata) -> s32 {
   input_mask:   [FtOutDims / (8 * size_of(u32)) ] u32 #align 8;
   hidden1_mask: [8 / size_of(u32)] u32 #align 8;
   FV_SCALE :: 16;
   input: [FtOutDims] s8 #align 16;
   hidden1_out: [32] s8  #align 16;
   hidden2_out: [32] s8  #align 16; 
-  transform(pos, *input[0], *input_mask[0]);
+  transform(turn, pieces, occupied, w_king, b_king, nnue, *input[0], *input_mask[0]);
   affine_txfm(*input[0], *hidden1_out[0], FtOutDims, 32, *hidden1_biases[0], *hidden1_weights[0], *input_mask[0], *hidden1_mask[0], true);
   affine_txfm(*hidden1_out[0], *hidden2_out[0], 32, 32, *hidden2_biases[0], *hidden2_weights[0], *hidden1_mask[0], null, false);
   out_value := inline affine_propagate(*hidden2_out[0], output_biases[0], *output_weights[0]);
@@ -248,102 +247,16 @@ m256 :: union {
   i64x4 : [4]  s64;
 }
 
-update_accumulator :: (pos: *Position) -> bool {
+update_accumulator :: (pieces: [64] Piece, occupied: u64, w_king: u64, b_king: u64, nnue: **NNUEdata) -> bool {
 
   acc_if :: (i: int) -> bool #expand {
-    if !pos.nnue[i] then
+    if !nnue[i] then
       return true;
-    prevAcc = *pos.nnue[i].accumulator;
+    prevAcc = *nnue[i].accumulator;
     return !prevAcc.computedAccumulation;
   }
 
-  copy_biases :: (tile: *void) #expand {
-    #asm AVX, AVX2 {
-      movdqa.y ymm0,  [tile + 0x000];
-      movdqa.y ymm1,  [tile + 0x020];
-      movdqa.y ymm2,  [tile + 0x040];
-      movdqa.y ymm3,  [tile + 0x060];
-      movdqa.y ymm4,  [tile + 0x080];
-      movdqa.y ymm5,  [tile + 0x0a0];
-      movdqa.y ymm6,  [tile + 0x0c0];
-      movdqa.y ymm7,  [tile + 0x0e0];
-      movdqa.y ymm8,  [tile + 0x100];
-      movdqa.y ymm9,  [tile + 0x120];
-      movdqa.y ymm10, [tile + 0x140];
-      movdqa.y ymm11, [tile + 0x160];
-      movdqa.y ymm12, [tile + 0x180];
-      movdqa.y ymm13, [tile + 0x1a0];
-      movdqa.y ymm14, [tile + 0x1c0];
-      movdqa.y ymm15, [tile + 0x1e0];
-    }
-  }
-
-  sub_weights :: (tile: *void) #expand {
-    #asm AVX, AVX2 {
-      psubw.y ymm0,  ymm0,  [tile + 0x000];
-      psubw.y ymm1,  ymm1,  [tile + 0x020];
-      psubw.y ymm2,  ymm2,  [tile + 0x040];
-      psubw.y ymm3,  ymm3,  [tile + 0x060];
-      psubw.y ymm4,  ymm4,  [tile + 0x080];
-      psubw.y ymm5,  ymm5,  [tile + 0x0a0];
-      psubw.y ymm6,  ymm6,  [tile + 0x0c0];
-      psubw.y ymm7,  ymm7,  [tile + 0x0e0];
-      psubw.y ymm8,  ymm8,  [tile + 0x100];
-      psubw.y ymm9,  ymm9,  [tile + 0x120];
-      psubw.y ymm10, ymm10, [tile + 0x140];
-      psubw.y ymm11, ymm11, [tile + 0x160];
-      psubw.y ymm12, ymm12, [tile + 0x180];
-      psubw.y ymm13, ymm13, [tile + 0x1a0];
-      psubw.y ymm14, ymm14, [tile + 0x1c0];
-      psubw.y ymm15, ymm15, [tile + 0x1e0];
-    }
-  }
-
-  add_weights :: (tile: *void) #expand {
-    #asm AVX, AVX2 {
-      paddw.y ymm0,  ymm0,  [tile + 0x000];
-      paddw.y ymm1,  ymm1,  [tile + 0x020];
-      paddw.y ymm2,  ymm2,  [tile + 0x040];
-      paddw.y ymm3,  ymm3,  [tile + 0x060];
-      paddw.y ymm4,  ymm4,  [tile + 0x080];
-      paddw.y ymm5,  ymm5,  [tile + 0x0a0];
-      paddw.y ymm6,  ymm6,  [tile + 0x0c0];
-      paddw.y ymm7,  ymm7,  [tile + 0x0e0];
-      paddw.y ymm8,  ymm8,  [tile + 0x100];
-      paddw.y ymm9,  ymm9,  [tile + 0x120];
-      paddw.y ymm10, ymm10, [tile + 0x140];
-      paddw.y ymm11, ymm11, [tile + 0x160];
-      paddw.y ymm12, ymm12, [tile + 0x180];
-      paddw.y ymm13, ymm13, [tile + 0x1a0];
-      paddw.y ymm14, ymm14, [tile + 0x1c0];
-      paddw.y ymm15, ymm15, [tile + 0x1e0];
-    }
-  }
-
-  store_accumulator :: (tile: *void) #expand {
-    #asm AVX, AVX2 {
-      movdqa.y [tile + 0x000],ymm0;
-      movdqa.y [tile + 0x020],ymm1;
-      movdqa.y [tile + 0x040],ymm2;
-      movdqa.y [tile + 0x060],ymm3;
-      movdqa.y [tile + 0x080],ymm4;
-      movdqa.y [tile + 0x0a0],ymm5;
-      movdqa.y [tile + 0x0c0],ymm6;
-      movdqa.y [tile + 0x0e0],ymm7;
-      movdqa.y [tile + 0x100],ymm8;
-      movdqa.y [tile + 0x120],ymm9;
-      movdqa.y [tile + 0x140],ymm10;
-      movdqa.y [tile + 0x160],ymm11;
-      movdqa.y [tile + 0x180],ymm12; 
-      movdqa.y [tile + 0x1a0],ymm13;
-      movdqa.y [tile + 0x1c0],ymm14; 
-      movdqa.y [tile + 0x1e0],ymm15; 
-    }
-  }
-
-
-
-  accumulator := *pos.nnue[0].accumulator;
+  accumulator := *nnue[0].accumulator;
   if accumulator.computedAccumulation then
     return true;
   prevAcc: *Accumulator = null;
@@ -356,47 +269,110 @@ update_accumulator :: (pos: *Position) -> bool {
   removed_indices[1].size = 0;
   added_indices[0].size = 0;
   added_indices[1].size = 0;
-  append_changed_indices(pos, removed_indices.data, added_indices.data, reset.data);
-
-  #asm AVX, AVX2 {
-    zeroall;
-    ymm0:  vec; ymm1:  vec; ymm2:  vec; ymm3:  vec;
-    ymm4:  vec; ymm5:  vec; ymm6:  vec; ymm7:  vec;
-    ymm8:  vec; ymm9:  vec; ymm10: vec; ymm11: vec;
-    ymm12: vec; ymm13: vec; ymm14: vec; ymm15: vec;
-  }
+  append_changed_indices(pieces, occupied, w_king, b_king, nnue, removed_indices, added_indices, reset);
 
   for c: 0..1 {
     accTile := (*accumulator.accumulation[c][0]);
     r := reset[c];
-    copy_biases(ifx r then *ft_biases[0] else *prevAcc.accumulation[c][0]);
+    tile := ifx r then *ft_biases[0] else *prevAcc.accumulation[c][0];
+    #asm AVX, AVX2 {
+      movdqa.y ymm0: vec,  [tile + 0x000];
+      movdqa.y ymm1: vec,  [tile + 0x020];
+      movdqa.y ymm2: vec,  [tile + 0x040];
+      movdqa.y ymm3: vec,  [tile + 0x060];
+      movdqa.y ymm4: vec,  [tile + 0x080];
+      movdqa.y ymm5: vec,  [tile + 0x0a0];
+      movdqa.y ymm6: vec,  [tile + 0x0c0];
+      movdqa.y ymm7: vec,  [tile + 0x0e0];
+      movdqa.y ymm8: vec,  [tile + 0x100];
+      movdqa.y ymm9: vec,  [tile + 0x120];
+      movdqa.y ymm10: vec, [tile + 0x140];
+      movdqa.y ymm11: vec, [tile + 0x160];
+      movdqa.y ymm12: vec, [tile + 0x180];
+      movdqa.y ymm13: vec, [tile + 0x1a0];
+      movdqa.y ymm14: vec, [tile + 0x1c0];
+      movdqa.y ymm15: vec, [tile + 0x1e0];
+    }
     if r == false {
       // Difference calculation for the deactivated features
       for k: 0..removed_indices[c].size-1 {
         index := removed_indices[c].values[k] * kHalfDimensions;
-        sub_weights(*ft_weights[index]);
+        subtile := *ft_weights[index];
+        #asm AVX, AVX2 {
+          psubw.y ymm0,  ymm0,  [subtile + 0x000];
+          psubw.y ymm1,  ymm1,  [subtile + 0x020];
+          psubw.y ymm2,  ymm2,  [subtile + 0x040];
+          psubw.y ymm3,  ymm3,  [subtile + 0x060];
+          psubw.y ymm4,  ymm4,  [subtile + 0x080];
+          psubw.y ymm5,  ymm5,  [subtile + 0x0a0];
+          psubw.y ymm6,  ymm6,  [subtile + 0x0c0];
+          psubw.y ymm7,  ymm7,  [subtile + 0x0e0];
+          psubw.y ymm8,  ymm8,  [subtile + 0x100];
+          psubw.y ymm9,  ymm9,  [subtile + 0x120];
+          psubw.y ymm10, ymm10, [subtile + 0x140];
+          psubw.y ymm11, ymm11, [subtile + 0x160];
+          psubw.y ymm12, ymm12, [subtile + 0x180];
+          psubw.y ymm13, ymm13, [subtile + 0x1a0];
+          psubw.y ymm14, ymm14, [subtile + 0x1c0];
+          psubw.y ymm15, ymm15, [subtile + 0x1e0];
+        }
       }
     }
 
     // Difference calculation for the activated features
     for k: 0..added_indices[c].size-1 {
       index := added_indices[c].values[k] * kHalfDimensions;
-      add_weights(*ft_weights[index]);
+      addtile := *ft_weights[index];
+      #asm AVX, AVX2 {
+        paddw.y ymm0,  ymm0,  [addtile + 0x000];
+        paddw.y ymm1,  ymm1,  [addtile + 0x020];
+        paddw.y ymm2,  ymm2,  [addtile + 0x040];
+        paddw.y ymm3,  ymm3,  [addtile + 0x060];
+        paddw.y ymm4,  ymm4,  [addtile + 0x080];
+        paddw.y ymm5,  ymm5,  [addtile + 0x0a0];
+        paddw.y ymm6,  ymm6,  [addtile + 0x0c0];
+        paddw.y ymm7,  ymm7,  [addtile + 0x0e0];
+        paddw.y ymm8,  ymm8,  [addtile + 0x100];
+        paddw.y ymm9,  ymm9,  [addtile + 0x120];
+        paddw.y ymm10, ymm10, [addtile + 0x140];
+        paddw.y ymm11, ymm11, [addtile + 0x160];
+        paddw.y ymm12, ymm12, [addtile + 0x180];
+        paddw.y ymm13, ymm13, [addtile + 0x1a0];
+        paddw.y ymm14, ymm14, [addtile + 0x1c0];
+        paddw.y ymm15, ymm15, [addtile + 0x1e0];
+      }
     }
 
-    store_accumulator(accTile);
+    #asm AVX, AVX2 {
+      movdqa.y [accTile + 0x000],ymm0;
+      movdqa.y [accTile + 0x020],ymm1;
+      movdqa.y [accTile + 0x040],ymm2;
+      movdqa.y [accTile + 0x060],ymm3;
+      movdqa.y [accTile + 0x080],ymm4;
+      movdqa.y [accTile + 0x0a0],ymm5;
+      movdqa.y [accTile + 0x0c0],ymm6;
+      movdqa.y [accTile + 0x0e0],ymm7;
+      movdqa.y [accTile + 0x100],ymm8;
+      movdqa.y [accTile + 0x120],ymm9;
+      movdqa.y [accTile + 0x140],ymm10;
+      movdqa.y [accTile + 0x160],ymm11;
+      movdqa.y [accTile + 0x180],ymm12; 
+      movdqa.y [accTile + 0x1a0],ymm13;
+      movdqa.y [accTile + 0x1c0],ymm14; 
+      movdqa.y [accTile + 0x1e0],ymm15; 
+    }
   }
 
   accumulator.computedAccumulation = 1;
   return true;
 }
 
-refresh_accumulator :: (pos: *Position) {
-  accumulator := *pos.nnue[0].accumulator;
+refresh_accumulator :: (pieces: [64] Piece, occupied: u64, w_king: u64, b_king: u64, nnue: **NNUEdata) {
+  accumulator := *nnue[0].accumulator;
   activeIndices: [2] IndexList;
   activeIndices[0].size = 0;
   activeIndices[1].size = 0;
-  append_active_indices(pos, activeIndices.data);
+  append_active_indices(pieces, occupied, w_king, b_king, activeIndices.data);
 
   biases := *ft_biases[0];
   for c: 0..1 {
@@ -467,78 +443,90 @@ refresh_accumulator :: (pos: *Position) {
 
 }
 
-append_active_indices :: (pos: *Position, active: *IndexList) {
-  half_kp_append_active_indices(pos, 0, *active[0]);
-  half_kp_append_active_indices(pos, 1, *active[1]);
+append_active_indices :: (pieces: [64] Piece, occupied: u64, w_king: u64, b_king: u64, active: *IndexList) {
+  half_kp_append_active_indices(pieces, occupied, w_king, b_king, 0, *active[0]);
+  half_kp_append_active_indices(pieces, occupied, b_king, w_king, 1, *active[1]);
 }
 
-append_changed_indices :: (pos: *Position, removed: *IndexList, added: *IndexList, reset: *bool) {
+append_changed_indices :: (pieces: [64] Piece, occupied: u64, w_king: u64, b_king: u64, nnue: **NNUEdata, removed: [] IndexList, added: [] IndexList, reset: [] bool) {
 
   KING :: (c: int) -> s32 #expand {
-    wking : s32 : 1;
-    bking : s32 : 7;
-    return ifx c then bking else wking;
+    return ifx c then cast(s32) 1  else cast(s32) 7;
   }
 
-  dp := *pos.nnue[0].dirtyPiece;
-  if pos.nnue[1].accumulator.computedAccumulation then {
-    for c: 0..cast(s32)1 {
+  dp := *nnue[0].dirtyPiece;
+  if nnue[1].accumulator.computedAccumulation then {
+    for c: 0..1 {
+      k:= ifx c == 0 then w_king else b_king;
+      oppking := ifx c == 0 then b_king else w_king;
       reset[c] = dp.pc[0] == KING(c);
       if reset[c] then {
-        half_kp_append_active_indices(pos, c, *added[c]);
+        half_kp_append_active_indices(pieces, occupied, k, oppking, c, *added[c]);
       } else {
-        half_kp_append_changed_indices(pos, c, dp, *removed[c], *added[c]);
+        half_kp_append_changed_indices(k, c, dp, *removed[c], *added[c]);
       }
     }
   } else {
-    dp2 := *pos.nnue[1].dirtyPiece;
-    for c: 0..cast(s32)1 {
+    dp2 := *nnue[1].dirtyPiece;
+    for c: 0..1 {
+      k := ifx c == 0 then w_king else b_king;
+      oppking := ifx c == 0 then b_king else w_king;
       reset[c] = dp.pc[0] == KING(c) || dp2.pc[0] == KING(c);
       if reset[c] then {
-        half_kp_append_active_indices(pos, c, *added[c]);
+        half_kp_append_active_indices(pieces, occupied, k, oppking, c, *added[c]);
       } else {
-        half_kp_append_changed_indices(pos, c, dp, *removed[c], *added[c]);
-        half_kp_append_changed_indices(pos, c, dp2, *removed[c], *added[c]);
+        half_kp_append_changed_indices(k, c, dp, *removed[c], *added[c]);
+        half_kp_append_changed_indices(k, c, dp2, *removed[c], *added[c]);
       }
     }
   }
 }
 
-half_kp_append_active_indices :: (pos: *Position, c: s32, active: *IndexList) {
-  ksq := pos.squares[c];
-  ksq = orient(c, ksq) * PS_END;
-  i := 2;
-  while pos.pieces[i] {
-    sq := pos.squares[i];
-    pc := pos.pieces[i];
-    active.values[active.size] = make_index(c, sq, pc, ksq);
+half_kp_append_active_indices :: (pieces: [64] Piece, occupied: u64, king: u64, opp_king: u64, c: int, active: *IndexList) {
+  ksq := cast(s32) bsf(king);
+  ksq = orient(xx c, ksq) * PS_END;
+  occupied ^= (king|opp_king);
+  while occupied {
+    sq := cast(s32) bsf(occupied);
+    occupied &= occupied - 1;
+    pc := cast(s32) pieces[sq];
+    active.values[active.size] = make_index(xx c, sq, pc, ksq);
     active.size += 1;
-    i += 1;
   }
 }
 
-half_kp_append_changed_indices :: (pos: *Position, c: s32, dp: *DirtyPiece, removed: *IndexList, added: *IndexList) {
-  ksq := pos.squares[c];
-  ksq = orient(c, ksq) * PS_END;
-  for i: 0..dp.dirtyNum-1 {
-    pc := dp.pc[i];
+bsf :: (value: u64) -> int #expand {
+  result: int = 0;
+  #asm { bsf.q result, value; }
+  return result;
+}
+
+half_kp_append_changed_indices :: (king: u64, c: int, dp: *DirtyPiece, removed: *IndexList, added: *IndexList) {
+  ksq := cast(s32) bsf(king);
+  ksq = orient(xx c, ksq) * PS_END;
+  i := 0;
+  while i < dp.dirtyNum {
+    pc := cast(s32) dp.pc[i];
+    from := cast(s32) dp.from[i];
+    to := cast(s32) dp.to[i];
+    i += 1;
     if pc == 1 || pc == 7 continue;
-    from := dp.from[i];
     if from != 64 then {
-      removed.values[removed.size] = make_index(c, from, pc, ksq);
+      removed.values[removed.size] = make_index(xx c, from, pc, ksq);
       removed.size += 1;
     }
 
-    to := dp.to[i];
     if to != 64 then {
-      added.values[added.size] = make_index(c, to, pc, ksq);
+      added.values[added.size] = make_index(xx c, to, pc, ksq);
       added.size += 1;
     }
   }
+  //print("%\n", removed.*);
+  //print("%\n", added.*);
 }
 
 make_index :: (c: s32, s: s32, pc: s32, ksq: s32) -> s32 #expand {
-  return orient(c, s) + PieceToIndex[c][pc] + ksq;
+  return (orient(c, s) + PieceToIndex[c][pc] + ksq);
 }
 
 orient :: (c: s32, s: s32) -> s32 #expand {
@@ -568,14 +556,13 @@ PieceToIndex: [2][14] s32 = .[
        0, PS_W_QUEEN, PS_W_ROOK, PS_W_BISHOP, PS_W_KNIGHT, PS_W_PAWN, 0]
 ];
 
-transform :: (pos: *Position, output: *s8, out_mask: *u32) {
-  if !update_accumulator(pos) then
-    refresh_accumulator(pos);
-  accumulation: [][256] s16 = pos.nnue[0].accumulator.accumulation;
-  pers := pos.player;
+transform :: (turn: Turn, pieces: [64] Piece, occupied: u64, w_king: u64, b_king: u64, nnue: **NNUEdata, output: *s8, out_mask: *u32) {
+  if !update_accumulator(pieces, occupied, w_king, b_king, nnue) then
+    refresh_accumulator(pieces, occupied, w_king, b_king, nnue);
+  accumulation: [][256] s16 = nnue[0].accumulator.accumulation;
 
   for p: 0..1 {
-    tile := *accumulation[pers][0];
+    tile := *accumulation[turn][0];
     #asm AVX, AVX2 {
       val: gpr;
       pxor.y     zeroes: vec, zeroes, zeroes;
@@ -633,17 +620,11 @@ transform :: (pos: *Position, output: *s8, out_mask: *u32) {
       add        out_mask, 0x20;
     }
 
-    pers ^= 1;
+    turn ^= 1;
   }
 }
 
 affine_txfm :: (input: *s8, output: *s8, inDims: u32, outDims: u32, biases: *s32, weights: *s8, in_mask: *u32, out_mask: *u32, pack8_and_calc_mask: bool) #expand {
-
-  bsf :: (value: u64) -> int #expand {
-    result: int = 0;
-    #asm { bsf.q result, value; }
-    return result;
-  }
 
   // mask2_t = u64
   next_idx :: () -> bool #expand {
