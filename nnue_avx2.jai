@@ -272,7 +272,6 @@ update_accumulator :: (pieces: [64] Piece, occupied: u64, w_king: u64, b_king: u
   append_changed_indices(pieces, occupied, w_king, b_king, nnue, removed_indices, added_indices, reset);
 
   for c: 0..1 {
-    accTile := (*accumulator.accumulation[c][0]);
     r := reset[c];
     tile := ifx r then *ft_biases[0] else *prevAcc.accumulation[c][0];
     #asm AVX, AVX2 {
@@ -343,6 +342,7 @@ update_accumulator :: (pieces: [64] Piece, occupied: u64, w_king: u64, b_king: u
       }
     }
 
+    accTile := *accumulator.accumulation[c][0];
     #asm AVX, AVX2 {
       movdqa.y [accTile + 0x000],ymm0;
       movdqa.y [accTile + 0x020],ymm1;
@@ -376,7 +376,6 @@ refresh_accumulator :: (pieces: [64] Piece, occupied: u64, w_king: u64, b_king: 
 
   biases := *ft_biases[0];
   for c: 0..1 {
-    acc := *accumulator.accumulation[c][0];
     #asm AVX, AVX2 {
       movdqa.y ymm0:  vec, [biases + 0x000];
       movdqa.y ymm1:  vec, [biases + 0x020];
@@ -419,6 +418,7 @@ refresh_accumulator :: (pieces: [64] Piece, occupied: u64, w_king: u64, b_king: 
       }
     }
 
+    acc := *accumulator.accumulation[c][0];
     #asm AVX, AVX2 {
       movdqa.y [acc + 0x000],ymm0;
       movdqa.y [acc + 0x020],ymm1;
