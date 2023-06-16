@@ -151,12 +151,12 @@ nnue_evaluate :: (chess: *ChessGame) -> int {
 
   i := 0;
   while i<3 && chess.ply >= i {
-    a_nnue[i] = chess.nnue.data + chess.ply - i;
+    a_nnue[i] = *chess.nnue[chess.ply - i];
     i += 1;
   }
 
   using chess.chess;
-  return nnue_evaluate_pos(chess.turn, chess.pieces, chess.occupied, chess.w_king, chess.b_king, a_nnue.data);
+  return nnue_evaluate_pos(chess, a_nnue);
 }
 
 nnue_evaluate_board :: (chess: Chess) -> int {
@@ -166,11 +166,7 @@ nnue_evaluate_board :: (chess: Chess) -> int {
   nnue_data[0] = *nnue;
   nnue_data[1] = null;
   nnue_data[2] = null;
-  return nnue_evaluate_pos(chess.turn, chess.pieces, chess.occupied, chess.w_king, chess.b_king, nnue_data.data);
-}
-
-nnue_evaluate_incremental :: (turn: Turn, pieces: [64] Piece, occupied: u64, w_king: u64, b_king: u64, nnue: **NNUEdata) -> s32 #expand {
-  return nnue_evaluate_pos(turn, pieces, occupied, w_king, b_king, nnue);
+  return nnue_evaluate_pos(*chess, nnue_data);
 }
 
 DirtyPiece :: struct {
@@ -226,14 +222,14 @@ IndexList :: struct {
   values: [30] s32;
 }
 
-nnue_evaluate_pos :: (turn: Turn, pieces: [64] Piece, occupied: u64, w_king: u64, b_king: u64, nnue: **NNUEdata) -> s32 {
+nnue_evaluate_pos :: (chess: *Chess, nnue: [3] *NNUEdata) -> s32 {
   input_mask:   [FtOutDims / (8 * size_of(u32)) ] u32 #align 8;
   hidden1_mask: [8 / size_of(u32)] u32 #align 8;
   FV_SCALE :: 16;
   input: [FtOutDims] s8 #align 16;
   hidden1_out: [32] s8  #align 16;
   hidden2_out: [32] s8  #align 16; 
-  transform(turn, pieces, occupied, w_king, b_king, nnue, *input[0], *input_mask[0]);
+  transform(chess, nnue, *input[0], *input_mask[0]);
   affine_txfm(*input[0], *hidden1_out[0], FtOutDims, 32, *hidden1_biases[0], *hidden1_weights[0], *input_mask[0], *hidden1_mask[0], true);
   affine_txfm(*hidden1_out[0], *hidden2_out[0], 32, 32, *hidden2_biases[0], *hidden2_weights[0], *hidden1_mask[0], null, false);
   out_value := inline affine_propagate(*hidden2_out[0], output_biases[0], *output_weights[0]);
@@ -247,20 +243,20 @@ m256 :: union {
   i64x4 : [4]  s64;
 }
 
-update_accumulator :: (pieces: [64] Piece, occupied: u64, w_king: u64, b_king: u64, nnue: **NNUEdata) -> bool {
+update_accumulator :: (chess: *Chess, nnue: [3] *NNUEdata) -> bool {
 
-  acc_if :: (i: int) -> bool #expand {
-    if !nnue[i] then
+  acc_if :: inline (prevAcc: **Accumulator, nnue: *NNUEdata) -> bool {
+    if !nnue then
       return true;
-    prevAcc = *nnue[i].accumulator;
-    return !prevAcc.computedAccumulation;
+    prevAcc.* = *nnue.accumulator;
+    return !prevAcc.*.computedAccumulation;
   }
 
   accumulator := *nnue[0].accumulator;
   if accumulator.computedAccumulation then
     return true;
   prevAcc: *Accumulator = null;
-  if acc_if(1) && acc_if(2) then
+  if acc_if(*prevAcc, nnue[1]) && acc_if(*prevAcc, nnue[2]) then
     return false;
   removed_indices: [2] IndexList;
   added_indices: [2] IndexList;
@@ -269,8 +265,7 @@ update_accumulator :: (pieces: [64] Piece, occupied: u64, w_king: u64, b_king: u
   removed_indices[1].size = 0;
   added_indices[0].size = 0;
   added_indices[1].size = 0;
-  append_changed_indices(pieces, occupied, w_king, b_king, nnue, removed_indices, added_indices, reset);
-
+  append_changed_indices(chess, nnue, *removed_indices[0], *added_indices[0], *reset[0]);
   for c: 0..1 {
     r := reset[c];
     tile := ifx r then *ft_biases[0] else *prevAcc.accumulation[c][0];
@@ -367,12 +362,12 @@ update_accumulator :: (pieces: [64] Piece, occupied: u64, w_king: u64, b_king: u
   return true;
 }
 
-refresh_accumulator :: (pieces: [64] Piece, occupied: u64, w_king: u64, b_king: u64, nnue: **NNUEdata) {
+refresh_accumulator :: (chess: *Chess, nnue: [3] *NNUEdata) {
   accumulator := *nnue[0].accumulator;
   activeIndices: [2] IndexList;
   activeIndices[0].size = 0;
   activeIndices[1].size = 0;
-  append_active_indices(pieces, occupied, w_king, b_king, activeIndices.data);
+  append_active_indices(chess, *activeIndices[0]);
 
   biases := *ft_biases[0];
   for c: 0..1 {
@@ -440,56 +435,74 @@ refresh_accumulator :: (pieces: [64] Piece, occupied: u64, w_king: u64, b_king: 
   }
 
   accumulator.computedAccumulation = 1;
-
 }
 
-append_active_indices :: (pieces: [64] Piece, occupied: u64, w_king: u64, b_king: u64, active: *IndexList) {
-  half_kp_append_active_indices(pieces, occupied, w_king, b_king, 0, *active[0]);
-  half_kp_append_active_indices(pieces, occupied, b_king, w_king, 1, *active[1]);
+append_active_indices :: (chess: *Chess, active: *IndexList) {
+  half_kp_append_active_indices(chess, chess.w_king, 0, *active[0]);
+  half_kp_append_active_indices(chess, chess.b_king, 1, *active[1]);
 }
 
-append_changed_indices :: (pieces: [64] Piece, occupied: u64, w_king: u64, b_king: u64, nnue: **NNUEdata, removed: [] IndexList, added: [] IndexList, reset: [] bool) {
-
-  KING :: (c: int) -> s32 #expand {
-    return ifx c then cast(s32) 1  else cast(s32) 7;
-  }
-
+append_changed_indices :: (chess: *Chess, nnue: [3] *NNUEdata, removed: *IndexList, added: *IndexList, reset: *bool) {
   dp := *nnue[0].dirtyPiece;
   if nnue[1].accumulator.computedAccumulation then {
-    for c: 0..1 {
-      k:= ifx c == 0 then w_king else b_king;
-      oppking := ifx c == 0 then b_king else w_king;
-      reset[c] = dp.pc[0] == KING(c);
-      if reset[c] then {
-        half_kp_append_active_indices(pieces, occupied, k, oppking, c, *added[c]);
+    {
+      king := chess.w_king;
+      ksq := cast(s32) bsf(king);
+      reset[0] = dp.pc[0] == 1;
+      if reset[0] then {
+        half_kp_append_active_indices(chess, king, 0, *added[0]);
       } else {
-        half_kp_append_changed_indices(k, c, dp, *removed[c], *added[c]);
+        half_kp_append_changed_indices(ksq, 0, dp, *removed[0], *added[0]);
+      }
+    }
+    {
+      king := chess.b_king;
+      ksq := cast(s32) bsf(king);
+      reset[1] = dp.pc[0] == 7;
+      if reset[1] then {
+        half_kp_append_active_indices(chess, king, 1, *added[1]);
+      } else {
+        half_kp_append_changed_indices(ksq, 1, dp, *removed[1], *added[1]);
       }
     }
   } else {
     dp2 := *nnue[1].dirtyPiece;
-    for c: 0..1 {
-      k := ifx c == 0 then w_king else b_king;
-      oppking := ifx c == 0 then b_king else w_king;
-      reset[c] = dp.pc[0] == KING(c) || dp2.pc[0] == KING(c);
-      if reset[c] then {
-        half_kp_append_active_indices(pieces, occupied, k, oppking, c, *added[c]);
+    {
+      king := chess.w_king;
+      ksq := cast(s32) bsf(king);
+      reset[0] = dp.pc[0] == 1 || dp2.pc[0] == 1;
+      if reset[0] then {
+        half_kp_append_active_indices(chess, king, 0, *added[0]);
       } else {
-        half_kp_append_changed_indices(k, c, dp, *removed[c], *added[c]);
-        half_kp_append_changed_indices(k, c, dp2, *removed[c], *added[c]);
+        half_kp_append_changed_indices(ksq, 0, dp, *removed[0], *added[0]);
+        half_kp_append_changed_indices(ksq, 0, dp2, *removed[0], *added[0]);
+      }
+    }
+
+    {
+      king := chess.b_king;
+      ksq := cast(s32) bsf(king);
+      reset[1] = dp.pc[0] == 7 || dp2.pc[0] == 7;
+      if reset[1] then {
+        half_kp_append_active_indices(chess, king, 1, *added[1]);
+      } else {
+        half_kp_append_changed_indices(ksq, 1, dp, *removed[1], *added[1]);
+        half_kp_append_changed_indices(ksq, 1, dp2, *removed[1], *added[1]);
       }
     }
   }
 }
 
-half_kp_append_active_indices :: (pieces: [64] Piece, occupied: u64, king: u64, opp_king: u64, c: int, active: *IndexList) {
+half_kp_append_active_indices :: (chess: *Chess, king: u64, c: s32, active: *IndexList) {
   ksq := cast(s32) bsf(king);
-  ksq = orient(xx c, ksq) * PS_END;
-  occupied ^= (king|opp_king);
+  ksq = orient(c, ksq) * PS_END;
+  occupied := chess.occupied;
+  kings := chess.w_king | chess.b_king;
+  occupied ^= kings;
   while occupied {
     sq := cast(s32) bsf(occupied);
     occupied &= occupied - 1;
-    pc := cast(s32) pieces[sq];
+    pc := cast(s32) chess.pieces[sq];
     active.values[active.size] = make_index(xx c, sq, pc, ksq);
     active.size += 1;
   }
@@ -501,35 +514,31 @@ bsf :: (value: u64) -> int #expand {
   return result;
 }
 
-half_kp_append_changed_indices :: (king: u64, c: int, dp: *DirtyPiece, removed: *IndexList, added: *IndexList) {
-  ksq := cast(s32) bsf(king);
-  ksq = orient(xx c, ksq) * PS_END;
-  i := 0;
-  while i < dp.dirtyNum {
-    pc := cast(s32) dp.pc[i];
-    from := cast(s32) dp.from[i];
-    to := cast(s32) dp.to[i];
-    i += 1;
+half_kp_append_changed_indices :: (ksq: s32, c: s32, dp: DirtyPiece, removed: *IndexList, added: *IndexList) {
+  ksq = orient(c, ksq) * PS_END;
+  num := dp.dirtyNum - 1;
+  for i: 0..num {
+    pc := dp.pc[i];
     if pc == 1 || pc == 7 continue;
+    from := dp.from[i];
+    to := dp.to[i];
     if from != 64 then {
-      removed.values[removed.size] = make_index(xx c, from, pc, ksq);
+      removed.values[removed.size] = make_index(c, from, pc, ksq);
       removed.size += 1;
     }
 
     if to != 64 then {
-      added.values[added.size] = make_index(xx c, to, pc, ksq);
+      added.values[added.size] = make_index(c, to, pc, ksq);
       added.size += 1;
     }
   }
-  //print("%\n", removed.*);
-  //print("%\n", added.*);
 }
 
 make_index :: (c: s32, s: s32, pc: s32, ksq: s32) -> s32 #expand {
-  return (orient(c, s) + PieceToIndex[c][pc] + ksq);
+  return orient(c, s) + PieceToIndex[c][pc] + ksq;
 }
 
-orient :: (c: s32, s: s32) -> s32 #expand {
+orient :: (c: s32, s: s32) -> s32 {
   if c == 0 {
     return s;
   } else {
@@ -556,11 +565,12 @@ PieceToIndex: [2][14] s32 = .[
        0, PS_W_QUEEN, PS_W_ROOK, PS_W_BISHOP, PS_W_KNIGHT, PS_W_PAWN, 0]
 ];
 
-transform :: (turn: Turn, pieces: [64] Piece, occupied: u64, w_king: u64, b_king: u64, nnue: **NNUEdata, output: *s8, out_mask: *u32) {
-  if !update_accumulator(pieces, occupied, w_king, b_king, nnue) then
-    refresh_accumulator(pieces, occupied, w_king, b_king, nnue);
+transform :: (chess: *Chess, nnue: [3] *NNUEdata, output: *s8, out_mask: *u32) {
+  if !update_accumulator(chess, nnue) then
+    refresh_accumulator(chess, nnue);
   accumulation: [][256] s16 = nnue[0].accumulator.accumulation;
 
+  turn := chess.turn;
   for p: 0..1 {
     tile := *accumulation[turn][0];
     #asm AVX, AVX2 {
@@ -652,12 +662,10 @@ affine_txfm :: (input: *s8, output: *s8, inDims: u32, outDims: u32, biases: *s32
 
 
   #asm AVX, AVX2 {
-    zeroall;
     movdqa.y out_0: vec, [biases + 0];
     movdqa.y out_1: vec, [biases + 32];
     movdqa.y out_2: vec, [biases + 64];
     movdqa.y out_3: vec, [biases + 96];
-    pxor.y   second: vec, second, second;
     pxor.y   kZero: vec, kZero, kZero;
   }
 
@@ -671,15 +679,16 @@ affine_txfm :: (input: *s8, output: *s8, inDims: u32, outDims: u32, biases: *s32
     #asm AVX, AVX2 {
       // initialize first and second = 0.
       movdqa.y first: vec, [weights_data];
+      second: vec;
     }
     factor: s16 = input[idx];
     if next_idx() {
       weights_data := *(cast(*m256)weights)[idx];
+      val: s16 = cast(s16) input[idx];
+      factor |= val << 8;
       #asm AVX, AVX2 {
         movdqa.y second, [weights_data];
       }
-      val: s16 = cast(s16) input[idx];
-      factor |= val << 8;
     } else {
       #asm AVX, AVX2 {
         pxor.y second, second, second;

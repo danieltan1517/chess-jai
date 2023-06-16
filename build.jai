@@ -191,7 +191,7 @@ build_debug :: (cpu_info: *Cpu_X86, executable_name: string) -> Workspace {
   options := get_build_options(w);
   options.output_executable_name = executable_name;
   set_optimization(*options, .DEBUG);
-  options.backend = .X64;
+  options.backend = .LLVM;
   options.stack_trace = true;
   set_build_options(options, w);
   movegen_features(cpu_info, w);
@@ -203,7 +203,7 @@ build_release :: (cpu_info: *Cpu_X86, executable_name: string) -> Workspace {
   w := compiler_create_workspace(executable_name);
   options := get_build_options(w);
   options.output_executable_name = executable_name;
-  set_optimization(*options, .VERY_OPTIMIZED);
+  set_optimization(*options, .OPTIMIZED);
   options.llvm_options.enable_split_modules = false;
   options.stack_trace = false;
   set_build_options(options, w);

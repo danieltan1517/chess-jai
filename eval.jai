@@ -4,13 +4,12 @@ uci_evaluate :: (chess: *Chess) -> int #expand {
   return nnue_evaluate_board(chess);
 }
 
+positions := 0;
+
 evaluate :: (chess: *ChessGame, fifty: int) -> int {
   TF, score := trivial_evaluation(chess, fifty); 
   if TF return score;
-
-  eval := nnue_evaluate_board(chess);
-  // eval1 := nnue_evaluate_board(chess);
-  // assert(eval == eval1, "% %", eval, eval1);
+  eval := nnue_evaluate(chess);
   return (eval * (100-fifty)) / 200;
 } 
 
