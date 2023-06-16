@@ -265,7 +265,7 @@ update_accumulator :: (chess: *Chess, nnue: [3] *NNUEdata) -> bool {
   removed_indices[1].size = 0;
   added_indices[0].size = 0;
   added_indices[1].size = 0;
-  append_changed_indices(chess, nnue, *removed_indices[0], *added_indices[0], *reset[0]);
+  append_changed_indices(chess, nnue, removed_indices, added_indices, reset);
   for c: 0..1 {
     r := reset[c];
     tile := ifx r then *ft_biases[0] else *prevAcc.accumulation[c][0];
@@ -367,7 +367,7 @@ refresh_accumulator :: (chess: *Chess, nnue: [3] *NNUEdata) {
   activeIndices: [2] IndexList;
   activeIndices[0].size = 0;
   activeIndices[1].size = 0;
-  append_active_indices(chess, *activeIndices[0]);
+  append_active_indices(chess, activeIndices);
 
   biases := *ft_biases[0];
   for c: 0..1 {
@@ -437,12 +437,12 @@ refresh_accumulator :: (chess: *Chess, nnue: [3] *NNUEdata) {
   accumulator.computedAccumulation = 1;
 }
 
-append_active_indices :: (chess: *Chess, active: *IndexList) {
+append_active_indices :: (chess: *Chess, active: [] IndexList) {
   half_kp_append_active_indices(chess, chess.w_king, 0, *active[0]);
   half_kp_append_active_indices(chess, chess.b_king, 1, *active[1]);
 }
 
-append_changed_indices :: (chess: *Chess, nnue: [3] *NNUEdata, removed: *IndexList, added: *IndexList, reset: *bool) {
+append_changed_indices :: (chess: *Chess, nnue: [3] *NNUEdata, removed: [] IndexList, added: [] IndexList, reset: [] bool) {
   dp := *nnue[0].dirtyPiece;
   if nnue[1].accumulator.computedAccumulation then {
     {
