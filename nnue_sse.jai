@@ -115,29 +115,30 @@ nnue_init :: (file_name: string) -> bool {
 
 }
 
-nnue_evaluate :: (player: s32, pieces: *s32, squares: *s32) -> s32 {
-  nnue: NNUEdata;
-  nnue.accumulator.computedAccumulation = 0;
-  pos: Position;
-  pos.nnue[0] = *nnue;
-  pos.nnue[1] = null;
-  pos.nnue[2] = null;
-  pos.player  = player;
-  pos.pieces = pieces;
-  pos.squares = squares;
-  return nnue_evaluate_pos(*pos);
+nnue_evaluate :: (chess: *ChessGame) -> int {
+  a_nnue: [3] *NNUEdata;
+  a_nnue[0] = null;
+  a_nnue[1] = null;
+  a_nnue[2] = null;
+
+  i := 0;
+  while i<3 && chess.ply >= i {
+    a_nnue[i] = *chess.nnue[chess.ply - i];
+    i += 1;
+  }
+
+  using chess.chess;
+  return nnue_evaluate_pos(chess, a_nnue);
 }
 
-nnue_evaluate_incremental :: (player: s32, pieces: *s32, squares: *s32, nnue: **NNUEdata) -> s32 {
-  assert(nnue[0] && cast(int)(*nnue[0].accumulator) % 64 == 0);
-  pos: Position;
-  pos.nnue[0] = nnue[0];
-  pos.nnue[1] = nnue[1];
-  pos.nnue[2] = nnue[2];
-  pos.player = player;
-  pos.pieces = pieces;
-  pos.squares = squares;
-  return nnue_evaluate_pos(*pos);
+nnue_evaluate_board :: (chess: Chess) -> int {
+  nnue: NNUEdata;
+  nnue.accumulator.computedAccumulation = 0;
+  nnue_data: [3] *NNUEdata;
+  nnue_data[0] = *nnue;
+  nnue_data[1] = null;
+  nnue_data[2] = null;
+  return nnue_evaluate_pos(*chess, nnue_data);
 }
 
 DirtyPiece :: struct {
@@ -203,30 +204,43 @@ IndexList :: struct {
   values: [30] s32;
 }
 
-nnue_evaluate_pos :: (pos: *Position) -> s32 {
+nnue_evaluate_pos :: (chess: *Chess, nnue: [3] *NNUEdata) -> s32 {
   input_mask:   [FtOutDims / (8 * size_of(u32)) ] u32 #align 8;
   hidden1_mask: [8 / size_of(u32)] u32 #align 8;
-  input: [FtOutDims] s8;
-  hidden1_out: [32] s8;
-  hidden2_out: [32] s8; 
-
-  transform(pos, input, input_mask.data);
+  FV_SCALE :: 16;
+  input: [FtOutDims] s8 #align 16;
+  hidden1_out: [32] s8  #align 16;
+  hidden2_out: [32] s8  #align 16; 
+  transform(chess, nnue, *input[0], *input_mask[0]);
   affine_txfm(*input[0], *hidden1_out[0], FtOutDims, *hidden1_biases[0], *hidden1_weights[0]);
   affine_txfm(*hidden1_out[0], *hidden2_out[0], 32, *hidden2_biases[0], *hidden2_weights[0]);
-  out_value := affine_propagate(*hidden2_out[0], output_biases[0], *output_weights[0]);
-
-  FV_SCALE :: 16;
+  out_value := inline affine_propagate(*hidden2_out[0], output_biases[0], *output_weights[0]);
   return out_value / FV_SCALE;
 }
 
-update_accumulator :: (pos: *Position) -> bool {
+update_accumulator :: (chess: *Chess, nnue: [3] *NNUEdata) -> bool {
 
-  acc :: (i: int) -> bool #expand {
-    if !pos.nnue[i] then
+  acc_if :: inline (prevAcc: **Accumulator, nnue: *NNUEdata) -> bool {
+    if !nnue then
       return true;
-    prevAcc = *pos.nnue[i].accumulator;
-    return !prevAcc.computedAccumulation;
+    prevAcc.* = *nnue.accumulator;
+    return !prevAcc.*.computedAccumulation;
   }
+
+  accumulator := *nnue[0].accumulator;
+  if accumulator.computedAccumulation then
+    return true;
+  prevAcc: *Accumulator = null;
+  if acc_if(*prevAcc, nnue[1]) && acc_if(*prevAcc, nnue[2]) then
+    return false;
+  removed_indices: [2] IndexList;
+  added_indices: [2] IndexList;
+  reset: [2] bool;
+  removed_indices[0].size = 0;
+  removed_indices[1].size = 0;
+  added_indices[0].size = 0;
+  added_indices[1].size = 0;
+  append_changed_indices(chess, nnue, *removed_indices[0], *added_indices[0], *reset[0]);
 
   copy_biases :: (tile: *void) #expand {
     #asm SSE {
@@ -312,22 +326,6 @@ update_accumulator :: (pos: *Position) -> bool {
     }
   }
 
-  accumulator := *pos.nnue[0].accumulator;
-  if accumulator.computedAccumulation then
-    return true;
-  prevAcc: *Accumulator = null;
-  if acc(1) && acc(2) then
-    return false;
- 
-  removed_indices: [2] IndexList;
-  added_indices: [2] IndexList;
-  reset: [2] bool;
-  removed_indices[0].size = 0;
-  removed_indices[1].size = 0;
-  added_indices[0].size = 0;
-  added_indices[1].size = 0;
-  append_changed_indices(pos, removed_indices.data, added_indices.data, reset.data);
-
   #asm SSE {
     xmm0:  vec; xmm1:  vec; xmm2:  vec; xmm3:  vec;
     xmm4:  vec; xmm5:  vec; xmm6:  vec; xmm7:  vec;
@@ -365,7 +363,12 @@ update_accumulator :: (pos: *Position) -> bool {
   return true;
 }
 
-refresh_accumulator :: (pos: *Position) {
+refresh_accumulator :: (chess: *Chess, nnue: [3] *NNUEdata) {
+  accumulator := *nnue[0].accumulator;
+  activeIndices: [2] IndexList;
+  activeIndices[0].size = 0;
+  activeIndices[1].size = 0;
+  append_active_indices(chess, *activeIndices[0]);
 
   copy_biases :: (tile: *void) #expand {
     #asm SSE {
@@ -429,11 +432,7 @@ refresh_accumulator :: (pos: *Position) {
       movdqa.x [tile + 0xf0], xmm15; 
     }
   }
-  accumulator := *pos.nnue[0].accumulator;
-  activeIndices: [2] IndexList;
-  activeIndices[0].size = 0;
-  activeIndices[1].size = 0;
-  append_active_indices(pos, activeIndices.data);
+
   COUNT :: 31;
   #asm SSE {
     xmm0:  vec; xmm1:  vec; xmm2:  vec; xmm3:  vec;
@@ -458,69 +457,96 @@ refresh_accumulator :: (pos: *Position) {
   accumulator.computedAccumulation = 1;
 }
 
-append_active_indices :: (pos: *Position, active: *IndexList) {
-  half_kp_append_active_indices(pos, 0, *active[0]);
-  half_kp_append_active_indices(pos, 1, *active[1]);
+append_active_indices :: (chess: *Chess, active: *IndexList) {
+  half_kp_append_active_indices(chess, chess.w_king, 0, *active[0]);
+  half_kp_append_active_indices(chess, chess.b_king, 1, *active[1]);
 }
 
-append_changed_indices :: (pos: *Position, removed: *IndexList, added: *IndexList, reset: *bool) {
-
-  KING :: (c: int) -> s32 #expand {
-    wking : s32 : 1;
-    bking : s32 : 7;
-    return ifx c then bking else wking;
-  }
-
-  dp := *pos.nnue[0].dirtyPiece;
-  if pos.nnue[1].accumulator.computedAccumulation then {
-    for c: 0..cast(s32)1 {
-      reset[c] = dp.pc[0] == KING(c);
-      if reset[c] then {
-        half_kp_append_active_indices(pos, c, *added[c]);
+append_changed_indices :: (chess: *Chess, nnue: [3] *NNUEdata, removed: *IndexList, added: *IndexList, reset: *bool) {
+  dp := *nnue[0].dirtyPiece;
+  if nnue[1].accumulator.computedAccumulation then {
+    {
+      king := chess.w_king;
+      ksq := cast(s32) bsf(king);
+      reset[0] = dp.pc[0] == 1;
+      if reset[0] then {
+        half_kp_append_active_indices(chess, king, 0, *added[0]);
       } else {
-        half_kp_append_changed_indices(pos, c, dp, *removed[c], *added[c]);
+        half_kp_append_changed_indices(ksq, 0, dp, *removed[0], *added[0]);
+      }
+    }
+    {
+      king := chess.b_king;
+      ksq := cast(s32) bsf(king);
+      reset[1] = dp.pc[0] == 7;
+      if reset[1] then {
+        half_kp_append_active_indices(chess, king, 1, *added[1]);
+      } else {
+        half_kp_append_changed_indices(ksq, 1, dp, *removed[1], *added[1]);
       }
     }
   } else {
-    dp2 := *pos.nnue[1].dirtyPiece;
-    for c: 0..cast(s32)1 {
-      reset[c] = dp.pc[0] == KING(c) || dp2.pc[0] == KING(c);
-      if reset[c] then {
-        half_kp_append_active_indices(pos, c, *added[c]);
+    dp2 := *nnue[1].dirtyPiece;
+    {
+      king := chess.w_king;
+      ksq := cast(s32) bsf(king);
+      reset[0] = dp.pc[0] == 1 || dp2.pc[0] == 1;
+      if reset[0] then {
+        half_kp_append_active_indices(chess, king, 0, *added[0]);
       } else {
-        half_kp_append_changed_indices(pos, c, dp, *removed[c], *added[c]);
-        half_kp_append_changed_indices(pos, c, dp2, *removed[c], *added[c]);
+        half_kp_append_changed_indices(ksq, 0, dp, *removed[0], *added[0]);
+        half_kp_append_changed_indices(ksq, 0, dp2, *removed[0], *added[0]);
+      }
+    }
+
+    {
+      king := chess.b_king;
+      ksq := cast(s32) bsf(king);
+      reset[1] = dp.pc[0] == 7 || dp2.pc[0] == 7;
+      if reset[1] then {
+        half_kp_append_active_indices(chess, king, 1, *added[1]);
+      } else {
+        half_kp_append_changed_indices(ksq, 1, dp, *removed[1], *added[1]);
+        half_kp_append_changed_indices(ksq, 1, dp2, *removed[1], *added[1]);
       }
     }
   }
 }
 
-half_kp_append_active_indices :: (pos: *Position, c: s32, active: *IndexList) {
-  ksq := pos.squares[c];
+half_kp_append_active_indices :: (chess: *Chess, king: u64, c: s32, active: *IndexList) {
+  ksq := cast(s32) bsf(king);
   ksq = orient(c, ksq) * PS_END;
-  i := 2;
-  while pos.pieces[i] {
-    sq := pos.squares[i];
-    pc := pos.pieces[i];
-    active.values[active.size] = make_index(c, sq, pc, ksq);
+  occupied := chess.occupied;
+  kings := chess.w_king | chess.b_king;
+  occupied ^= kings;
+  while occupied {
+    sq := cast(s32) bsf(occupied);
+    occupied &= occupied - 1;
+    pc := cast(s32) chess.pieces[sq];
+    active.values[active.size] = make_index(xx c, sq, pc, ksq);
     active.size += 1;
-    i += 1;
   }
 }
 
-half_kp_append_changed_indices :: (pos: *Position, c: s32, dp: *DirtyPiece, removed: *IndexList, added: *IndexList) {
-  ksq := pos.squares[c];
+bsf :: (value: u64) -> int #expand {
+  result: int = 0;
+  #asm { bsf.q result, value; }
+  return result;
+}
+
+half_kp_append_changed_indices :: (ksq: s32, c: s32, dp: DirtyPiece, removed: *IndexList, added: *IndexList) {
   ksq = orient(c, ksq) * PS_END;
-  for i: 0..dp.dirtyNum-1 {
+  num := dp.dirtyNum - 1;
+  for i: 0..num {
     pc := dp.pc[i];
     if pc == 1 || pc == 7 continue;
     from := dp.from[i];
+    to := dp.to[i];
     if from != 64 then {
       removed.values[removed.size] = make_index(c, from, pc, ksq);
       removed.size += 1;
     }
 
-    to := dp.to[i];
     if to != 64 then {
       added.values[added.size] = make_index(c, to, pc, ksq);
       added.size += 1;
@@ -559,21 +585,21 @@ PieceToIndex: [2][14] s32 = .[
        0, PS_W_QUEEN, PS_W_ROOK, PS_W_BISHOP, PS_W_KNIGHT, PS_W_PAWN, 0]
 ];
 
-transform :: (pos: *Position, output: [] s8, out_mask: *u32) {
-  if !update_accumulator(pos) then
-    refresh_accumulator(pos);
-  accumulation: [][256] s16 = pos.nnue[0].accumulator.accumulation;
-  pers := pos.player; 
+transform :: (chess: *Chess, nnue: [3] *NNUEdata, output: *s8, out_mask: *u32) {
+  if !update_accumulator(chess, nnue) then
+    refresh_accumulator(chess, nnue);
+  accumulation: [][256] s16 = nnue[0].accumulator.accumulation;
 
   // 128 bit xmm register
   // 8 bit data
   // 128 / 8 => 16 numbers at a time.
   // 256 numbers total / 16 numbers per SIMD = 16 times.
   data  := *output[0];
+  turn := chess.turn;
   for p: 0..1 {
     accindex := 0;
     while accindex < 256 {
-      accum := *accumulation[pers][accindex];
+      accum := *accumulation[turn][accindex];
       #asm SSE {
         xmm0: vec; xmm1: vec; xmm2: vec; xmm3: vec;
         xmm4: vec; xmm5: vec; xmm6: vec; xmm7: vec;
@@ -606,7 +632,7 @@ transform :: (pos: *Position, output: [] s8, out_mask: *u32) {
       accindex += 128;
     }
 
-    pers ^= 1;
+    turn ^= 1;
   }
 }
 
