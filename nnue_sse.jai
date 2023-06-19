@@ -242,120 +242,99 @@ update_accumulator :: (chess: *Chess, nnue: [3] *NNUEdata) -> bool {
   added_indices[1].size = 0;
   append_changed_indices(chess, nnue, removed_indices, added_indices, reset);
 
-  copy_biases :: (tile: *void) #expand {
-    #asm SSE {
-      movdqa.x xmm0,  [tile + 0x00];
-      movdqa.x xmm1,  [tile + 0x10];
-      movdqa.x xmm2,  [tile + 0x20];
-      movdqa.x xmm3,  [tile + 0x30];
-      movdqa.x xmm4,  [tile + 0x40];
-      movdqa.x xmm5,  [tile + 0x50];
-      movdqa.x xmm6,  [tile + 0x60];
-      movdqa.x xmm7,  [tile + 0x70];
-      movdqa.x xmm8,  [tile + 0x80];
-      movdqa.x xmm9,  [tile + 0x90];
-      movdqa.x xmm10, [tile + 0xa0];
-      movdqa.x xmm11, [tile + 0xb0];
-      movdqa.x xmm12, [tile + 0xc0];
-      movdqa.x xmm13, [tile + 0xd0];
-      movdqa.x xmm14, [tile + 0xe0];
-      movdqa.x xmm15, [tile + 0xf0];
-    }
-  }
-
-  sub_weights :: (tile: *void) #expand {
-    #asm SSE {
-      psubw.x xmm0,  [tile + 0x00];
-      psubw.x xmm1,  [tile + 0x10];
-      psubw.x xmm2,  [tile + 0x20];
-      psubw.x xmm3,  [tile + 0x30];
-      psubw.x xmm4,  [tile + 0x40];
-      psubw.x xmm5,  [tile + 0x50];
-      psubw.x xmm6,  [tile + 0x60];
-      psubw.x xmm7,  [tile + 0x70];
-      psubw.x xmm8,  [tile + 0x80];
-      psubw.x xmm9,  [tile + 0x90];
-      psubw.x xmm10, [tile + 0xa0];
-      psubw.x xmm11, [tile + 0xb0];
-      psubw.x xmm12, [tile + 0xc0];
-      psubw.x xmm13, [tile + 0xd0];
-      psubw.x xmm14, [tile + 0xe0];
-      psubw.x xmm15, [tile + 0xf0];
-    }
-  }
-
-  add_weights :: (tile: *void) #expand {
-    #asm SSE {
-      paddw.x xmm0,  [tile + 0x00];
-      paddw.x xmm1,  [tile + 0x10];
-      paddw.x xmm2,  [tile + 0x20];
-      paddw.x xmm3,  [tile + 0x30];
-      paddw.x xmm4,  [tile + 0x40];
-      paddw.x xmm5,  [tile + 0x50];
-      paddw.x xmm6,  [tile + 0x60];
-      paddw.x xmm7,  [tile + 0x70];
-      paddw.x xmm8,  [tile + 0x80];
-      paddw.x xmm9,  [tile + 0x90];
-      paddw.x xmm10, [tile + 0xa0];
-      paddw.x xmm11, [tile + 0xb0];
-      paddw.x xmm12, [tile + 0xc0];
-      paddw.x xmm13, [tile + 0xd0];
-      paddw.x xmm14, [tile + 0xe0];
-      paddw.x xmm15, [tile + 0xf0];
-    }
-  }
-
-  store_accumulator :: (tile: *void) #expand {
-    #asm SSE {
-      movdqa.x [tile + 0x00], xmm0;
-      movdqa.x [tile + 0x10], xmm1;
-      movdqa.x [tile + 0x20], xmm2;
-      movdqa.x [tile + 0x30], xmm3;
-      movdqa.x [tile + 0x40], xmm4;
-      movdqa.x [tile + 0x50], xmm5;
-      movdqa.x [tile + 0x60], xmm6;
-      movdqa.x [tile + 0x70], xmm7;
-      movdqa.x [tile + 0x80], xmm8;
-      movdqa.x [tile + 0x90], xmm9;
-      movdqa.x [tile + 0xa0], xmm10;
-      movdqa.x [tile + 0xb0], xmm11;
-      movdqa.x [tile + 0xc0], xmm12;
-      movdqa.x [tile + 0xd0], xmm13;
-      movdqa.x [tile + 0xe0], xmm14;
-      movdqa.x [tile + 0xf0], xmm15; 
-    }
-  }
-
-  #asm SSE {
-    xmm0:  vec; xmm1:  vec; xmm2:  vec; xmm3:  vec;
-    xmm4:  vec; xmm5:  vec; xmm6:  vec; xmm7:  vec;
-    xmm8:  vec; xmm9:  vec; xmm10: vec; xmm11: vec;
-    xmm12: vec; xmm13: vec; xmm14: vec; xmm15: vec;
-  }
-
   for c: 0..1 {
     accindex := 0;
     while accindex < 256 {
       acc_tile := *accumulator.accumulation[c][accindex];
-      if reset[c] then {
-        copy_biases(*ft_biases[accindex]);
-      } else {
-        copy_biases(*prevAcc.accumulation[c][accindex]);
-        
+      r := reset[c] == true;
+      copy_tile := ifx r then *ft_biases[accindex] else *prevAcc.accumulation[c][accindex];
+      #asm SSE {
+        movdqa.x xmm0: vec,  [copy_tile + 0x00];
+        movdqa.x xmm1: vec,  [copy_tile + 0x10];
+        movdqa.x xmm2: vec,  [copy_tile + 0x20];
+        movdqa.x xmm3: vec,  [copy_tile + 0x30];
+        movdqa.x xmm4: vec,  [copy_tile + 0x40];
+        movdqa.x xmm5: vec,  [copy_tile + 0x50];
+        movdqa.x xmm6: vec,  [copy_tile + 0x60];
+        movdqa.x xmm7: vec,  [copy_tile + 0x70];
+        movdqa.x xmm8: vec,  [copy_tile + 0x80];
+        movdqa.x xmm9: vec,  [copy_tile + 0x90];
+        movdqa.x xmm10: vec, [copy_tile + 0xa0];
+        movdqa.x xmm11: vec, [copy_tile + 0xb0];
+        movdqa.x xmm12: vec, [copy_tile + 0xc0];
+        movdqa.x xmm13: vec, [copy_tile + 0xd0];
+        movdqa.x xmm14: vec, [copy_tile + 0xe0];
+        movdqa.x xmm15: vec, [copy_tile + 0xf0];
+      }
+
+      if r == false then {
         // Difference calculation for the deactivated features
         for k: 0..removed_indices[c].size-1 {
           index := removed_indices[c].values[k] * kHalfDimensions;
-          sub_weights(*ft_weights[index + accindex]);
+          sub_tile := *ft_weights[index + accindex];
+          #asm SSE {
+            psubw.x xmm0,  [sub_tile + 0x00];
+            psubw.x xmm1,  [sub_tile + 0x10];
+            psubw.x xmm2,  [sub_tile + 0x20];
+            psubw.x xmm3,  [sub_tile + 0x30];
+            psubw.x xmm4,  [sub_tile + 0x40];
+            psubw.x xmm5,  [sub_tile + 0x50];
+            psubw.x xmm6,  [sub_tile + 0x60];
+            psubw.x xmm7,  [sub_tile + 0x70];
+            psubw.x xmm8,  [sub_tile + 0x80];
+            psubw.x xmm9,  [sub_tile + 0x90];
+            psubw.x xmm10, [sub_tile + 0xa0];
+            psubw.x xmm11, [sub_tile + 0xb0];
+            psubw.x xmm12, [sub_tile + 0xc0];
+            psubw.x xmm13, [sub_tile + 0xd0];
+            psubw.x xmm14, [sub_tile + 0xe0];
+            psubw.x xmm15, [sub_tile + 0xf0];
+          }
         }
       }
      
       // Difference calculation for the activated features
       for k: 0..added_indices[c].size-1 {
         index := added_indices[c].values[k] * kHalfDimensions;
-        add_weights(*ft_weights[index + accindex]);
+        add_tile := *ft_weights[index + accindex];
+        #asm SSE {
+          paddw.x xmm0,  [add_tile + 0x00];
+          paddw.x xmm1,  [add_tile + 0x10];
+          paddw.x xmm2,  [add_tile + 0x20];
+          paddw.x xmm3,  [add_tile + 0x30];
+          paddw.x xmm4,  [add_tile + 0x40];
+          paddw.x xmm5,  [add_tile + 0x50];
+          paddw.x xmm6,  [add_tile + 0x60];
+          paddw.x xmm7,  [add_tile + 0x70];
+          paddw.x xmm8,  [add_tile + 0x80];
+          paddw.x xmm9,  [add_tile + 0x90];
+          paddw.x xmm10, [add_tile + 0xa0];
+          paddw.x xmm11, [add_tile + 0xb0];
+          paddw.x xmm12, [add_tile + 0xc0];
+          paddw.x xmm13, [add_tile + 0xd0];
+          paddw.x xmm14, [add_tile + 0xe0];
+          paddw.x xmm15, [add_tile + 0xf0];
+        }
       }
      
-      store_accumulator(acc_tile);
+      #asm SSE {
+        movdqa.x [acc_tile + 0x00], xmm0;
+        movdqa.x [acc_tile + 0x10], xmm1;
+        movdqa.x [acc_tile + 0x20], xmm2;
+        movdqa.x [acc_tile + 0x30], xmm3;
+        movdqa.x [acc_tile + 0x40], xmm4;
+        movdqa.x [acc_tile + 0x50], xmm5;
+        movdqa.x [acc_tile + 0x60], xmm6;
+        movdqa.x [acc_tile + 0x70], xmm7;
+        movdqa.x [acc_tile + 0x80], xmm8;
+        movdqa.x [acc_tile + 0x90], xmm9;
+        movdqa.x [acc_tile + 0xa0], xmm10;
+        movdqa.x [acc_tile + 0xb0], xmm11;
+        movdqa.x [acc_tile + 0xc0], xmm12;
+        movdqa.x [acc_tile + 0xd0], xmm13;
+        movdqa.x [acc_tile + 0xe0], xmm14;
+        movdqa.x [acc_tile + 0xf0], xmm15; 
+      }
       accindex += 128;
     }
   }
@@ -370,87 +349,70 @@ refresh_accumulator :: (chess: *Chess, nnue: [3] *NNUEdata) {
   activeIndices[1].size = 0;
   append_active_indices(chess, activeIndices);
 
-  copy_biases :: (tile: *void) #expand {
-    #asm SSE {
-      movdqa.x xmm0,  [tile + 0x00];
-      movdqa.x xmm1,  [tile + 0x10];
-      movdqa.x xmm2,  [tile + 0x20];
-      movdqa.x xmm3,  [tile + 0x30];
-      movdqa.x xmm4,  [tile + 0x40];
-      movdqa.x xmm5,  [tile + 0x50];
-      movdqa.x xmm6,  [tile + 0x60];
-      movdqa.x xmm7,  [tile + 0x70];
-      movdqa.x xmm8,  [tile + 0x80];
-      movdqa.x xmm9,  [tile + 0x90];
-      movdqa.x xmm10, [tile + 0xa0];
-      movdqa.x xmm11, [tile + 0xb0];
-      movdqa.x xmm12, [tile + 0xc0];
-      movdqa.x xmm13, [tile + 0xd0];
-      movdqa.x xmm14, [tile + 0xe0];
-      movdqa.x xmm15, [tile + 0xf0];
-    }
-  }
-
-  add_weights :: (tile: *void) #expand {
-    #asm SSE {
-      paddw.x xmm0,  [tile + 0x00];
-      paddw.x xmm1,  [tile + 0x10];
-      paddw.x xmm2,  [tile + 0x20];
-      paddw.x xmm3,  [tile + 0x30];
-      paddw.x xmm4,  [tile + 0x40];
-      paddw.x xmm5,  [tile + 0x50];
-      paddw.x xmm6,  [tile + 0x60];
-      paddw.x xmm7,  [tile + 0x70];
-      paddw.x xmm8,  [tile + 0x80];
-      paddw.x xmm9,  [tile + 0x90];
-      paddw.x xmm10, [tile + 0xa0];
-      paddw.x xmm11, [tile + 0xb0];
-      paddw.x xmm12, [tile + 0xc0];
-      paddw.x xmm13, [tile + 0xd0];
-      paddw.x xmm14, [tile + 0xe0];
-      paddw.x xmm15, [tile + 0xf0];
-    }
-  }
-
-  store_accumulator :: (tile: *void) #expand {
-    #asm SSE {
-      movdqa.x [tile + 0x00], xmm0;
-      movdqa.x [tile + 0x10], xmm1;
-      movdqa.x [tile + 0x20], xmm2;
-      movdqa.x [tile + 0x30], xmm3;
-      movdqa.x [tile + 0x40], xmm4;
-      movdqa.x [tile + 0x50], xmm5;
-      movdqa.x [tile + 0x60], xmm6;
-      movdqa.x [tile + 0x70], xmm7;
-      movdqa.x [tile + 0x80], xmm8;
-      movdqa.x [tile + 0x90], xmm9;
-      movdqa.x [tile + 0xa0], xmm10;
-      movdqa.x [tile + 0xb0], xmm11;
-      movdqa.x [tile + 0xc0], xmm12;
-      movdqa.x [tile + 0xd0], xmm13;
-      movdqa.x [tile + 0xe0], xmm14;
-      movdqa.x [tile + 0xf0], xmm15; 
-    }
-  }
-
-  COUNT :: 31;
-  #asm SSE {
-    xmm0:  vec; xmm1:  vec; xmm2:  vec; xmm3:  vec;
-    xmm4:  vec; xmm5:  vec; xmm6:  vec; xmm7:  vec;
-    xmm8:  vec; xmm9:  vec; xmm10: vec; xmm11: vec;
-    xmm12: vec; xmm13: vec; xmm14: vec; xmm15: vec;
-  }
   for c: 0..1 {
     accindex := 0;
     while accindex < 256 {
-      copy_biases(*ft_biases[accindex]);
+      tile := *ft_biases[accindex];
       acc_tile := *accumulator.accumulation[c][accindex];
+      #asm SSE {
+        movdqa.x xmm0: vec,  [tile + 0x00];
+        movdqa.x xmm1: vec,  [tile + 0x10];
+        movdqa.x xmm2: vec,  [tile + 0x20];
+        movdqa.x xmm3: vec,  [tile + 0x30];
+        movdqa.x xmm4: vec,  [tile + 0x40];
+        movdqa.x xmm5: vec,  [tile + 0x50];
+        movdqa.x xmm6: vec,  [tile + 0x60];
+        movdqa.x xmm7: vec,  [tile + 0x70];
+        movdqa.x xmm8: vec,  [tile + 0x80];
+        movdqa.x xmm9: vec,  [tile + 0x90];
+        movdqa.x xmm10: vec, [tile + 0xa0];
+        movdqa.x xmm11: vec, [tile + 0xb0];
+        movdqa.x xmm12: vec, [tile + 0xc0];
+        movdqa.x xmm13: vec, [tile + 0xd0];
+        movdqa.x xmm14: vec, [tile + 0xe0];
+        movdqa.x xmm15: vec, [tile + 0xf0];
+      }
       for k: 0..activeIndices[c].size-1 {
         index := activeIndices[c].values[k];
         offset := kHalfDimensions * index;
-        add_weights(*ft_weights[offset + accindex]);
+        add_tile := *ft_weights[offset + accindex];
+        #asm SSE {
+          paddw.x xmm0,  [add_tile + 0x00];
+          paddw.x xmm1,  [add_tile + 0x10];
+          paddw.x xmm2,  [add_tile + 0x20];
+          paddw.x xmm3,  [add_tile + 0x30];
+          paddw.x xmm4,  [add_tile + 0x40];
+          paddw.x xmm5,  [add_tile + 0x50];
+          paddw.x xmm6,  [add_tile + 0x60];
+          paddw.x xmm7,  [add_tile + 0x70];
+          paddw.x xmm8,  [add_tile + 0x80];
+          paddw.x xmm9,  [add_tile + 0x90];
+          paddw.x xmm10, [add_tile + 0xa0];
+          paddw.x xmm11, [add_tile + 0xb0];
+          paddw.x xmm12, [add_tile + 0xc0];
+          paddw.x xmm13, [add_tile + 0xd0];
+          paddw.x xmm14, [add_tile + 0xe0];
+          paddw.x xmm15, [add_tile + 0xf0];
+        }
       }
-      store_accumulator(acc_tile);
+      #asm SSE {
+        movdqa.x [acc_tile + 0x00], xmm0;
+        movdqa.x [acc_tile + 0x10], xmm1;
+        movdqa.x [acc_tile + 0x20], xmm2;
+        movdqa.x [acc_tile + 0x30], xmm3;
+        movdqa.x [acc_tile + 0x40], xmm4;
+        movdqa.x [acc_tile + 0x50], xmm5;
+        movdqa.x [acc_tile + 0x60], xmm6;
+        movdqa.x [acc_tile + 0x70], xmm7;
+        movdqa.x [acc_tile + 0x80], xmm8;
+        movdqa.x [acc_tile + 0x90], xmm9;
+        movdqa.x [acc_tile + 0xa0], xmm10;
+        movdqa.x [acc_tile + 0xb0], xmm11;
+        movdqa.x [acc_tile + 0xc0], xmm12;
+        movdqa.x [acc_tile + 0xd0], xmm13;
+        movdqa.x [acc_tile + 0xe0], xmm14;
+        movdqa.x [acc_tile + 0xf0], xmm15; 
+      }
       accindex += 128;
     }
   }
