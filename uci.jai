@@ -339,14 +339,27 @@ time_management :: (time: int, incr: int, movestogo: int, ply: int) -> movetime:
   } else {
     div = max(60 - ply, 20);
   }
-  movetime := (time / div) + incr - 50;
-  if movetime < 0
-    movetime = 0;
-  return movetime;
+
+  if incr > time then
+    incr = 0;
+
+  time /= div;
+  time -= 75;
+
+  // time up
+  if time < 0 {
+    time = 0;
+    incr -= 75;
+    if incr < 0 then {
+      incr = 1;
+    }
+  }
+
+  return time + incr;
 }
 
 
-chess: ChessGame;
+chess: ChessGame #align 64;
 
 
 

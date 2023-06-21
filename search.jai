@@ -58,7 +58,7 @@ set_threads :: (num_wanted: int) {
   if chess_work.count
     array_free(chess_work);
 
-  chess_work = NewArray(num_threads, ChessGame);
+  chess_work = NewArray(num_threads, ChessGame, alignment=64);
   for *chess_work {
     it.main_thread = false;
     initialize_chess_game_memory(it);
