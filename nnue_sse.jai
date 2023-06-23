@@ -343,7 +343,7 @@ update_accumulator :: (chess: *Chess, nnue: [3] *NNUEdata) -> bool {
 }
 
 refresh_accumulator :: (chess: *Chess, nnue: [3] *NNUEdata) {
-  accumulator := *nnue[0].accumulator;
+  accumulator := *(nnue[0].accumulator);
   activeIndices: [2] IndexList;
   activeIndices[0].size = 0;
   activeIndices[1].size = 0;
