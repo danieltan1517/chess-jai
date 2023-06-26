@@ -160,7 +160,7 @@ nnue_evaluate :: (chess: *ChessGame) -> int {
 }
 
 nnue_evaluate_board :: (chess: Chess) -> int {
-  nnue: NNUEdata;
+  nnue: NNUEdata #align 32;
   nnue.accumulator.computedAccumulation = 0;
   nnue_data: [3] *NNUEdata;
   nnue_data[0] = *nnue;
@@ -223,16 +223,21 @@ IndexList :: struct {
 }
 
 nnue_evaluate_pos :: (chess: *Chess, nnue: [3] *NNUEdata) -> s32 {
-  input_mask:   [FtOutDims / (8 * size_of(u32)) ] u32 #align 8;
-  hidden1_mask: [8 / size_of(u32)] u32 #align 8;
-  FV_SCALE :: 16;
-  input: [FtOutDims] s8 #align 16;
-  hidden1_out: [32] s8  #align 16;
-  hidden2_out: [32] s8  #align 16; 
+  Data :: struct {
+    input: [FtOutDims] s8;
+    hidden1_out: [32] s8;
+    hidden2_out: [32] s8; 
+  }
+
+  input_mask:   [FtOutDims / (8 * size_of(u32)) ] u32;
+  hidden1_mask: [8 / size_of(u32)] u32;
+  using data: Data #align 32;
+
   transform(chess, nnue, *input[0], *input_mask[0]);
   affine_txfm(*input[0], *hidden1_out[0], FtOutDims, 32, *hidden1_biases[0], *hidden1_weights[0], *input_mask[0], *hidden1_mask[0], true);
   affine_txfm(*hidden1_out[0], *hidden2_out[0], 32, 32, *hidden2_biases[0], *hidden2_weights[0], *hidden1_mask[0], null, false);
   out_value := inline affine_propagate(*hidden2_out[0], output_biases[0], *output_weights[0]);
+  FV_SCALE :: 16;
   return out_value / FV_SCALE;
 }
 
@@ -593,14 +598,14 @@ transform :: (chess: *Chess, nnue: [3] *NNUEdata, output: *s8, out_mask: *u32) {
       movdqa.y   ymm7: vec,  [tile + 0x1c0];
       packsswb.y ymm7, ymm7, [tile + 0x1e0];
 
-      movdqu.y   [output + 0x000], ymm0;
-      movdqu.y   [output + 0x020], ymm1;
-      movdqu.y   [output + 0x040], ymm2;
-      movdqu.y   [output + 0x060], ymm3;
-      movdqu.y   [output + 0x080], ymm4;
-      movdqu.y   [output + 0x0a0], ymm5;
-      movdqu.y   [output + 0x0c0], ymm6;
-      movdqu.y   [output + 0x0e0], ymm7;
+      movdqa.y   [output + 0x000], ymm0;
+      movdqa.y   [output + 0x020], ymm1;
+      movdqa.y   [output + 0x040], ymm2;
+      movdqa.y   [output + 0x060], ymm3;
+      movdqa.y   [output + 0x080], ymm4;
+      movdqa.y   [output + 0x0a0], ymm5;
+      movdqa.y   [output + 0x0c0], ymm6;
+      movdqa.y   [output + 0x0e0], ymm7;
       pcmpgtb.y  ymm0, ymm0, zeroes; 
       pcmpgtb.y  ymm1, ymm1, zeroes; 
       pcmpgtb.y  ymm2, ymm2, zeroes; 
@@ -741,7 +746,7 @@ affine_txfm :: (input: *s8, output: *s8, inDims: u32, outDims: u32, biases: *s32
   #if pack8_and_calc_mask then {
     #asm AVX, AVX2 {
       // outMask[0] = _mm256_movemask_epi8(_mm256_cmpgt_epi8(outVec[0], kZero));
-      movdqu.y   [output], out_0;
+      movdqa.y   [output], out_0;
       pcmpgtb.y out_0, out_0, kZero;
       pmovmskb  reg: gpr, out_0;
       mov.d     [out_mask], reg;
@@ -750,7 +755,7 @@ affine_txfm :: (input: *s8, output: *s8, inDims: u32, outDims: u32, biases: *s32
     #asm AVX, AVX2 {
       // outVec[0] = _mm256_max_epi8(outVec[0], kZero);
       pmaxsb.y out_0, out_0, kZero;
-      movdqu.y [output], out_0;
+      movdqa.y [output], out_0;
     }
   }
 }
@@ -765,7 +770,7 @@ affine_propagate :: (input: *s8, biases: s32, weights: *s8) -> s32 #expand {
     // return _mm_cvtsi128_si32(sum) + _mm_extract_epi32(sum, 1) + biases[0];
 
     mov eax, 1;
-    movdqu.y    prod: vec,  [input];
+    movdqa.y    prod: vec,  [input];
     pmaddubsw.y prod, prod, [weights];
     movd        xmm0: vec, eax;
     pbroadcastw xmm0, xmm0; 
