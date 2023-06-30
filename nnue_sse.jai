@@ -132,7 +132,7 @@ nnue_evaluate :: (chess: *ChessGame) -> int {
 }
 
 nnue_evaluate_board :: (chess: Chess) -> int {
-  nnue: NNUEdata;
+  nnue: NNUEdata #align 32;
   nnue.accumulator.computedAccumulation = 0;
   nnue_data: [3] *NNUEdata;
   nnue_data[0] = *nnue;
