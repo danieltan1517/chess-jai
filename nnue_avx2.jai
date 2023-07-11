@@ -272,6 +272,7 @@ update_accumulator :: (chess: *Chess, nnue: [3] *NNUEdata) -> bool {
   added_indices[1].size = 0;
   append_changed_indices(chess, nnue, removed_indices, added_indices, reset);
   for c: 0..1 {
+    accTile := *accumulator.accumulation[c][0];
     r := reset[c];
     tile := ifx r then *ft_biases[0] else *prevAcc.accumulation[c][0];
     #asm AVX, AVX2 {
@@ -342,7 +343,6 @@ update_accumulator :: (chess: *Chess, nnue: [3] *NNUEdata) -> bool {
       }
     }
 
-    accTile := *accumulator.accumulation[c][0];
     #asm AVX, AVX2 {
       movdqa.y [accTile + 0x000],ymm0;
       movdqa.y [accTile + 0x020],ymm1;
@@ -376,6 +376,8 @@ refresh_accumulator :: (chess: *Chess, nnue: [3] *NNUEdata) {
 
   biases := *ft_biases[0];
   for c: 0..1 {
+
+    acc := *accumulator.accumulation[c][0];
     #asm AVX, AVX2 {
       movdqa.y ymm0:  vec, [biases + 0x000];
       movdqa.y ymm1:  vec, [biases + 0x020];
@@ -417,8 +419,6 @@ refresh_accumulator :: (chess: *Chess, nnue: [3] *NNUEdata) {
         paddw.y ymm15, ymm15, [tile_add + 0x1e0];
       }
     }
-
-    acc := *accumulator.accumulation[c][0];
     #asm AVX, AVX2 {
       movdqa.y [acc + 0x000],ymm0;
       movdqa.y [acc + 0x020],ymm1;
