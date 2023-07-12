@@ -2434,9 +2434,22 @@ can_move :: (using chess: *Chess, sq: u64) -> bool {
 }
 
 popcount :: (value: u64) -> int #expand {
-  result: int;
-  #asm { popcnt.q  result, value; }
-  return result;
+  // use the assembly instruction for popcount if it's available.
+  #if CPU == .X64 {
+    result: int;
+    #asm { popcnt.q  result, value; }
+    return result;
+  } else {
+    software_emulate_popcount :: (value: u64) -> int {
+      bits := 0;
+      while value {
+        bits += 1;
+        value &= value - 1;
+      }
+      return bits;
+    }
+    return software_emulate_popcount(value);
+  }
 }
 
 bit_reverse64  :: (x: u64) -> u64 #expand {
