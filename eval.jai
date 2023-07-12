@@ -4,8 +4,6 @@ uci_evaluate :: (chess: *Chess) -> int #expand {
   return nnue_evaluate_board(chess);
 }
 
-positions := 0;
-
 evaluate :: (chess: *ChessGame, fifty: int) -> int {
   TF, score := trivial_evaluation(chess, fifty); 
   if TF return score;
