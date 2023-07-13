@@ -2127,9 +2127,15 @@ get_countermove_history :: (chess: *ChessGame, num: int) -> [][64] s32 {
 
 // fetch and add.
 fetch_and_add :: (val: *int) #expand {
-  #asm {
-    mov incr: gpr, 1;
-    xadd.q [val], incr;
+  #if CPU == .X64 {
+    #asm {
+      mov incr: gpr, 1;
+      xadd.q [val], incr;
+    }
+  } else {
+    // unknown cpu architecture. just default to simple incrementing of number.
+    // this doesn't support multi-threading...but it should be okay-ish...
+    val.* += 1;
   }
 }
 
