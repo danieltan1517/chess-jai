@@ -2108,11 +2108,34 @@ set_occ :: (index: int, bits_in_mask: u64, attack_mask: u64) -> u64 {
 }
 
 bit_scan_forward :: (value: u64)->int #expand {
-  #assert(!is_constant(value));
+  
+  #if CPU == .X64 {
+    #assert(!is_constant(value));
+    result := -1;
+    #asm { bsf.q result, value; }
+    return result;
+  } else {
+    // DeBruijn Multiplication.
+    // https://www.chessprogramming.org/BitScan#DeBruijnMultiplation
+    index64 :: int.[
+       0,  1, 48,  2, 57, 49, 28,  3,
+      61, 58, 50, 42, 38, 29, 17,  4,
+      62, 55, 59, 36, 53, 51, 43, 22,
+      45, 39, 33, 30, 24, 18, 12,  5,
+      63, 47, 56, 27, 60, 41, 37, 16,
+      54, 35, 52, 21, 44, 32, 23, 11,
+      46, 26, 40, 15, 34, 20, 31, 10,
+      25, 14, 19,  9, 13,  8,  7,  6,
+    ];
 
-  result := -1;
-  #asm { bsf.q result, value; }
-  return result;
+    bit_scan_forward_inner :: (value: u64) -> int {
+      DEBRUIJN64 : u64 : 0x03f79d71b4cb0a89;
+      value = value & (cast(u64) -(cast(int)value));
+      return index64[ (value * DEBRUIJN64) >> 58];
+    }
+
+    return bit_scan_forward_inner(value);
+  }
 }
 
 pext :: (a: u64, b: u64) -> u64 #expand {
