@@ -2302,7 +2302,6 @@ simp :: #import "Simp";
 #import "GetRect";
 #import "Input";
 #import "Window_Creation";
-#import "GetRect";
 #import "Sound_Player";
 #import "Wav_File";
 #import "File";
