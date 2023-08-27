@@ -564,11 +564,11 @@ main :: () {
     }
 
     if format.wFormatTag == WAVE_FORMAT_PCM {
-      data.type = Mixer_Sound_Data.Type.LINEAR_SAMPLE_ARRAY;
+      data.type = .LINEAR_SAMPLE_ARRAY;
       data.nchannels = cast(u16) format.nChannels;
       data.nsamples_times_nchannels = samples.count/2;
     } else if format.wFormatTag == WAVE_FORMAT_DVI_ADPCM {
-      data.type = Mixer_Sound_Data.Type.ADPCM_COMPRESSED;
+      data.type = .ADPCM_COMPRESSED;
       data.wSamplesPerBlock = extra.wSamplesPerBlock;
       data.nBlockAlign = format.nBlockAlign;
       data.nchannels = cast(u16) format.nChannels;
@@ -1436,7 +1436,7 @@ draw_subwindow_load_engine :: (r: Rect, data: *void) {
             write_to_process(process, to_u8_array(opt));
           }
         case .button;
-        case .string;
+        case .uci_string;
           if !equal(string_value, string_value_old) {
             string_value = string_value_old;
             opt := tprint("setoption name % value %\n", name, string_value);
@@ -1488,7 +1488,7 @@ draw_subwindow_load_engine :: (r: Rect, data: *void) {
           write_to_process(process, to_u8_array(opt));
         }
         index += 1;
-      case .string;
+      case .uci_string;
         label(s, name, label_theme);
         s.x += k * XVAL * 2;
         s.w -= k * XVAL * 2;
@@ -2029,7 +2029,7 @@ parse_uci_option :: (message: string) -> bool, Engine_Option #must {
     case "button";
       return .button;
     case "string";
-      return .string;
+      return .uci_string;
     }
     return .check, false;
   }
@@ -2081,7 +2081,7 @@ parse_uci_option :: (message: string) -> bool, Engine_Option #must {
         combo_default = value;
       case .button;
         return false, option;
-      case .string;
+      case .uci_string;
       }
 
     case "max";
@@ -2097,7 +2097,7 @@ parse_uci_option :: (message: string) -> bool, Engine_Option #must {
       case .combo;
       case .button;
         return false, option;
-      case .string;
+      case .uci_string;
         return false, option;
       }
 
@@ -2114,7 +2114,7 @@ parse_uci_option :: (message: string) -> bool, Engine_Option #must {
       case .combo;
       case .button;
         return false, option;
-      case .string;
+      case .uci_string;
         return false, option;
       }
     case "var";
@@ -2277,7 +2277,7 @@ UCI_Types :: enum {
   spin;
   combo;
   button;
-  string;
+  uci_string;
 }
 
 is_draw :: () -> bool {
