@@ -46,11 +46,6 @@ arrows: [128] Arrow;
 arrow_index: int = 0;
 num_arrows: int = 0;
 
-// sound play and sound effects
-sound_player : *Sound_Player;
-sound_quiet_move: *Mixer_Sound_Data;
-sound_capture_move: *Mixer_Sound_Data;
-
 // board colors.
 white_sq_color := Vector4.{238.0/255.0, 238.0/255.0, 210.0/255.0, 1.0};
 black_sq_color := Vector4.{118.0/255.0, 150.0/255.0,  86.0/255.0, 1.0};
@@ -536,80 +531,34 @@ main :: () {
     assert(font != null, "font not loaded properly");
   }
 
-  init_sound :: () {
-    sound_player = New(Sound_Player);
-    sound_player.update_history = true;
-    sound_quiet_move = load_wav_file("resources/move.wav");
-    assert(sound_quiet_move != null);
-
-    sound_capture_move = load_wav_file("resources/capture.wav");
-    assert(sound_capture_move != null);
-
-    // initialize sound player
-    success := init(sound_player, win, true, true);
-    // assert(success);
-  }
-
-  load_wav_file :: (name: string) -> *Mixer_Sound_Data {
-    file_data, success := read_entire_file(name);
-    assert(success);
-    data := New(Mixer_Sound_Data);
-    data.name = copy_string(name);
-    data.buffer = file_data;
-
-    format, samples, success2, extra := get_wav_header(data.buffer);
-    if !success2 {
-      log("Unable to parse '%' as wav.\n", data.full_path);
-      return data;
-    }
-
-    if format.wFormatTag == WAVE_FORMAT_PCM {
-      data.type = .LINEAR_SAMPLE_ARRAY;
-      data.nchannels = cast(u16) format.nChannels;
-      data.nsamples_times_nchannels = samples.count/2;
-    } else if format.wFormatTag == WAVE_FORMAT_DVI_ADPCM {
-      data.type = .ADPCM_COMPRESSED;
-      data.wSamplesPerBlock = extra.wSamplesPerBlock;
-      data.nBlockAlign = format.nBlockAlign;
-      data.nchannels = cast(u16) format.nChannels;
-      data.nsamples_times_nchannels = extra.wSamplesAccordingToFactChunk * data.nchannels;
-    } else {
-      assert(false);
-    }
-
-    data.samples = cast(*s16) samples.data;
-    data.sampling_rate = cast(u32) format.nSamplesPerSec;
-    return data;
-  }
-
-    determine_piece :: (x: float, y: float, corner_x: float, corner_y: float, end_x: float, end_y: float, square: float) -> Piece {
-      promotion_select_piece := Piece.NONE;
-      if chess_mouse == .Promote {
-        if chess.turn == .WHITE
-          promotion_select_piece = Piece.W_QUEEN;
-        else
-          promotion_select_piece = Piece.B_QUEEN;
-        if x >= corner_x && x <= end_x && y >= corner_y && y <= end_y then {
-          mouse_coor_x := cast(int) ((x - corner_x) / square);
-          mouse_coor_y := cast(int) ((y - corner_y) / square);
-          if board_orientation == false then {
-            mouse_coor_x = 7 - mouse_coor_x;
-            mouse_coor_y = 7 - mouse_coor_y;
-          }
-          position := mouse_coor_x + mouse_coor_y * 8;
-          if position == promote_q_select {
-            promotion_select_piece = ifx chess.turn == .WHITE Piece.W_QUEEN else Piece.B_QUEEN;
-          } else if position == promote_r_select {
-            promotion_select_piece = ifx chess.turn == .WHITE Piece.W_ROOK else Piece.B_ROOK;
-          } else if position == promote_b_select {
-            promotion_select_piece = ifx chess.turn == .WHITE Piece.W_BISHOP else Piece.B_BISHOP;
-          } else if position == promote_n_select {
-            promotion_select_piece = ifx chess.turn == .WHITE Piece.W_KNIGHT else Piece.B_KNIGHT;
-          }
+  determine_piece :: (x: float, y: float, corner_x: float, corner_y: float, end_x: float, end_y: float, square: float) -> Piece {
+    promotion_select_piece := Piece.NONE;
+    if chess_mouse == .Promote {
+      if chess.turn == .WHITE
+        promotion_select_piece = Piece.W_QUEEN;
+      else
+        promotion_select_piece = Piece.B_QUEEN;
+      if x >= corner_x && x <= end_x && y >= corner_y && y <= end_y then {
+        mouse_coor_x := cast(int) ((x - corner_x) / square);
+        mouse_coor_y := cast(int) ((y - corner_y) / square);
+        if board_orientation == false then {
+          mouse_coor_x = 7 - mouse_coor_x;
+          mouse_coor_y = 7 - mouse_coor_y;
+        }
+        position := mouse_coor_x + mouse_coor_y * 8;
+        if position == promote_q_select {
+          promotion_select_piece = ifx chess.turn == .WHITE Piece.W_QUEEN else Piece.B_QUEEN;
+        } else if position == promote_r_select {
+          promotion_select_piece = ifx chess.turn == .WHITE Piece.W_ROOK else Piece.B_ROOK;
+        } else if position == promote_b_select {
+          promotion_select_piece = ifx chess.turn == .WHITE Piece.W_BISHOP else Piece.B_BISHOP;
+        } else if position == promote_n_select {
+          promotion_select_piece = ifx chess.turn == .WHITE Piece.W_KNIGHT else Piece.B_KNIGHT;
         }
       }
-      return promotion_select_piece;
     }
+    return promotion_select_piece;
+  }
 
   draw_chess_pieces :: (width: float, height: float, x: float, y: float, mouse_event: bool, key_pressed: int) {
     cen_x := width  / 2;
@@ -1093,7 +1042,6 @@ main :: () {
   width, height := simp.get_render_dimensions(win);
   simp.set_render_target(win);
 
-  init_sound();
   init_textures();
 
   init_fonts(height);
@@ -1195,16 +1143,13 @@ main :: () {
     draw_chess_pieces(xx width, xx height, xx x, xx y, mouse_event, key_pressed);
     draw_ui(width, height);
 
-    pre_entity_update(sound_player);
-    for sound_player.streams  it.marked = true;
-    post_entity_update(sound_player, dt);
     for *engine, id: chess_engines
       update_uci_engine(engine, id, dt, reset_switch);
 
     simp.swap_buffers(win);
     sleep_milliseconds(20);
     reset_temporary_storage();
-    looptime_end = cast(float)get_time();
+    looptime_end = cast(float)seconds_since_init();
   }
 
 
@@ -1625,27 +1570,6 @@ ui_make_move :: (chess: *Chess, mov: Move16, animate: bool) {
       mov_anim_time = 0.0;
       mov_anim_state = MovAnim.Play;
     }
-
-    // play sound only if the sound_on is true
-    if sound_on == true {
-
-      // pick the sound to play based on the type of move
-      using Move16;
-      flag := get_move16_flag(mov);
-      sound: *Mixer_Sound_Data;
-      if flag <= Double_Pawn_Push 
-        sound = sound_quiet_move;
-      else if flag == King_Castle 
-        sound = sound_quiet_move;
-      else if flag == Queen_Castle
-        sound = sound_quiet_move;
-      else if flag >= Knight_Promotion && flag <= Queen_Promotion
-        sound = sound_quiet_move;
-      else
-        sound = sound_capture_move;
-
-      play_sound(sound);
-    }
   }
 }
 
@@ -1730,27 +1654,7 @@ get_uci_board_string :: () -> string {
     append(*builder, move);
   }
   append(*builder, NEWLINE);
-  return builder_to_string(*builder, allocator=temp);
-}
-
-play_sound :: (data: *Mixer_Sound_Data, perturb: bool = true) -> *Sound_Stream {
-  stream := make_stream(sound_player, data);
-
-  if stream {
-    stream.sound_data = data;
-  }
-
-  if perturb && stream {
-    stream.user_volume_scale = random_get_within_range(0.7, 1.0);
-    stream.desired_rate = random_get_within_range(0.7, 1.22);
-  }
-
-  if stream {
-    // @Temporary @Hack! We do not get the duration by default from an ogg file...
-    stream.repeat_end_position = cast(int)(data.sampling_rate * 234.475);
-  }
-  
-  return stream;
+  return builder_to_string(*builder,, allocator=temp);
 }
 
 parse_move :: (str: string) -> bool, Move16 {
@@ -1855,7 +1759,7 @@ update_uci_engine :: (engine: *Engine, id: int, dt: float, reset: bool) {
   // read.
   if state == {
   case .uciok;
-    out_buff := NewArray(SIZE, u8, allocator=temp);
+    out_buff := NewArray(SIZE, u8,, allocator=temp);
     err_buff: [] u8; // nothing.
     success, output_bytes := read_from_process(process, out_buff, err_buff, timeout_ms=0);
     messages: string;
@@ -1878,7 +1782,7 @@ update_uci_engine :: (engine: *Engine, id: int, dt: float, reset: bool) {
     }
 
   case .isready;
-    out_buff := NewArray(SIZE, u8, allocator=temp);
+    out_buff := NewArray(SIZE, u8,, allocator=temp);
     err_buff: [] u8; // nothing.
     success, output_bytes := read_from_process(process, out_buff, err_buff, timeout_ms=0);
     messages: string;
@@ -1915,11 +1819,11 @@ update_uci_engine :: (engine: *Engine, id: int, dt: float, reset: bool) {
       if reset then {
         write_to_process(process, to_u8_array("stop\n"));
         state = .ucinewgame;
-        out_buff := NewArray(SIZE, u8, allocator=temp);
+        out_buff := NewArray(SIZE, u8,, allocator=temp);
         err_buff: [] u8; // nothing.
         read_from_process(process, out_buff, err_buff, timeout_ms=0);
       } else {
-        out_buff := NewArray(SIZE, u8, allocator=temp);
+        out_buff := NewArray(SIZE, u8,, allocator=temp);
         err_buff: [] u8; // nothing.
         success, output_bytes := read_from_process(process, out_buff, err_buff, timeout_ms=0);
         messages: string;

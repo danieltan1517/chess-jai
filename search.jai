@@ -12,7 +12,7 @@ free_threads :: () {
 }
 
 uci_search :: (chess: *ChessGame) -> bestmove: Move16 {
-  time_begin = get_time();
+  time_begin = seconds_since_init();
   nodes_searched = 0;
   // copy the work. add to queue.
   // make sure we are on max difficulty before starting threads.
@@ -106,7 +106,7 @@ search :: (chess: *ChessGame) -> bestmove: Move16 {
       append(*builder, #char " ");
       append(*builder, move);
     }
-    str := builder_to_string(*builder, allocator=__temporary_allocator);
+    str := builder_to_string(*builder,, allocator=__temporary_allocator);
     print("%1%2", str, NEWLINE);
   }
 
@@ -147,7 +147,7 @@ search :: (chess: *ChessGame) -> bestmove: Move16 {
       chess.maxply = 0; 
       chess.depth = cur_depth;
       score = negamax_root(chess, *root_moves, line, cur_depth, alpha, beta, chess.fifty);
-      time_taken := get_time() - time_begin;
+      time_taken := seconds_since_init() - time_begin;
       if stop() || nodes_searched >= maxnodes then 
         break outer_loop;
  
@@ -1274,9 +1274,9 @@ perft_all :: () {
   }
 
   perft_run :: (depth: int, expected: int) #expand {
-    time_taken := get_time();
+    time_taken := seconds_since_init();
     nodes := perft(*chess, depth);
-    time_taken = get_time() - time_taken;
+    time_taken = seconds_since_init() - time_taken;
     if nodes == expected {
       print("perft successful at the depth of: %1, %2 nodes found, time taken: %3%4", depth, nodes, time_taken, NEWLINE);
     } else {
@@ -1367,7 +1367,7 @@ perft_all :: () {
 }
 
 perft_divide :: (chess: *Chess, depth: int) -> int {
-  taken := get_time();
+  taken := seconds_since_init();
   if depth <= 0 then return 1;
 
   moves: Moves;
@@ -1391,7 +1391,7 @@ perft_divide :: (chess: *Chess, depth: int) -> int {
   }
 
   print("moves from here: %1%2%2", perft_count, NEWLINE);
-  taken = get_time() - taken;
+  taken = seconds_since_init() - taken;
   print("Total %1 nodes%3Time taken: %2%3", num_nodes, taken, NEWLINE);
   print("NPS: %1%2", cast(float)num_nodes / taken, NEWLINE);
   return num_nodes;

@@ -775,6 +775,9 @@ affine_propagate :: (input: *s8, biases: s32, weights: *s8) -> s32 #expand {
     movd        xmm0: vec, eax;
     pbroadcastw xmm0, xmm0; 
     pmaddwd.y   prod, prod, xmm0;
+
+
+
     extracti128 xmm0, prod, 1;
     paddd.x     sum: vec, prod, xmm0;
     pshufd      xmm0, sum, 0x1b;

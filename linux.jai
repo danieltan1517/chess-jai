@@ -47,7 +47,7 @@ read_input :: (main_thread: bool, nodes: int, maxnodes: int, time_begin: float64
       return;
 
     if (nodes & 8191) == 8191 {
-      time := get_time();
+      time := seconds_since_init();
       left: int = xx (1000.0 * (time - time_begin));
       if left > movetime {
         stopping = true;
