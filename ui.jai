@@ -124,7 +124,7 @@ main :: () {
         row = 7 - index % 8;
         col = 7 - index / 8;
       }
-      return make_vector2(corner_x + square * row + half_square, corner_y + square * col + half_square);
+      return Vector2.{corner_x + square * row + half_square, corner_y + square * col + half_square};
     }
 
     hsquare := square * .5;
@@ -138,8 +138,8 @@ main :: () {
     ct   := (dx / hypotenuse);
     st   := (dy / hypotenuse);
     size := square * .12;
-    w    := make_vector2(ct, st) * size;
-    h    := make_vector2(st, -ct) * size;
+    w    := Vector2.{ct, st} * size;
+    h    := Vector2.{st, -ct} * size;
 
     qsquare := square * .70;
     from_pt.x += ct * square * .425;
@@ -158,8 +158,8 @@ main :: () {
     from_pt = to_pt;
     to_pt.x += ct * qsquare * .6;
     to_pt.y += st * qsquare * .6;
-    w  = make_vector2(ct, st) * size;
-    h  = make_vector2(st, -ct) * size;
+    w  = Vector2.{ct, st} * size;
+    h  = Vector2.{st, -ct} * size;
     p0 = from_pt + w - h * 2.25;
     p1 = to_pt + w;
     p2 = from_pt + w + h * 2.25;
@@ -582,12 +582,12 @@ main :: () {
         col = 7 - index / 8;
       }
 
-      p0 := make_vector2(corner_x + square * row, corner_y + square * col);
-      p1 := make_vector2(p0.x, p0.y + square);
-      p2 := make_vector2(p0.x + square, p0.y + square);
-      p3 := make_vector2(p0.x + square, p0.y);
+      p0 := Vector2.{corner_x + square * row, corner_y + square * col};
+      p1 := Vector2.{p0.x, p0.y + square};
+      p2 := Vector2.{p0.x + square, p0.y + square};
+      p3 := Vector2.{p0.x + square, p0.y};
 
-      bitboard := cast(u64) (1 << index);
+      bitboard := cast, no_check(u64) (1 << index);
       if highlighted_squares_bitboard & bitboard {
         simp.set_shader_for_color(true);
         simp.immediate_quad(p0, p1, p2, p3, highlight_color);
@@ -658,10 +658,10 @@ main :: () {
     }
 
     if chess_mouse == ChessMouse.Drag then {
-      p0 := make_vector2(x - square * 0.5, y - square * 0.5);
-      p1 := make_vector2(p0.x, p0.y + square);
-      p2 := make_vector2(p0.x + square, p0.y + square);
-      p3 := make_vector2(p0.x + square, p0.y);
+      p0 := Vector2.{x - square * 0.5, y - square * 0.5};
+      p1 := Vector2.{p0.x, p0.y + square};
+      p2 := Vector2.{p0.x + square, p0.y + square};
+      p3 := Vector2.{p0.x + square, p0.y};
       assert(chess_square_select >= 0 && chess_square_select <= 63);
       piece := chess.pieces[chess_square_select];
       draw_piece(p0, p1, p2, p3, piece);
@@ -704,9 +704,9 @@ main :: () {
         mov_anim_state = MovAnim.Idle;
       }
       p0 := lerp(from_vector, to_vector, ratio);
-      p1 := make_vector2(p0.x, p0.y + square);
-      p2 := make_vector2(p0.x + square, p0.y + square);
-      p3 := make_vector2(p0.x + square, p0.y);
+      p1 := Vector2.{p0.x, p0.y + square};
+      p2 := Vector2.{p0.x + square, p0.y + square};
+      p3 := Vector2.{p0.x + square, p0.y};
       draw_piece(p0, p1, p2, p3, piece);
     }
 
@@ -976,10 +976,10 @@ main :: () {
     for i: 0..7 {
       for j: 0..7 {
         color := ifx white then white_sq_color else black_sq_color;
-        p0 := make_vector2(corner_x + i * square, corner_y + j * square);
-        p1 := make_vector2(p0.x, p0.y + square);
-        p2 := make_vector2(p0.x + square, p0.y + square);
-        p3 := make_vector2(p0.x + square, p0.y);
+        p0 := Vector2.{corner_x + i * square, corner_y + j * square};
+        p1 := Vector2.{p0.x, p0.y + square};
+        p2 := Vector2.{p0.x + square, p0.y + square};
+        p3 := Vector2.{p0.x + square, p0.y};
         simp.immediate_quad(p0, p1, p2, p3, color);
         white = ! white;
       }
@@ -1046,6 +1046,7 @@ main :: () {
 
   init_fonts(height);
   ui_init();
+  init_sound();
 
   subwindow_newgame.rect = get_rect(100,100,400,300);
   subwindow_newgame.draw = draw_subwindow_newgame;
@@ -1059,8 +1060,6 @@ main :: () {
   subwindow_load_engine.open = false;
 
   ctrl_pressed := 0;
-
-  //assert(etf);
   engine, etf := load_engine("ceij", "ceij");
   if etf == true {
     array_add(*chess_engines, engine);
@@ -1142,6 +1141,7 @@ main :: () {
     draw_chess_board(xx width, xx height);
     draw_chess_pieces(xx width, xx height, xx x, xx y, mouse_event, key_pressed);
     draw_ui(width, height);
+    Sound.update();
 
     for *engine, id: chess_engines
       update_uci_engine(engine, id, dt, reset_switch);
@@ -1527,6 +1527,16 @@ ui_make_move :: (chess: *Chess, mov: Move16, animate: bool) {
     // zero the next move
     // so we don't accidentally redo an illegal move.
     undo_list[ply].move = 0;
+    sound_data: *Sound.Sound_Data;
+    mov_flag := get_move16_flag(mov);
+    if (mov_flag >= .Quiet && mov_flag <= .Queen_Castle) || (mov_flag >= .Knight_Promotion && mov_flag <= .Queen_Promotion) then {
+      sound_data = *sound_quiet_move;
+    } else {
+      sound_data = *sound_capture_move;
+    }
+    if sound_on == true then {
+      play_sound(sound_data);
+    }
 
     clear(*move_bitboards);
     generate_moves(chess, *move_bitboards);
@@ -2198,6 +2208,34 @@ is_draw :: () -> bool {
   return false;
 }
 
+sound_quiet_move: Sound.Sound_Data;
+sound_capture_move: Sound.Sound_Data;
+
+init_sound :: () {
+  sound_quiet_move = Sound.load_audio_file("resources/move.wav");
+  assert(sound_quiet_move.loaded);
+
+  sound_capture_move = Sound.load_audio_file("resources/capture.wav");
+  assert(sound_capture_move.loaded);
+
+  // initialize sound player
+  Sound.sound_player_init(.{});
+}
+
+stage_sound :: (data: *Sound.Sound_Data, category := Sound.Sound_Category.GENERAL_SFX, perturb := true) -> *Sound.Sound_Stream {
+  stream := Sound.make_stream(data, category);
+  if perturb {
+    stream.user_volume_scale = random_get_within_range(0.5, 1.4);
+    stream.rate_scale        = random_get_within_range(0.7, 1.22);
+  }
+  return stream;
+}
+
+play_sound :: (sound: *Sound.Sound_Data) {
+  stream := stage_sound(sound, .GENERAL_SFX, true);
+  Sound.start_playing(stream);
+}
+
 simp :: #import "Simp";
 #import "System"; // For get_path_of_running_executable.
 #import "String"; // For path_strip_filename. 
@@ -2206,7 +2244,7 @@ simp :: #import "Simp";
 #import "GetRect";
 #import "Input";
 #import "Window_Creation";
-#import "Sound_Player";
+Sound :: #import "Sound_Player";
 #import "Wav_File";
 #import "File";
 #import "Random";

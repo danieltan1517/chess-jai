@@ -1838,7 +1838,7 @@ rook_attacks:   [64][4096] u64 #align 64;
 
 init_magic_bitboard :: () {
   for i: 0..63 {
-    sq := cast(u64) (1 << i);
+    sq: u64 = cast, no_check(u64) (1 << i);
     magic_bishop[i].mask         = bishop_mask(sq);
     #if FANCY_MAGIC_BITBOARDS == false {
       bishop_magic_array :: u64.[
@@ -2036,7 +2036,7 @@ init_magic_bitboard :: () {
   }
 
   for sq: 0..63 {
-    bitboard := cast(u64) (1 << sq);
+    bitboard := cast, no_check(u64) (1 << sq);
     calc_bishop_attacks(*magic_bishop[sq], sq, bitboard);
     calc_rook_attacks(*magic_rook[sq], sq, bitboard);
   }
@@ -2099,7 +2099,7 @@ set_occ :: (index: int, bits_in_mask: u64, attack_mask: u64) -> u64 {
   occ : u64 = 0;
   for count: 0..bits_in_mask-1 {
     sq := bit_scan_forward(attack_mask);
-    attack_mask &= cast(u64) (~(1 << sq));
+    attack_mask &= cast, no_check(u64) (~(1 << sq));
 
     if index & (1 << count)
       occ |= xx (1 << sq);
