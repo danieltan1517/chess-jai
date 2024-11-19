@@ -1839,7 +1839,7 @@ see :: (chess: *Chess, move: Move16, threshold: int) -> bool {
     from_set, apiece = get_least_valuable_piece(attadef, turn);
   }
 
-  for < i: d-1..1 {
+  for #v2 < i: 1..d-1 {
     gain[i-1]= -max(-gain[i-1], gain[i]);
   }
 
@@ -2179,7 +2179,7 @@ pop :: (queue: *MoveQueue) -> move: Move16, priority: s32 {
 construct_heap :: (queue: *MoveQueue) {
 
   count := queue.array.count/2 - 1;
-  for < index: count..0 {
+  for #v2 < index: 0..count {
     heapify(queue, index);
   }
 

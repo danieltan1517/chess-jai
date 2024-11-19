@@ -1155,7 +1155,7 @@ main :: () {
 
 }
 
-draw_subwindow_newgame :: (r: Rect, data: *void) {
+draw_subwindow_newgame :: (state: *Subwindow_State, r: Rect, user_data: *void) {
   get_engine_names :: () -> [..] string {
     arr: [..] string;
     arr.allocator = temp;
@@ -1275,7 +1275,7 @@ draw_subwindow_newgame :: (r: Rect, data: *void) {
 
 }
 
-draw_subwindow_load_engine :: (r: Rect, data: *void) {
+draw_subwindow_load_engine :: (state: *Subwindow_State, r: Rect, user_data: *void) {
 
   get_engine_names :: () -> [..] string {
     arr: [..] string;
@@ -1558,7 +1558,7 @@ ui_make_move :: (chess: *Chess, mov: Move16, animate: bool) {
 
     cur_hash := chess.hash;
     count := 0;
-    for < index: ply-1..0 {
+    for #v2 < index: 0..ply-1 {
       if get_move16_flag(undo_list[index].move) >= Move16.Double_Pawn_Push
         break;
       if undo_list[index].hash == cur_hash {
