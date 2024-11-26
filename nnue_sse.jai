@@ -776,7 +776,7 @@ affine_txfm :: (input: *s8, output: *void, inDims: u32, biases: *s32, weights: *
 
   outVec := output;
   tmp_data := tmp.data;
-  for < 7..0 {
+  for #v2 < 0..7 {
     #asm SSE {
       movups.x   xmm_relu: vec, [tmp_data];
       packssdw.x xmm_relu, xmm_000;

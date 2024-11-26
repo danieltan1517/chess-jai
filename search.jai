@@ -203,7 +203,7 @@ count_moves :: (chess: *Chess) -> int {
 set_maxdepth :: (maxdepth: int) -> int {
   DEPTH_DIFFICULTY :: int.[1, 2, 3, 4, 5, 6, 9];
   if difficulty == 8 then {
-    return maxdepth;
+    return min(maxdepth, 1000);
   } else {
     return DEPTH_DIFFICULTY[difficulty-1];
   }
