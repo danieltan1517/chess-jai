@@ -937,7 +937,7 @@ main :: () {
           case .Select;
             if key_pressed == 0 {
               if chess_highlight_select == position {
-                bitboard := cast(u64) (1 << position);
+                bitboard := cast,no_check(u64) (1 << position);
                 highlighted_squares_bitboard ^= bitboard;
               } else {
                 // add an arrow...
@@ -1482,7 +1482,7 @@ draw_subwindow_engine_options :: (r: Rect, data: *void) {
 }
 
 add_move :: (moves: *Move_Bitboards, from: int, to: int, flags: Move16) {
-  moves.bitboard[from] |= cast(u64) (1 << to);
+  moves.bitboard[from] |= cast,no_check(u64) (1 << to);
   moves.count += 1;
 }
 
@@ -1514,7 +1514,7 @@ ui_make_move :: (chess: *Chess, mov: Move16, animate: bool) {
     }
 
     _, from, to := decode_move16(mov);
-    previous_move = (cast(u64) (1 << from)) | (cast(u64) (1 << to));
+    previous_move = (cast,no_check(u64) (1 << from)) | (cast,no_check(u64) (1 << to));
     cap, flags, hash := make_move(chess, mov);
 
     // store the undo state so we can restore it if needed.
@@ -1621,7 +1621,7 @@ ui_undo_move :: (chess: *Chess) {
   } else {
     prev_move := undo_list[ply-1].move;
     _, from, to := decode_move16(prev_move);
-    previous_move = (cast(u64) (1 << from)) | (cast(u64) (1 << to));
+    previous_move = (cast,no_check(u64) (1 << from)) | (cast,no_check(u64) (1 << to));
   }
 
   if in_check(chess) {

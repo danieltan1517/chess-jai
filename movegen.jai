@@ -303,7 +303,7 @@ to_fen_string :: (chess: *Chess) -> string {
   if chess.en_passant == 0 then 
     append(*builder, " -");
   else 
-    print_to_builder(*builder, " %", cast(Bitboard)chess.en_passant);
+    print_to_builder(*builder, " %", cast,no_check(Bitboard)chess.en_passant);
 
   return builder_to_string(*builder);
 }
@@ -371,8 +371,8 @@ make_move :: (chess: *Chess, move: Move16) -> captured: Piece, Castling, hash: u
   hash := chess.hash;
   chess.hash ^= zobrist_en_passant(chess.en_passant);
   chess.en_passant = 0;
-  from := cast(u64) (1 << sq);
-  to   := cast(u64) (1 << to_sq);
+  from := cast,no_check(u64) (1 << sq);
+  to   := cast,no_check(u64) (1 << to_sq);
   castling := chess.castling;
   chess.occupied ^= from;
   chess.occupied |= to;
@@ -420,8 +420,8 @@ make_move :: (chess: *Chess, move: Move16) -> captured: Piece, Castling, hash: u
       index := cast(int) flags;
       rook_from := castle_from[turn][index];
       rook_to   := castle_to[turn][index];
-      from_bitboard := cast(u64) (1 << rook_from);
-      to_bitboard := cast(u64) (1 << rook_to);
+      from_bitboard := cast,no_check(u64) (1 << rook_from);
+      to_bitboard := cast, no_check(u64) (1 << rook_to);
       piece_type := chess.pieces[rook_from];
       chess.bitboard[cast(int) piece_type] ^= from_bitboard ^ to_bitboard;
       chess.pieces[rook_to] = piece_type;
@@ -446,8 +446,8 @@ unmake_move :: (chess: *Chess, move: Move16, cap: Piece, castling: Castling, has
   // hash rather than do an incremental update calculation.
   chess.hash = hash;
   flags, sq, to_sq := decode_move16(move);
-  from := cast(u64) (1 << sq);
-  to   := cast(u64) (1 << to_sq);
+  from := cast,no_check(u64) (1 << sq);
+  to   := cast,no_check(u64) (1 << to_sq);
   piece_moved := cast(int) chess.pieces[to_sq];
   chess.castling = castling;
   chess.occupied |= from;
@@ -495,8 +495,8 @@ unmake_move :: (chess: *Chess, move: Move16, cap: Piece, castling: Castling, has
       index := cast(int) flags;
       rook_from := castle_from[turn][index];
       rook_to   := castle_to[turn][index];
-      from_bitboard := cast(u64) (1 << rook_from);
-      to_bitboard := cast(u64) (1 << rook_to);
+      from_bitboard := cast,no_check(u64) (1 << rook_from);
+      to_bitboard := cast,no_check(u64) (1 << rook_to);
       piece_type := chess.pieces[rook_to];
       chess.bitboard[cast(int) piece_type] |= from_bitboard;
       chess.bitboard[cast(int) piece_type] &= ~to_bitboard;
@@ -734,7 +734,7 @@ do_en_passant_moves :: (chess: *Chess, pawn: u64, en_passant: u64, $turn: Turn, 
 
   while pawn {
     pawn_sq := bit_scan_forward(pawn);
-    pawn_bitboard := cast(u64) (1 << pawn_sq);
+    pawn_bitboard := cast,no_check(u64) (1 << pawn_sq);
     if king != 0 && queen_rook != 0 {
       while queen_rook {
         sq := bit_scan_forward(queen_rook);
@@ -927,11 +927,11 @@ get_move16_flag :: (chess: *Chess, from: int, to: int, p: u8) -> Move16 {
       return Queen_Castle;
 
   case  Piece.W_PAWN;
-    fbb := cast(Bitboard) (1 << from);
-    tbb := cast(Bitboard) (1 << to);
+    fbb := cast,no_check(Bitboard) (1 << from);
+    tbb := cast,no_check(Bitboard) (1 << to);
     if (fbb & rank_2) && (tbb & rank_4) then
       return Double_Pawn_Push;
-    if cast(u64)tbb == chess.en_passant then
+    if cast,no_check(u64)tbb == chess.en_passant then
       return Ep_Capture;
     if tbb & rank_8 then {
       if topiece == Piece.NONE
@@ -946,11 +946,11 @@ get_move16_flag :: (chess: *Chess, from: int, to: int, p: u8) -> Move16 {
       return Queen_Castle;
 
   case  Piece.B_PAWN;
-    fbb := cast(Bitboard) (1 << from);
-    tbb := cast(Bitboard) (1 << to);
+    fbb := cast,no_check(Bitboard) (1 << from);
+    tbb := cast,no_check(Bitboard) (1 << to);
     if (fbb & rank_7) && (tbb & rank_5) then
       return Double_Pawn_Push;
-    if cast(u64)tbb == chess.en_passant then
+    if cast,no_check(u64)tbb == chess.en_passant then
       return Ep_Capture;
     if tbb & rank_1 then {
       if topiece == Piece.NONE
@@ -1044,8 +1044,8 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
     if from == to then
       return false;
 
-    from_bit := cast(u64) (1<<from);
-    to_bitboard := cast(u64) (1<<to);
+    from_bit := cast,no_check(u64) (1<<from);
+    to_bitboard := cast,no_check(u64) (1<<to);
     moves : u64 = 0;
     piece := piece_at(chess, from);
     pieces : u64 = 0;
@@ -1218,7 +1218,7 @@ is_legal :: (chess: *Chess, move: Move16) -> bool {
       adv2 := pawn_advance(adv & cast(u64)rank_6, turn) & ~occupied;
       cap  := pawn_captures(from_bit, turn) & (occupied|chess.en_passant) & ~pieces;
       moves = adv|adv2|cap;
-      if from_bit & cast(u64)(rank_1|rank_8)
+      if from_bit & cast,no_check(u64)(rank_1|rank_8)
         return false;
       if (flags == Move16.Quiet || flags == Move16.Capture) && (to_bitboard & cast(u64)(rank_1|rank_8))
         return false;
@@ -1629,7 +1629,7 @@ generate_tactics_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T)
     } else if pawn & pin {
       // diagonal pawn capture.
       from_bitboard := pin;
-      to_bitboard := pawn_captures(from_bitboard, turn) & cast(u64)(1 << index);
+      to_bitboard := pawn_captures(from_bitboard, turn) & cast,no_check(u64)(1 << index);
       if to_bitboard {
         add_move(move_gen, sq, index, Move16.Capture);
       }
@@ -1656,8 +1656,8 @@ generate_tactics_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T)
     }
   }
 
-  safe_sqs := cast(Bitboard) ~unsafe;
-  not_occu := cast(Bitboard) ~occupied;
+  safe_sqs := cast,no_check(Bitboard) ~unsafe;
+  not_occu := cast,no_check(Bitboard) ~occupied;
   #if turn == Turn.WHITE {
     handle_castling(Castling.W_KS, f1|g1, f1|g1, serialized_bb.e1, serialized_bb.g1, Move16.King_Castle);
     handle_castling(Castling.W_QS, c1|d1, b1|c1|d1, serialized_bb.e1, serialized_bb.c1, Move16.Queen_Castle);
@@ -1729,7 +1729,7 @@ generate_tactics_for :: (unsafe: u64, chess: *Chess, $turn: Turn, move_gen: *$T)
 
 file_of :: inline (i: int) -> u64 #expand {
   f := i & 7;
-  file: u64 = (cast(u64) file_a) << f;
+  file: u64 = (cast,no_check(u64) file_a) << f;
   return file;
 }
 
@@ -2006,7 +2006,7 @@ init_magic_bitboard :: () {
   }
 
   calc_bishop_attacks :: (using m: *Magics, sq: int, bitboard: u64) #expand {
-    count := cast(u64) popcount(mask);
+    count := cast,no_check(u64) popcount(mask);
     occ_indices := 1 << count;
     for i: 0..occ_indices-1 {
       occ := set_occ(i, count, mask);
@@ -2021,7 +2021,7 @@ init_magic_bitboard :: () {
   }
 
   calc_rook_attacks :: (using m: *Magics, sq: int, bitboard: u64) #expand {
-    count := cast(u64) popcount(mask);
+    count := cast,no_check(u64) popcount(mask);
     occ_indices := 1 << count;
     for i: 0..occ_indices-1 {
       occ := set_occ(i, count, mask);
@@ -2055,7 +2055,7 @@ find_magic_number :: (attack_mask: u64, sq: int, relevant_bits: u64, $moves: (u6
   prng.seed = seeds[rank];
 
   for i: 0..occ_indices-1 {
-    bitboard := cast(u64) (1<<sq);
+    bitboard := cast,no_check(u64) (1<<sq);
     occ[i] = set_occ(i, relevant_bits, attack_mask);
     attacks[i] = moves(bitboard, occ[i]);
   }
@@ -2130,7 +2130,7 @@ bit_scan_forward :: (value: u64)->int #expand {
 
     bit_scan_forward_inner :: (value: u64) -> int {
       DEBRUIJN64 : u64 : 0x03f79d71b4cb0a89;
-      value = value & (cast(u64) -(cast(int)value));
+      value = value & (cast,no_check(u64) -(cast(int)value));
       return index64[ (value * DEBRUIJN64) >> 58];
     }
 
@@ -2542,7 +2542,7 @@ initialize_zobrist_hashing :: () {
   }
   zobrist_ep[0] = 0;
   for i: 1..63 {
-    bit := cast(u64)  (1<<i);
+    bit := cast,no_check(u64)  (1<<i);
     epbits := cast(u64) (rank_3|rank_6);
     if bit & epbits then {
       zobrist_ep[i] = random_u64(*prng);

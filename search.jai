@@ -1736,7 +1736,7 @@ add_move :: (queue: *MoveQueue, from: int, to: int, flags: Move16) #expand {
 // static exchange evaluation.
 see :: (chess: *Chess, move: Move16, threshold: int) -> bool {
   attacks_to :: (occ: u64, sq: int) -> u64 #expand {
-    to := cast(u64) (1 << sq);
+    to := cast,no_check(u64) (1 << sq);
     atts : u64 = 0;
     atts |= pawn_captures(to, Turn.BLACK) & chess.w_pawn;
     atts |= pawn_captures(to, Turn.WHITE) & chess.b_pawn;
@@ -1800,8 +1800,11 @@ see :: (chess: *Chess, move: Move16, threshold: int) -> bool {
   }
 
   get_bit :: (bits: u64) -> u64 {
-    return bits & cast(u64)(-cast(int)bits);
+    b: int = cast, no_check(int) bits;
+    b = -b;
+    return bits & (cast, no_check(u64)b);
   }
+
   _, from, to := decode_move16(move);
   target := cast(int) piece_at(chess, to);
   apiece := cast(int) piece_at(chess, from);
@@ -1810,7 +1813,7 @@ see :: (chess: *Chess, move: Move16, threshold: int) -> bool {
   d := 0;
   may_x_ray: u64 = chess.w_pawn | chess.w_bishop | chess.w_rook | chess.w_queen
                  | chess.b_pawn | chess.b_bishop | chess.b_rook | chess.b_queen;
-  from_set := cast(u64) 1 << from;
+  from_set := cast,no_check(u64) 1 << from;
   occupied := chess.occupied;
   attadef  := attacks_to(occupied, to);
   gain[d] = PVALUE[target] - cast(s16)threshold;
