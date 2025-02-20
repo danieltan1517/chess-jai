@@ -71,11 +71,11 @@ This code is divided up into the following files:
 * UCI protocol
 
 ### Chess Engine Options
-* Clear Hash
-* Transposition Table Memory Size (in MB).
-* Number of Threads
-* Multiple Principle Variation Lines
-* Difficulty Levels 1 to 8
+* Clear Hash - clears out the transposition table
+* Transposition Table Memory Size (in MB). - adjusts the size of the transposition table in megabytes
+* Number of Threads - adjusts the number of threads used by the CPU. increasing the number of threads should increase the playing strength of the CPU
+* Multiple Principle Variation Lines - detects multiple PV lines. Set the PV to 1 for the best playing strength (the default)
+* Difficulty Levels 1 to 8 - adjusts the difficulty of the engine.
 
 ### Parallel Search
 * Lazy Shared Memory Processing Parallel Search
