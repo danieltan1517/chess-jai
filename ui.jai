@@ -1765,7 +1765,7 @@ update_uci_engine :: (engine: *Engine, id: int, dt: float, reset: bool) {
   state := engine.state;
   defer engine.state = state;
   process := *engine.process;
-  SIZE :: 4096;
+  SIZE :: 4194304;
   // read.
   if state == {
   case .uciok;
