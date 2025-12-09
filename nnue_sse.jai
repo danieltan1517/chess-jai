@@ -149,17 +149,11 @@ DirtyPiece :: struct {
 }
 
 Accumulator :: struct {
-  padding: [1088] u8;
-  #place padding;
-
   accumulation: [2][256] s16 #align 64;
   computedAccumulation: s32;
 } 
 
 NNUEdata :: struct {
-  padding: [1152] u8;
-  #place padding;
-
   accumulator: Accumulator;
   dirtyPiece: DirtyPiece;
 } 
