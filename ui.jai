@@ -1558,7 +1558,7 @@ ui_make_move :: (chess: *Chess, mov: Move16, animate: bool) {
 
     cur_hash := chess.hash;
     count := 0;
-    for #v2 < index: 0..ply-1 {
+    for < index: 0..ply-1 {
       if get_move16_flag(undo_list[index].move) >= Move16.Double_Pawn_Push
         break;
       if undo_list[index].hash == cur_hash {
