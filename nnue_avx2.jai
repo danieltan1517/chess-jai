@@ -36,7 +36,7 @@ nnue_init :: (file_name: string) -> bool {
 
   read_output_weights :: (weight: []s8, data: *s8) {
     for i: 0..31 {
-      weight[i] = << data;
+      weight[i] = data.*;
       data += 1;
     }
   }
@@ -64,15 +64,15 @@ nnue_init :: (file_name: string) -> bool {
     if buffer.count != 21022697 then
       return false;
     d := buffer.data;
-    if <<cast(*u32)d != NnueVersion then
+    if (cast(*u32)d).* != NnueVersion then
       return false;
-    if <<cast(*u32)(d+4) != 0x3e5aa6ee then
+    if (cast(*u32)(d+4)).* != 0x3e5aa6ee then
       return false;
-    if <<cast(*u32)(d+8) != 177 then
+    if (cast(*u32)(d+8)).* != 177 then
       return false;
-    if <<cast(*u32)(d + TransformerStart) != 0x5d69d7b8 then
+    if (cast(*u32)(d + TransformerStart)).* != 0x5d69d7b8 then
       return false;
-    if <<cast(*u32)(d + NetworkStart) != 0x63337156 then
+    if (cast(*u32)(d + NetworkStart)).* != 0x63337156 then
       return false;
     return true;
   }
@@ -82,33 +82,33 @@ nnue_init :: (file_name: string) -> bool {
 
     // Read transformer
     for i: 0..(kHalfDimensions-1) {
-      ft_biases[i] = <<cast, no_check (*s16)(data);
+      ft_biases[i] = (cast, no_check (*s16)(data)).*;
       data += 2;
     }
 
     for i: 0..(kHalfDimensions*FtInDims)-1 {
-      ft_weights[i] = <<cast, no_check(*s16)(data);
+      ft_weights[i] = (cast, no_check(*s16)(data)).*;
       data += 2;
     }
 
     // Read network
     data += 4;
     for i: 0..31 {
-      hidden1_biases[i] = <<cast, no_check(*s32)(data);
+      hidden1_biases[i] = (cast, no_check(*s32)(data)).*;
       data += 4;
     }
 
     data = read_hidden_weights(hidden1_weights, 512, data);
 
     for i: 0..31 {
-      hidden2_biases[i] = <<cast, no_check(*s32)(data);
+      hidden2_biases[i] = (cast, no_check(*s32)(data)).*;
       data += 4;
     }
 
     data = read_hidden_weights(hidden2_weights, 32, data);
     
     for i: 0..0 {
-      output_biases[i] = <<cast(*s32)(data);
+      output_biases[i] = (cast(*s32)(data)).*;
       data += 4;
     }
 
@@ -639,12 +639,12 @@ affine_txfm :: (input: *s8, output: *s8, inDims: u32, outDims: u32, biases: *s32
 
   // mask2_t = u64
   next_idx :: () -> bool #expand {
-    #if pack8_and_calc_mask{
+    #if pack8_and_calc_mask {
       while v == 0 {
         offset += 8 * size_of(u64);
         if offset >= inDims then
           return false;
-        v = << cast(*u64)((cast(*s8)in_mask) + (offset/8));
+        v = (cast(*u64)((cast(*s8)in_mask) + (offset/8))).*;
       }
 
       idx = offset + bsf(v);
@@ -671,7 +671,7 @@ affine_txfm :: (input: *s8, output: *s8, inDims: u32, outDims: u32, biases: *s32
   }
 
   // translated from => memcpy(&v, inMask, sizeof(mask2_t));
-  v := << cast(*u64)in_mask;
+  v := (cast(*u64)in_mask).*;
   idx: int = 0;
   offset: int = 0;
   while offset < inDims {

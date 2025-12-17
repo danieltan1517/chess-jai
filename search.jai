@@ -1180,7 +1180,7 @@ update_quiet :: (chess: *ChessGame, move: Move16, depth: int, quiet_moves: []Mov
 }
 
 incr_history :: (data: *s32, incr: s32) #expand {
-  <<data += (64*incr) - (<<data)*incr / 1024;
+  data.* += (64*incr) - (data.*)*incr / 1024;
 }
 
 norm :: (p: Piece) -> Piece #expand {

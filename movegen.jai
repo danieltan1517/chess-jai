@@ -1800,7 +1800,7 @@ generate_attacks :: (chess: *Chess, $turn: Turn) -> att: u64, check: u64 {
 }
 
 bitloop :: (bitboard: *u64, body: Code, flags: For_Flags) #expand {
-  loop := << bitboard;
+  loop := bitboard.*;
   while loop {
     `it_index := bit_scan_forward(loop);
     `it := loop & cast,no_check(u64)(-cast,no_check(int)loop);
