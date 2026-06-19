@@ -106,7 +106,7 @@ search :: (chess: *ChessGame) -> bestmove: Move16 {
       append(*builder, #char " ");
       append(*builder, move);
     }
-    str := builder_to_string(*builder,, allocator=__temporary_allocator);
+    str := builder_to_string(*builder,, allocator=temp);
     print("%1%2", str, NEWLINE);
   }
 

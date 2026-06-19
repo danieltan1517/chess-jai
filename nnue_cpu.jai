@@ -15,15 +15,15 @@ nnue_init :: (file_name: string) -> bool {
     if buffer.count != 21022697 then
       return false;
     d := buffer.data;
-    if <<cast(*u32)d != NnueVersion then
+    if (cast(*u32)d).* != NnueVersion then
       return false;
-    if <<cast(*u32)(d+4) != 0x3e5aa6ee then
+    if (cast(*u32)(d+4)).* != 0x3e5aa6ee then
       return false;
-    if <<cast(*u32)(d+8) != 177 then
+    if (cast(*u32)(d+8)).* != 177 then
       return false;
-    if <<cast(*u32)(d + TransformerStart) != 0x5d69d7b8 then
+    if (cast(*u32)(d + TransformerStart)).* != 0x5d69d7b8 then
       return false;
-    if <<cast(*u32)(d + NetworkStart) != 0x63337156 then
+    if (cast(*u32)(d + NetworkStart)).* != 0x63337156 then
       return false;
     return true;
   }
@@ -37,7 +37,7 @@ nnue_init :: (file_name: string) -> bool {
     for r: 0..31 {
       for c: 0..dims-1 {
         index := wt_idx(r, c, dims);
-        weight[index] = <<d;
+        weight[index] = d.*;
         d += 1;
       }
     }
@@ -47,7 +47,7 @@ nnue_init :: (file_name: string) -> bool {
 
   read_output_weights :: (weight: []s8, data: *s8) {
     for i: 0..31 {
-      weight[i] = << data;
+      weight[i] = data.*;
       data += 1;
     }
   }
@@ -57,33 +57,33 @@ nnue_init :: (file_name: string) -> bool {
 
     // Read transformer
     for i: 0..(kHalfDimensions-1) {
-      ft_biases[i] = <<cast, no_check (*s16)(data);
+      ft_biases[i] = (cast, no_check (*s16)(data)).*;
       data += 2;
     }
 
     for i: 0..(kHalfDimensions*FtInDims)-1 {
-      ft_weights[i] = <<cast, no_check(*s16)(data);
+      ft_weights[i] = (cast, no_check(*s16)(data)).*;
       data += 2;
     }
 
     // Read network
     data += 4;
     for i: 0..31 {
-      hidden1_biases[i] = <<cast, no_check(*s32)(data);
+      hidden1_biases[i] = (cast, no_check(*s32)(data)).*;
       data += 4;
     }
 
     data = read_hidden_weights(hidden1_weights, 512, data);
 
     for i: 0..31 {
-      hidden2_biases[i] = <<cast, no_check(*s32)(data);
+      hidden2_biases[i] = (cast, no_check(*s32)(data)).*;
       data += 4;
     }
 
     data = read_hidden_weights(hidden2_weights, 32, data);
     
     for i: 0..0 {
-      output_biases[i] = <<cast(*s32)(data);
+      output_biases[i] = (cast(*s32)(data)).*;
       data += 4;
     }
 
@@ -150,17 +150,11 @@ DirtyPiece :: struct {
 }
 
 Accumulator :: struct {
-  padding: [1088] u8;
-  #place padding;
-
   accumulation: [2][256] s16 #align 64;
   computedAccumulation: s32;
 } 
 
 NNUEdata :: struct {
-  padding: [1152] u8;
-  #place padding;
-
   accumulator: Accumulator;
   dirtyPiece: DirtyPiece;
 } 

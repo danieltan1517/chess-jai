@@ -14,15 +14,15 @@ nnue_init :: (file_name: string) -> bool {
     if buffer.count != 21022697 then
       return false;
     d := buffer.data;
-    if <<cast(*u32)d != NnueVersion then
+    if (cast(*u32)d).* != NnueVersion then
       return false;
-    if <<cast(*u32)(d+4) != 0x3e5aa6ee then
+    if (cast(*u32)(d+4)).* != 0x3e5aa6ee then
       return false;
-    if <<cast(*u32)(d+8) != 177 then
+    if (cast(*u32)(d+8)).* != 177 then
       return false;
-    if <<cast(*u32)(d + TransformerStart) != 0x5d69d7b8 then
+    if (cast(*u32)(d + TransformerStart)).* != 0x5d69d7b8 then
       return false;
-    if <<cast(*u32)(d + NetworkStart) != 0x63337156 then
+    if (cast(*u32)(d + NetworkStart)).* != 0x63337156 then
       return false;
     return true;
   }
@@ -37,7 +37,7 @@ nnue_init :: (file_name: string) -> bool {
     for r: 0..31 {
       for c: 0..dims-1 {
         index := wt_idx(r, c, dims);
-        weight[index] = <<d;
+        weight[index] = d.*;
         d += 1;
       }
     }
@@ -47,7 +47,7 @@ nnue_init :: (file_name: string) -> bool {
 
   read_output_weights :: (weight: []s8, data: *s8) {
     for i: 0..31 {
-      weight[i] = << data;
+      weight[i] = data.*;
       data += 1;
     }
   }
@@ -57,33 +57,33 @@ nnue_init :: (file_name: string) -> bool {
 
     // Read transformer
     for i: 0..(kHalfDimensions-1) {
-      ft_biases[i] = <<cast, no_check (*s16)(data);
+      ft_biases[i] = (cast, no_check (*s16)(data)).*;
       data += 2;
     }
 
     for i: 0..(kHalfDimensions*FtInDims)-1 {
-      ft_weights[i] = <<cast, no_check(*s16)(data);
+      ft_weights[i] = (cast, no_check(*s16)(data)).*;
       data += 2;
     }
 
     // Read network
     data += 4;
     for i: 0..31 {
-      hidden1_biases[i] = <<cast, no_check(*s32)(data);
+      hidden1_biases[i] = (cast, no_check(*s32)(data)).*;
       data += 4;
     }
 
     data = read_hidden_weights(hidden1_weights, 512, data);
 
     for i: 0..31 {
-      hidden2_biases[i] = <<cast, no_check(*s32)(data);
+      hidden2_biases[i] = (cast, no_check(*s32)(data)).*;
       data += 4;
     }
 
     data = read_hidden_weights(hidden2_weights, 32, data);
     
     for i: 0..0 {
-      output_biases[i] = <<cast(*s32)(data);
+      output_biases[i] = (cast(*s32)(data)).*;
       data += 4;
     }
 
@@ -206,8 +206,8 @@ nnue_evaluate_pos :: (chess: *Chess, nnue: [3] *NNUEdata) -> s32 {
   hidden1_out: [32] s8  #align 16;
   hidden2_out: [32] s8  #align 16; 
   transform(chess, nnue, *input[0], *input_mask[0]);
-  affine_txfm(*input[0], *hidden1_out[0], FtOutDims, *hidden1_biases[0], *hidden1_weights[0]);
-  affine_txfm(*hidden1_out[0], *hidden2_out[0], 32, *hidden2_biases[0], *hidden2_weights[0]);
+  affine_txfm(*input[0], *hidden1_out[0], FtOutDims, 32, *hidden1_biases[0], *hidden1_weights[0], *input_mask[0], *hidden1_mask[0], true);
+  affine_txfm(*hidden1_out[0], *hidden2_out[0], 32, 32, *hidden2_biases[0], *hidden2_weights[0], *hidden1_mask[0], null, false);
   out_value := inline affine_propagate(*hidden2_out[0], output_biases[0], *output_weights[0]);
   return out_value / FV_SCALE;
 }
@@ -556,7 +556,7 @@ transform :: (chess: *Chess, nnue: [3] *NNUEdata, output: *s8, out_mask: *u32) {
     accindex := 0;
     while accindex < 256 {
       accum := *accumulation[turn][accindex];
-      #asm SSE {
+      #asm SSE, SSE2 {
         xmm0: vec; xmm1: vec; xmm2: vec; xmm3: vec;
         xmm4: vec; xmm5: vec; xmm6: vec; xmm7: vec;
         movaps.x   xmm0, [accum + 0x00];
@@ -583,7 +583,41 @@ transform :: (chess: *Chess, nnue: [3] *NNUEdata, output: *s8, out_mask: *u32) {
         movups.x   [data + 0x50], xmm5;
         movups.x   [data + 0x60], xmm6;
         movups.x   [data + 0x70], xmm7;
+
+        // Build the input mask: one bit per packed byte, set where the byte
+        // is > 0. Each xmm covers 16 inputs -> a 16-bit mask, stored
+        // contiguously so the bitstream is dense in input order (this is what
+        // affine_txfm's next_idx walks).
+        zeroes: vec;
+        pxor.x     zeroes, zeroes;
+        mval: gpr;
+        pcmpgtb.x  xmm0, zeroes;
+        pmovmskb   mval, xmm0;
+        mov.w      [out_mask + 0x00], mval;
+        pcmpgtb.x  xmm1, zeroes;
+        pmovmskb   mval, xmm1;
+        mov.w      [out_mask + 0x02], mval;
+        pcmpgtb.x  xmm2, zeroes;
+        pmovmskb   mval, xmm2;
+        mov.w      [out_mask + 0x04], mval;
+        pcmpgtb.x  xmm3, zeroes;
+        pmovmskb   mval, xmm3;
+        mov.w      [out_mask + 0x06], mval;
+        pcmpgtb.x  xmm4, zeroes;
+        pmovmskb   mval, xmm4;
+        mov.w      [out_mask + 0x08], mval;
+        pcmpgtb.x  xmm5, zeroes;
+        pmovmskb   mval, xmm5;
+        mov.w      [out_mask + 0x0a], mval;
+        pcmpgtb.x  xmm6, zeroes;
+        pmovmskb   mval, xmm6;
+        mov.w      [out_mask + 0x0c], mval;
+        pcmpgtb.x  xmm7, zeroes;
+        pmovmskb   mval, xmm7;
+        mov.w      [out_mask + 0x0e], mval;
+
         add data, 0x80;
+        add out_mask, 0x10;
       }
       accindex += 128;
     }
@@ -592,195 +626,198 @@ transform :: (chess: *Chess, nnue: [3] *NNUEdata, output: *s8, out_mask: *u32) {
   }
 }
 
-affine_txfm :: (input: *s8, output: *void, inDims: u32, biases: *s32, weights: *s8) #expand {
+affine_txfm :: (input: *s8, output: *s8, inDims: u32, outDims: u32, biases: *s32, weights: *s8, in_mask: *u32, out_mask: *u32, pack8_and_calc_mask: bool) #expand {
+  // Masked 128-bit port of the AVX2 affine transform.
+  //
+  // The clipped inputs coming out of `transform` are SIGNED s8 (packsswb can
+  // produce negatives). pmaddubsw treats its input operand as UNSIGNED, so we
+  // must not feed negatives through it. The mask is the ReLU: in_mask has a bit
+  // set for every input byte that is > 0, and next_idx visits only those. Any
+  // non-positive input is skipped (it would contribute 0 anyway).
+  //
+  // Weights are 8-bit (like AVX2) and outDims == 32, so the 32 int32 partial
+  // sums live in eight 128-bit accumulators (out_0..out_7). A weight row is
+  // outDims == 32 bytes == two xmm registers. Because a 128-bit lane never
+  // crosses (unlike AVX2's 256-bit unpacks) the channels stay in natural
+  // order, so neither the weights nor the biases need the AVX2 permutation.
+  //
+  // mask2_t == u64 (IS_64BIT). SHIFT == 6.
 
-  // GCC -O3 "optimized" output
-  // terrible scrabbled eggs output, but faster than CPU w/o SIMD
-  // the SSE code is a bit difficult to translate.
-  sse_simd :: (factor: s32, tmp: *s32, weights: *s8) #expand {
-    edx := factor;
-    rsi := tmp;
-    rdi := weights;
-    #asm {
-      movdqa.x    xmm1:, [rdi];
-      pxor.x      xmm6:, xmm6;
-      pxor.x      xmm7:, xmm7;
-      movd        xmm5:,  edx;
-      movdqa.x    xmm2:, xmm6;
-      movdqa.x    xmm9:, xmm7;
-      pshufd.x    xmm0:, xmm5, 0;
-      pcmpgtb.x   xmm2, xmm1;
-      movdqa.x    xmm3:, xmm1;
-      movdqa.x    xmm5, xmm0;
-      psrlq.x     xmm5, 32;
-      movdqa.x    xmm10:, xmm7;
-      punpcklbw.x xmm3, xmm2;
-      punpckhbw.x xmm1, xmm2;
-      pcmpgtw.x   xmm9, xmm3;
-      pcmpgtw.x   xmm10, xmm1;
-      movdqa.x    xmm2, xmm3;
-      punpckhwd.x xmm2, xmm9;
-      movdqa.x    xmm4:, xmm2;
-      psrlq.x     xmm2, 32;
-      pmuludq.x   xmm4, xmm0;
-      pmuludq.x   xmm2, xmm5;
-      pshufd.x    xmm4, xmm4, 8;
-      pshufd.x    xmm2, xmm2, 8;
-      punpckldq.x xmm4, xmm2;
-      movdqu.x    xmm2, [rsi+16];
-      paddd.x     xmm4, xmm2;
-      movdqa.x    xmm2, xmm1;
-      punpckhwd.x xmm1, xmm10;
-      punpcklwd.x xmm2, xmm10;
-      movdqa.x    xmm10, xmm1;
-      movups.x    [rsi+16], xmm4;
-      movdqa.x    xmm8:, xmm2;
-      psrlq.x     xmm2, 32;
-      pmuludq.x   xmm8, xmm0;
-      pmuludq.x   xmm2, xmm5;
-      pmuludq.x   xmm10, xmm0;
-      pshufd      xmm2, xmm2, 8;
-      pshufd      xmm8, xmm8, 8;
-      punpckldq.x xmm8, xmm2;
-      movdqu.x    xmm2, [rsi+32];
-      paddd.x     xmm8, xmm2;
-      movdqa.x    xmm2, xmm1;
-      pshufd      xmm1, xmm10, 8;
-      psrlq       xmm2, 32;
-      movups.x    [rsi+32], xmm8;
-      movdqa.x    xmm8, xmm7;
-      pmuludq xmm2, xmm5;
-      pshufd  xmm2, xmm2, 8;
-      punpckldq       xmm1, xmm2;
-      movdqu.x  xmm2, [rsi+48];
-      paddd   xmm2, xmm1;
-      movdqa  xmm1, xmm3;
-      punpcklwd       xmm1, xmm9;
-      movups.x [rsi+48], xmm2;
-      movdqa  xmm3, xmm1;
-      psrlq   xmm1, 32;
-      pmuludq xmm3, xmm0;
-      pmuludq xmm1, xmm5;
-      pshufd  xmm3, xmm3, 8;
-      pshufd  xmm1, xmm1, 8;
-      punpckldq       xmm3, xmm1;
-      movdqu.x  xmm1, [rsi];
-      paddd.x   xmm1, xmm3;
-      movdqu.x  xmm3, [rsi+80];
-      movups.x  [rsi], xmm1;
-      movdqa.x  xmm1, [rdi+16];
-      pcmpgtb xmm6, xmm1;
-      movdqa  xmm2, xmm6;
-      movdqa  xmm6, xmm1;
-      punpcklbw       xmm6, xmm2;
-      punpckhbw       xmm1, xmm2;
-      pcmpgtw xmm8, xmm6;
-      pcmpgtw xmm7, xmm1;
-      movdqa  xmm2, xmm6;
-      punpckhwd       xmm2, xmm8;
-      movdqa  xmm4, xmm2;
-      psrlq   xmm2, 32;
-      pmuludq xmm4, xmm0;
-      pmuludq xmm2, xmm5;
-      pshufd  xmm4, xmm4, 8;
-      pshufd  xmm2, xmm2, 8;
-      punpckldq       xmm4, xmm2;
-      movdqa  xmm2, xmm1;
-      punpckhwd       xmm1, xmm7;
-      punpcklwd       xmm2, xmm7;
-      paddd   xmm4, xmm3;
-      movdqa  xmm7, xmm1;
-      movdqa  xmm3, xmm2;
-      psrlq   xmm2, 32;
-      movups.x  [rsi+80], xmm4;
-      pmuludq xmm3, xmm0;
-      pmuludq xmm2, xmm5;
-      pmuludq xmm7, xmm0;
-      pshufd  xmm2, xmm2, 8;
-      pshufd  xmm3, xmm3, 8;
-      punpckldq       xmm3, xmm2;
-      movdqu.x  xmm2, [rsi+96];
-      paddd   xmm3, xmm2;
-      movdqa  xmm2, xmm1;
-      pshufd  xmm1, xmm7, 8;
-      psrlq   xmm2, 32;
-      movups.x  [rsi+96], xmm3;
-      pmuludq xmm2, xmm5;
-      pshufd  xmm2, xmm2, 8;
-      punpckldq       xmm1, xmm2;
-      movdqu.x  xmm2, [rsi+112];
-      paddd   xmm2, xmm1;
-      movdqa  xmm1, xmm6;
-      movdqu.x  xmm6, [rsi+64];
-      punpcklwd       xmm1, xmm8;
-      movups  [rsi+112], xmm2;
-      pmuludq xmm0, xmm1;
-      psrlq   xmm1, 32;
-      pmuludq xmm1, xmm5;
-      pshufd  xmm0, xmm0, 8;
-      pshufd  xmm1, xmm1, 8;
-      punpckldq       xmm0, xmm1;
-      paddd   xmm0, xmm6;
-      movups  [rsi+64], xmm0;
-    }
-  }
-
-
-  tmp: [32] s32;
-  memcpy(*tmp[0], *biases[0], size_of(s32) * 32);
-
-  offset := 0;
-  mask: u32 = 0;
-  input_pointer := input;
-  #asm SSE {
-    pxor.x zeroes: vec, zeroes;
-  }
-
-  while offset < inDims {
-    // input 
-    #asm SSE, SSE2 {
-      movups.x   xmm0: vec, [input_pointer];
-      pcmpgtb.x  xmm0, zeroes;
-      pmovmskb.x mask, xmm0;
-      add input_pointer, 16;
-    }
-
-    while mask {
-      idx: int;
-      #asm SSE {
-        bsf idx, mask;
-        add idx, offset;
+  // Identical to the AVX2 next_idx: it walks the dense input-bitstream and is
+  // independent of SIMD width.
+  next_idx :: () -> bool #expand {
+    #if pack8_and_calc_mask {
+      while v == 0 {
+        offset += 8 * size_of(u64);
+        if offset >= inDims then
+          return false;
+        v = (cast(*u64)((cast(*s8)in_mask) + (offset/8))).*;
       }
-      factor: s32 = input[idx];
-      index := idx << 5;  // idx * 32.
-      sse_simd(factor, *tmp[0], *weights[index]);
-      mask &= mask - 1;
+      idx = offset + bsf(v);
+      v &= v - 1;
+      return true;
+    } else {
+      if v == 0 then {
+        return false;
+      }
+      idx = bsf(v);
+      v &= v - 1;
+      return true;
+    }
+  }
+
+  #asm SSE, SSE2, SSE3 {
+    movdqa.x out_0: vec, [biases + 0x00];   // channels  0.. 3
+    movdqa.x out_1: vec, [biases + 0x10];   // channels  4.. 7
+    movdqa.x out_2: vec, [biases + 0x20];   // channels  8..11
+    movdqa.x out_3: vec, [biases + 0x30];   // channels 12..15
+    movdqa.x out_4: vec, [biases + 0x40];   // channels 16..19
+    movdqa.x out_5: vec, [biases + 0x50];   // channels 20..23
+    movdqa.x out_6: vec, [biases + 0x60];   // channels 24..27
+    movdqa.x out_7: vec, [biases + 0x70];   // channels 28..31
+    kZero: vec;
+    pxor.x   kZero, kZero;
+  }
+
+  // memcpy(&v, in_mask, sizeof(mask2_t));
+  v := (cast(*u64)in_mask).*;
+  idx: int = 0;
+  offset: int = 0;
+  while offset < inDims {
+    if !next_idx() break;
+
+    // First active input of the pair.
+    w0 := weights + 32 * idx;                       // weight row, outDims == 32 bytes
+    factor: s16 = input[idx];
+
+    // Optional second active input: its weights pair up with the first via
+    // the interleaved (punpck) layout, and its value occupies the high byte
+    // of factor. If there is no second input, `second` is zero.
+    has_second := next_idx();
+    w1: *s8 = ---;
+    if has_second {
+      w1 = weights + 32 * idx;
+      val: s16 = input[idx];
+      factor |= val << 8;
     }
 
-    offset += 16;
+    f32: u32 = cast(u32) (cast(u16) factor);
+    f32 |= f32 << 16;                               // replicate for pshufd broadcast
+
+    // ---- low 16 weights -> channels 0..15 ----
+    #asm SSE, SSE2, SSE3 {
+      movd        mul: vec, f32;
+      pshufd      mul, mul, 0x0;                     // _mm_set1_epi16(factor)
+      movdqa.x    a: vec, [w0 + 0x00];               // first_lo
+      movdqa.x    b: vec, kZero;                     // second_lo defaults to 0
+    }
+    if has_second { #asm SSE, SSE2 { movdqa.x b, [w1 + 0x00]; } }
+    #asm SSE, SSE2, SSE3 {
+      // channels 0..7
+      movdqa.x    prod: vec, mul;
+      movdqa.x    t: vec, a;
+      punpcklbw.x t, b;                              // interleave first/second weights
+      pmaddubsw.x prod, t;                           // in0*w_first + in1*w_second, s16 x8
+      movdqa.x    signs: vec, kZero;
+      pcmpgtw.x   signs, prod;                       // signs = (0 > prod)
+      movdqa.x    t, prod;
+      punpcklwd.x t, signs;                          // sign-extend s16 -> s32
+      paddd.x     out_0, t;
+      movdqa.x    t, prod;
+      punpckhwd.x t, signs;
+      paddd.x     out_1, t;
+      // channels 8..15
+      movdqa.x    prod, mul;
+      movdqa.x    t, a;
+      punpckhbw.x t, b;
+      pmaddubsw.x prod, t;
+      movdqa.x    signs, kZero;
+      pcmpgtw.x   signs, prod;
+      movdqa.x    t, prod;
+      punpcklwd.x t, signs;
+      paddd.x     out_2, t;
+      movdqa.x    t, prod;
+      punpckhwd.x t, signs;
+      paddd.x     out_3, t;
+    }
+
+    // ---- high 16 weights -> channels 16..31 ----
+    #asm SSE, SSE2 {
+      movdqa.x    a, [w0 + 0x10];                    // first_hi
+      movdqa.x    b, kZero;                          // second_hi defaults to 0
+    }
+    if has_second { #asm SSE, SSE2 { movdqa.x b, [w1 + 0x10]; } }
+    #asm SSE, SSE2, SSE3 {
+      // channels 16..23
+      movdqa.x    prod, mul;
+      movdqa.x    t, a;
+      punpcklbw.x t, b;
+      pmaddubsw.x prod, t;
+      movdqa.x    signs, kZero;
+      pcmpgtw.x   signs, prod;
+      movdqa.x    t, prod;
+      punpcklwd.x t, signs;
+      paddd.x     out_4, t;
+      movdqa.x    t, prod;
+      punpckhwd.x t, signs;
+      paddd.x     out_5, t;
+      // channels 24..31
+      movdqa.x    prod, mul;
+      movdqa.x    t, a;
+      punpckhbw.x t, b;
+      pmaddubsw.x prod, t;
+      movdqa.x    signs, kZero;
+      pcmpgtw.x   signs, prod;
+      movdqa.x    t, prod;
+      punpcklwd.x t, signs;
+      paddd.x     out_6, t;
+      movdqa.x    t, prod;
+      punpckhwd.x t, signs;
+      paddd.x     out_7, t;
+    }
   }
 
-
-  #asm SSE2 {
-    mov.d    reg: gpr, 0x00_7f_00_7f;
-    movd     xmm_127: vec, reg;
-    pshufd.x xmm_127, xmm_127, 0;
-    pxor.x   xmm_000: vec, xmm_000;
+  // pack int32 -> int16 (saturating) and shift down by SHIFT.
+  #asm SSE, SSE2 {
+    packssdw.x out_0, out_1;                         // s16: channels  0.. 7
+    packssdw.x out_2, out_3;                         // s16: channels  8..15
+    packssdw.x out_4, out_5;                         // s16: channels 16..23
+    packssdw.x out_6, out_7;                         // s16: channels 24..31
+    psraw.x    out_0, 6;
+    psraw.x    out_2, 6;
+    psraw.x    out_4, 6;
+    psraw.x    out_6, 6;
   }
 
-  outVec := output;
-  tmp_data := tmp.data;
-  for #v2 < 0..7 {
-    #asm SSE {
-      movups.x   xmm_relu: vec, [tmp_data];
-      packssdw.x xmm_relu, xmm_000;
-      psraw.x    xmm_relu, 6;
-      pmaxsw.x   xmm_relu, xmm_000;
-      pminsw.x   xmm_relu, xmm_127;
-      packsswb.x xmm_relu, xmm_000;
-      movups.x   [outVec], xmm_relu;
-      add        tmp_data, 0x10;
-      add        outVec,   0x04;
+  #if pack8_and_calc_mask {
+    // Store the raw clipped bytes (still signed) and emit the next layer's
+    // mask: one bit per output, set where the byte is > 0.
+    #asm SSE, SSE2 {
+      packsswb.x out_0, out_2;                       // s8: channels  0..15
+      packsswb.x out_4, out_6;                       // s8: channels 16..31
+      movdqu.x   [output + 0x00], out_0;
+      movdqu.x   [output + 0x10], out_4;
+      mreg: gpr;
+      pcmpgtb.x  out_0, kZero;
+      pmovmskb   mreg, out_0;
+      mov.w      [out_mask + 0x00], mreg;
+      pcmpgtb.x  out_4, kZero;
+      pmovmskb   mreg, out_4;
+      mov.w      [out_mask + 0x02], mreg;
+    }
+  } else {
+    // Final hidden layer: apply the ReLU clamp to [0,127] here (no mask). The
+    // clamp is done in 16-bit with pmaxsw so this stays pure SSE2 (no pmaxsb /
+    // SSE4.1); packsswb then saturates anything above 127 down to 127.
+    #asm SSE, SSE2 {
+      pmaxsw.x   out_0, kZero;
+      pmaxsw.x   out_2, kZero;
+      pmaxsw.x   out_4, kZero;
+      pmaxsw.x   out_6, kZero;
+      packsswb.x out_0, out_2;                       // s8: channels  0..15 in [0,127]
+      packsswb.x out_4, out_6;                       // s8: channels 16..31 in [0,127]
+      movdqu.x   [output + 0x00], out_0;
+      movdqu.x   [output + 0x10], out_4;
     }
   }
 }
